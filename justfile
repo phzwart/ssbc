@@ -31,9 +31,7 @@ pdb *ARGS:
 
 # Run coverage, and build to HTML
 coverage:
-    uv run --python=3.13 --extra test coverage run -m pytest .
-    uv run --python=3.13 --extra test coverage report -m
-    uv run --python=3.13 --extra test coverage html
+    uv run --python=3.13 --extra test pytest --cov=src/ssbc --cov-report=term-missing --cov-report=html
 
 # Build the project, useful for checking that packaging is correct
 build:
