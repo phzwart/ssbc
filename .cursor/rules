@@ -1,0 +1,25 @@
+# Cursor AI Rules for SSBC Project
+
+## Environment Setup
+When running terminal commands or Python scripts in this project, always use the `ssbc` mamba environment:
+
+- **For one-off commands**: `mamba run -n ssbc <command>`
+- **For Python scripts**: `mamba run -n ssbc python <script>`
+- **For interactive shells**: Start with `mamba activate ssbc` or `source .envrc-conda`
+- **For pytest**: `mamba run -n ssbc pytest <args>`
+- **For any Python tool**: `mamba run -n ssbc <tool> <args>`
+
+## Examples
+```bash
+# Run tests
+mamba run -n ssbc pytest
+
+# Run Python script
+mamba run -n ssbc python examples/basic_usage.py
+
+# Install package
+mamba run -n ssbc pip install <package>
+
+# Activate for multiple commands
+mamba activate ssbc
+```
