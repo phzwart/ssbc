@@ -52,5 +52,4 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
-        args: [--ignore-words-list=crate]
-
+        args: ['--ignore-words-list=crate,doub']

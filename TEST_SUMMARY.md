@@ -222,8 +222,7 @@ Potential additions:
 
 ---
 
-**Generated:** 2024-10-10  
-**Test Framework:** pytest 8.4.2  
-**Coverage Tool:** pytest-cov 7.0.0  
+**Generated:** 2024-10-10
+**Test Framework:** pytest 8.4.2
+**Coverage Tool:** pytest-cov 7.0.0
 **Python Version:** 3.11.13
-

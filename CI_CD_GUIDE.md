@@ -186,4 +186,3 @@ Edit `[tool.ruff.lint]` in `pyproject.toml`
 - [GitHub Actions documentation](https://docs.github.com/en/actions)
 - [uv documentation](https://docs.astral.sh/uv/)
 - [Codecov setup](https://docs.codecov.com/docs)
-

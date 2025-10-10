@@ -242,4 +242,3 @@ You now have:
 - ✅ Professional issue and PR templates
 
 Your code quality and security are now automatically enforced! 🚀
-

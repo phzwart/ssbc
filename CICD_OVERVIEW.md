@@ -295,4 +295,3 @@ View coverage: https://codecov.io/gh/phzwart/ssbc
 ---
 
 **Your code is now professionally maintained with automated quality checks!** 🚀
-

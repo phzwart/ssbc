@@ -40,4 +40,3 @@ echo "4. Push to GitHub: git push"
 echo ""
 echo "From now on, pre-commit hooks will run automatically before each commit."
 echo "To run QA checks manually: just qa"
-

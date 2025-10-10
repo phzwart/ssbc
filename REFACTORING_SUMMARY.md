@@ -258,4 +258,3 @@ The refactoring successfully transformed a monolithic notebook into a well-struc
 - **User-friendly**: Clear public API and examples
 
 The library is ready for development, testing, and deployment! 🎉
-

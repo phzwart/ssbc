@@ -64,11 +64,10 @@ pre-commit install
 
 This project uses:
 - **Ruff** for linting and formatting
-- **Ty** for type checking  
+- **Ty** for type checking
 - **Pytest** for testing
 - **Pre-commit** hooks for automated checks
 - **GitHub Actions** for CI/CD
 
 All checks must pass before merging.
 ```
-

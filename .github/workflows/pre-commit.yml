@@ -27,4 +27,3 @@ jobs:
           uv sync --extra test
 
       - uses: pre-commit/action@v3.0.1
-
