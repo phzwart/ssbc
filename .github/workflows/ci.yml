@@ -29,7 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test --retry 3
+          uv sync --extra test
 
       - name: Run ruff format check
         run: |
@@ -57,7 +57,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test --retry 3
+          uv sync --extra test
 
       - name: Run ty type checking
         run: |
@@ -86,7 +86,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test --retry 3
+          uv sync --extra test
 
       - name: Run tests
         run: |
@@ -110,7 +110,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test --retry 3
+          uv sync --extra test
 
       - name: Run tests with coverage
         run: |
