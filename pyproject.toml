@@ -14,7 +14,13 @@ classifiers = [
 ]
 license = {text = "MIT"}
 dependencies = [
-  "typer"
+  "matplotlib",
+  "numpy",
+  "pandas",
+  "plotly",
+  "rich",
+  "scipy",
+  "typer",
 ]
 requires-python = ">= 3.10"
 
