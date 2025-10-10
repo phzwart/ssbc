@@ -26,6 +26,10 @@ test = [
     "ty", # checking types
     "ipdb", # debugging
 ]
+dev = [
+    "pre-commit",  # git hooks
+    "bandit[toml]",  # security linting
+]
 
 [project.urls]
 bugs = "https://github.com/phzwart/ssbc/issues"
@@ -52,6 +56,10 @@ select = [
     "B",   # flake8-bugbear
     "UP",  # pyupgrade
 ]
+
+[tool.bandit]
+exclude_dirs = ["tests", "htmlcov", ".venv", "venv"]
+skips = ["B101"]  # Skip assert_used check (common in tests)
 
 [tool.uv]
 package = true

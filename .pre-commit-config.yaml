@@ -1,0 +1,56 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# Install with: pip install pre-commit
+# Setup with: pre-commit install
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  # Ruff - linting and formatting (replaces flake8, isort, black, etc.)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # Type checking with ty
+  - repo: local
+    hooks:
+      - id: ty-check
+        name: ty type checking
+        entry: bash -c 'uv run --extra test ty check .'
+        language: system
+        types: [python]
+        pass_filenames: false
+        always_run: true
+
+  # Security checks
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml']
+        additional_dependencies: ['bandit[toml]']
+
+  # Check for common misspellings
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        args: [--ignore-words-list=crate]
+
