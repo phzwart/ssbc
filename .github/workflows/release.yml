@@ -20,6 +20,7 @@ jobs:
       name: release
       url: https://pypi.org/p/ssbc
     permissions:
+      contents: write  # Required for creating releases
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
     steps:
