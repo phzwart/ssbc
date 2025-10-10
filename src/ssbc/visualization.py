@@ -163,21 +163,19 @@ def report_prediction_stats(
         summary[class_label] = class_summary
 
         if verbose:
-            print(f"\n{'='*80}")
+            print(f"\n{'=' * 80}")
             print(f"CLASS {class_label} (Conditioned on True Label = {class_label})")
-            print(f"{'='*80}")
+            print(f"{'=' * 80}")
             alpha_str = f"{alpha_target:.3f}" if alpha_target is not None else "n/a"
             delta_str = f"{delta:.3f}" if delta is not None else "n/a"
             print(f"  n={n}, α_target={alpha_str}, δ={delta_str}")
 
             print("\nPrediction Set Breakdown:")
             print(
-                f"  Abstentions:  {abst_count:4d} / {n:4d} = {pct(abst_rate)}  "
-                f"95% CI: [{abst_lo:.4f}, {abst_hi:.4f}]"
+                f"  Abstentions:  {abst_count:4d} / {n:4d} = {pct(abst_rate)}  95% CI: [{abst_lo:.4f}, {abst_hi:.4f}]"
             )
             print(
-                f"  Singletons:   {sing_count:4d} / {n:4d} = {pct(sing_rate)}  "
-                f"95% CI: [{sing_lo:.4f}, {sing_hi:.4f}]"
+                f"  Singletons:   {sing_count:4d} / {n:4d} = {pct(sing_rate)}  95% CI: [{sing_lo:.4f}, {sing_hi:.4f}]"
             )
             print(
                 f"    ├─ Correct:   {sing_corr_count:4d} / {n:4d} = {pct(sing_corr_rate)}  "
@@ -195,8 +193,7 @@ def report_prediction_stats(
             )
 
             print(
-                f"\n  Doublets:     {doub_count:4d} / {n:4d} = {pct(doub_rate)}  "
-                f"95% CI: [{doub_lo:.4f}, {doub_hi:.4f}]"
+                f"\n  Doublets:     {doub_count:4d} / {n:4d} = {pct(doub_rate)}  95% CI: [{doub_lo:.4f}, {doub_hi:.4f}]"
             )
 
             if pac and pac.get("rho", None) is not None:
@@ -307,15 +304,13 @@ def report_prediction_stats(
         summary["marginal"] = marginal_summary
 
         if verbose:
-            print(f"\n{'='*80}")
+            print(f"\n{'=' * 80}")
             print("MARGINAL ANALYSIS (Deployment View - Ignores True Labels)")
-            print(f"{'='*80}")
+            print(f"{'=' * 80}")
             print(f"  Total samples: {n_total}")
 
             print("\nOverall Coverage:")
-            print(
-                f"  Covered: {cov_count:4d} / {n_total:4d} = {pct(cov_rate)}  " f"95% CI: [{cov_lo:.4f}, {cov_hi:.4f}]"
-            )
+            print(f"  Covered: {cov_count:4d} / {n_total:4d} = {pct(cov_rate)}  95% CI: [{cov_lo:.4f}, {cov_hi:.4f}]")
 
             print("\nPrediction Set Distribution:")
             print(
@@ -326,12 +321,8 @@ def report_prediction_stats(
                 f"  Singletons:  {sing_total:4d} / {n_total:4d} = {pct(sing_m_rate)}  "
                 f"95% CI: [{sing_m_lo:.4f}, {sing_m_hi:.4f}]"
             )
-            print(
-                f"    ├─ Pred 0: {s0_count:4d} / {n_total:4d} = {pct(s0_rate)}  " f"95% CI: [{s0_lo:.4f}, {s0_hi:.4f}]"
-            )
-            print(
-                f"    ├─ Pred 1: {s1_count:4d} / {n_total:4d} = {pct(s1_rate)}  " f"95% CI: [{s1_lo:.4f}, {s1_hi:.4f}]"
-            )
+            print(f"    ├─ Pred 0: {s0_count:4d} / {n_total:4d} = {pct(s0_rate)}  95% CI: [{s0_lo:.4f}, {s0_hi:.4f}]")
+            print(f"    ├─ Pred 1: {s1_count:4d} / {n_total:4d} = {pct(s1_rate)}  95% CI: [{s1_lo:.4f}, {s1_hi:.4f}]")
             print(
                 f"    ├─ Errors (overall): {s_err_count:4d} / {sing_total:4d} = {pct(s_err_rate)}  "
                 f"95% CI: [{s_err_lo:.4f}, {s_err_hi:.4f}]"
@@ -365,7 +356,7 @@ def report_prediction_stats(
                 n_escalations = int(pac_m.get("n_escalations", doub_m_count + abst_m_count))
                 print("\n  Deployment Decision Mix:")
                 print(f"    Automate: {sing_total} singletons ({sing_m_rate:.1%})")
-                print(f"    Escalate: {n_escalations} doublets+abstentions " f"({n_escalations / n_total:.1%})")
+                print(f"    Escalate: {n_escalations} doublets+abstentions ({n_escalations / n_total:.1%})")
 
     return summary
 

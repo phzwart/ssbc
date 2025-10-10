@@ -68,7 +68,7 @@ def main():
     print(f"  u_guess:       {result_large.details['u_star_guess']}")
     print(f"  search_range:  {result_large.details['search_range']}")
     print(f"  satisfied_mass: {result_large.satisfied_mass:.6f}")
-    print(f"  searched {len(result_large.details['search_log'])} values " f"(instead of {result_large.n})")
+    print(f"  searched {len(result_large.details['search_log'])} values (instead of {result_large.n})")
 
     print("\nSearch Log (first 5 and last 5):")
     log = result_large.details["search_log"]
@@ -105,7 +105,7 @@ def main():
     for n in n_values:
         result = ssbc_correct(alpha_target=alpha_target, n=n, delta=delta, mode="beta")
         correction_pct = (alpha_target - result.alpha_corrected) / alpha_target * 100
-        print(f"{n:6d} {result.alpha_corrected:12.6f} {result.u_star:6d} " f"{correction_pct:11.2f}%")
+        print(f"{n:6d} {result.alpha_corrected:12.6f} {result.u_star:6d} {correction_pct:11.2f}%")
 
     print("\nObservation: As n increases, α_corrected approaches α_target")
     print("             (less correction needed for larger calibration sets)")

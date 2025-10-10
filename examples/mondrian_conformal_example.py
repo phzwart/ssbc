@@ -37,8 +37,8 @@ def main():
 
     print(f"   Generated {len(labels)} samples")
     print(f"   Class balance: Class 0: {np.sum(labels == 0)}, Class 1: {np.sum(labels == 1)}")
-    print(f"   Mean P(1) when true=0: {probs[labels==0, 1].mean():.3f}")
-    print(f"   Mean P(1) when true=1: {probs[labels==1, 1].mean():.3f}")
+    print(f"   Mean P(1) when true=0: {probs[labels == 0, 1].mean():.3f}")
+    print(f"   Mean P(1) when true=1: {probs[labels == 1, 1].mean():.3f}")
 
     # ========== Step 2: Split by Class ==========
     print("\n2. Splitting data by class for Mondrian conformal prediction...")
@@ -107,14 +107,12 @@ def main():
         f"  Coverage:        {marg['coverage']['rate']:.1%} "
         f"(CI: [{marg['coverage']['ci_95'][0]:.3f}, {marg['coverage']['ci_95'][1]:.3f}])"
     )
-    print(f"  Singleton rate:  {marg['singletons']['rate']:.1%} " f"(automated decisions)")
-    print(
-        f"  Escalation rate: {marg['abstentions']['rate'] + marg['doublets']['rate']:.1%} " f"(requires human review)"
-    )
+    print(f"  Singleton rate:  {marg['singletons']['rate']:.1%} (automated decisions)")
+    print(f"  Escalation rate: {marg['abstentions']['rate'] + marg['doublets']['rate']:.1%} (requires human review)")
 
     sing_err = marg["singletons"]["errors"]
     print("\nSingleton Error Rate:")
-    print(f"  Overall: {sing_err['rate']:.1%} " f"(CI: [{sing_err['ci_95'][0]:.3f}, {sing_err['ci_95'][1]:.3f}])")
+    print(f"  Overall: {sing_err['rate']:.1%} (CI: [{sing_err['ci_95'][0]:.3f}, {sing_err['ci_95'][1]:.3f}])")
 
     # Check PAC bounds
     if marg["pac_bounds"]["rho"] is not None:

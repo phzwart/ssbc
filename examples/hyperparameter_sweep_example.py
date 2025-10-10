@@ -46,7 +46,7 @@ def main():
 
     print(f"   α values: {alpha_grid}")
     print(f"   δ values: {delta_grid}")
-    print(f"   Total configurations: {len(alpha_grid)**2 * len(delta_grid)**2}")
+    print(f"   Total configurations: {len(alpha_grid) ** 2 * len(delta_grid) ** 2}")
 
     # ========== Step 3: Run Sweep ==========
     print("\n3. Running hyperparameter sweep...")
@@ -69,7 +69,7 @@ def main():
     print("\n4. Analyzing results...")
 
     print("\nKey Metrics Summary:")
-    print(f"   Coverage:      mean={df['cov'].mean():.3f}, " f"min={df['cov'].min():.3f}, max={df['cov'].max():.3f}")
+    print(f"   Coverage:      mean={df['cov'].mean():.3f}, min={df['cov'].min():.3f}, max={df['cov'].max():.3f}")
     print(
         f"   Singleton rate: mean={df['sing_rate'].mean():.3f}, "
         f"min={df['sing_rate'].min():.3f}, max={df['sing_rate'].max():.3f}"
