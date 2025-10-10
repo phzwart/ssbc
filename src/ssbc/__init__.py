@@ -28,10 +28,29 @@ from .simulation import (
     BinaryClassifierSimulator,
 )
 
+# SLA (Service Level Agreement) bounds
+from .sla import (
+    ConformalSLAResult,
+    OperationalRateBounds,
+    compute_conformal_sla,
+    compute_conformal_sla_mondrian,
+    compute_pac_coverage,
+    compute_transfer_cushion,
+    cross_fit_cp_bounds,
+    transfer_bounds_to_single_rule,
+)
+
 # Statistics utilities
 from .statistics import (
     clopper_pearson_intervals,
+    clopper_pearson_lower,
+    clopper_pearson_upper,
     cp_interval,
+)
+
+# Utility functions
+from .utils import (
+    compute_operational_rate,
 )
 
 # Visualization and reporting
@@ -49,7 +68,20 @@ __all__ = [
     "split_by_class",
     # Statistics
     "clopper_pearson_intervals",
+    "clopper_pearson_lower",
+    "clopper_pearson_upper",
     "cp_interval",
+    # Utilities
+    "compute_operational_rate",
+    # SLA
+    "ConformalSLAResult",
+    "OperationalRateBounds",
+    "compute_conformal_sla",
+    "compute_conformal_sla_mondrian",
+    "compute_pac_coverage",
+    "compute_transfer_cushion",
+    "cross_fit_cp_bounds",
+    "transfer_bounds_to_single_rule",
     # Simulation
     "BinaryClassifierSimulator",
     # Visualization

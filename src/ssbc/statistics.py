@@ -4,6 +4,76 @@ from typing import Any
 
 import numpy as np
 from scipy import stats
+from scipy.stats import beta as beta_dist
+
+
+def clopper_pearson_lower(k: int, n: int, confidence: float = 0.95) -> float:
+    """Compute lower Clopper-Pearson (one-sided) confidence bound.
+
+    Parameters
+    ----------
+    k : int
+        Number of successes
+    n : int
+        Total number of trials
+    confidence : float, default=0.95
+        Confidence level (e.g., 0.95 for 95% confidence)
+
+    Returns
+    -------
+    float
+        Lower confidence bound for the true proportion
+
+    Examples
+    --------
+    >>> lower = clopper_pearson_lower(k=5, n=10, confidence=0.95)
+    >>> print(f"Lower bound: {lower:.3f}")
+
+    Notes
+    -----
+    Uses Beta distribution quantiles for exact binomial confidence bounds.
+    For PAC-style guarantees, you may want to use delta = 1 - confidence.
+    """
+    if k == 0:
+        return 0.0
+    # L = Beta^{-1}(1-confidence; k, n-k+1)
+    # Note: Using (1-confidence) as the lower tail probability
+    alpha = 1 - confidence
+    return float(beta_dist.ppf(alpha, k, n - k + 1))
+
+
+def clopper_pearson_upper(k: int, n: int, confidence: float = 0.95) -> float:
+    """Compute upper Clopper-Pearson (one-sided) confidence bound.
+
+    Parameters
+    ----------
+    k : int
+        Number of successes
+    n : int
+        Total number of trials
+    confidence : float, default=0.95
+        Confidence level (e.g., 0.95 for 95% confidence)
+
+    Returns
+    -------
+    float
+        Upper confidence bound for the true proportion
+
+    Examples
+    --------
+    >>> upper = clopper_pearson_upper(k=5, n=10, confidence=0.95)
+    >>> print(f"Upper bound: {upper:.3f}")
+
+    Notes
+    -----
+    Uses Beta distribution quantiles for exact binomial confidence bounds.
+    For PAC-style guarantees, you may want to use delta = 1 - confidence.
+    """
+    if k == n:
+        return 1.0
+    # U = Beta^{-1}(confidence; k+1, n-k)
+    # Note: Using confidence directly for upper tail
+    return float(beta_dist.ppf(confidence, k + 1, n - k))
 
 
 def clopper_pearson_intervals(labels: np.ndarray, confidence: float = 0.95) -> dict[int, dict[str, Any]]:
