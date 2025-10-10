@@ -58,7 +58,7 @@ jobs:
 
       - name: Run ty type checking
         run: |
-          uv run --extra test ty check .
+          uv run --extra test ty check src/
 
   test:
     name: Test Python ${{ matrix.python-version }}
