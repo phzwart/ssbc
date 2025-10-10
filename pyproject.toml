@@ -1,6 +1,6 @@
 [project]
 name = "ssbc"
-version = "0.1.0"
+version = "1.0.0"
 description = "Small Sample Beta Correction - PAC guarantees with small datasets"
 readme = "README.md"
 authors = [
