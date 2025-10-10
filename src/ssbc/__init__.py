@@ -1,8 +1,10 @@
 """Top-level package for SSBC (Small-Sample Beta Correction)."""
 
+from importlib.metadata import version
+
 __author__ = """Petrus H Zwart"""
 __email__ = "phzwart@lbl.gov"
-__version__ = "0.1.0"
+__version__ = version("ssbc")  # Read from package metadata (pyproject.toml)
 
 # Core SSBC algorithm
 # Conformal prediction
