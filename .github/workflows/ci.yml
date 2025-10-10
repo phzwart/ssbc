@@ -7,6 +7,9 @@ on:
     branches: [ main, develop ]
   workflow_dispatch:
 
+env:
+  UV_HTTP_TIMEOUT: 300  # Increase timeout to 5 minutes for large packages
+
 jobs:
   lint:
     name: Lint and Format Check
@@ -26,7 +29,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test
+          uv sync --extra test --retry 3
 
       - name: Run ruff format check
         run: |
@@ -54,7 +57,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test
+          uv sync --extra test --retry 3
 
       - name: Run ty type checking
         run: |
@@ -83,7 +86,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test
+          uv sync --extra test --retry 3
 
       - name: Run tests
         run: |
@@ -107,7 +110,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --extra test
+          uv sync --extra test --retry 3
 
       - name: Run tests with coverage
         run: |
