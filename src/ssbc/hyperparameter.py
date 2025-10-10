@@ -2,7 +2,7 @@
 
 import itertools
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,7 @@ def sweep_hyperparams_and_collect(
     delta_0: np.ndarray,
     alpha_1: np.ndarray,
     delta_1: np.ndarray,
-    mode: str = "beta",
+    mode: Literal["beta", "beta-binomial"] = "beta",
     extra_metrics: dict[str, Callable] | None = None,
     quiet: bool = True,
 ) -> pd.DataFrame:
@@ -170,7 +170,7 @@ def sweep_and_plot_parallel_plotly(
     delta_1: np.ndarray,
     alpha_0: np.ndarray,
     alpha_1: np.ndarray,
-    mode: str = "beta",
+    mode: Literal["beta", "beta-binomial"] = "beta",
     extra_metrics: dict[str, Callable] | None = None,
     color: str = "err_all",
     color_continuous_scale=None,

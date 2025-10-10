@@ -7,7 +7,7 @@ from .statistics import cp_interval
 
 def report_prediction_stats(
     prediction_stats: dict[Any, Any], calibration_result: dict[Any, Any], verbose: bool = True
-) -> dict[str, Any]:
+) -> dict[str | int, Any]:
     """Pretty/robust summary for Mondrian conformal prediction stats.
 
     Tolerates multiple schema shapes:
@@ -56,7 +56,7 @@ def report_prediction_stats(
             return int(x)
         return default
 
-    def get_rate(x: Any, default: float = 0.0) -> float:
+    def get_rate(x: Any, default: float | None = 0.0) -> float | None:
         """Extract rate from dict or float."""
         if isinstance(x, dict):
             if "rate" in x:
@@ -91,7 +91,7 @@ def report_prediction_stats(
         """Format percentage."""
         return f"{x:6.2%}"
 
-    summary: dict[str, Any] = {}
+    summary: dict[str | int, Any] = {}
 
     if verbose:
         print("=" * 80)

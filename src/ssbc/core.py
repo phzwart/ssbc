@@ -131,8 +131,8 @@ def ssbc_correct(
             raise ValueError("m must be >= 1 for beta-binomial mode.")
         k_thresh = math.ceil(target_coverage * m_eval)
 
-    u_star = None
-    mass_star = None
+    u_star: int | None = None
+    mass_star: float | None = None
 
     # Search from u_min up to u_search_max to find the largest u that satisfies the condition
     # Keep updating u_star as we find larger values that work
@@ -181,6 +181,9 @@ def ssbc_correct(
         )
 
     alpha_corrected = u_star / (n + 1)
+
+    # At this point, mass_star is always set (either from loop or fallback)
+    assert mass_star is not None, "mass_star should be set by this point"
 
     return SSBCResult(
         alpha_target=alpha_target,

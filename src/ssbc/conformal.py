@@ -1,6 +1,6 @@
 """Mondrian conformal prediction with SSBC correction."""
 
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -50,8 +50,8 @@ def mondrian_conformal_calibrate(
     class_data: dict[int, dict[str, Any]],
     alpha_target: float | dict[int, float],
     delta: float | dict[int, float],
-    mode: str = "beta",
-    m: int = None,
+    mode: Literal["beta", "beta-binomial"] = "beta",
+    m: int | None = None,
 ) -> tuple[dict[int, dict[str, Any]], dict[Any, Any]]:
     """Perform Mondrian (per-class) conformal calibration with SSBC correction.
 
@@ -99,15 +99,21 @@ def mondrian_conformal_calibrate(
     ... )
     """
     # Handle scalar or dict inputs for alpha and delta
+    alpha_dict: dict[int, float]
     if isinstance(alpha_target, int | float):
-        alpha_dict = {0: alpha_target, 1: alpha_target}
+        alpha_dict = {0: float(alpha_target), 1: float(alpha_target)}
     else:
-        alpha_dict = alpha_target
+        # alpha_target is dict[int, float] in this branch
+        assert isinstance(alpha_target, dict), "alpha_target must be dict if not scalar"
+        alpha_dict = {k: float(v) for k, v in alpha_target.items()}
 
+    delta_dict: dict[int, float]
     if isinstance(delta, int | float):
-        delta_dict = {0: delta, 1: delta}
+        delta_dict = {0: float(delta), 1: float(delta)}
     else:
-        delta_dict = delta
+        # delta is dict[int, float] in this branch
+        assert isinstance(delta, dict), "delta must be dict if not scalar"
+        delta_dict = {k: float(v) for k, v in delta.items()}
 
     calibration_result = {}
 

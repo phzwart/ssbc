@@ -28,6 +28,7 @@ requires-python = ">= 3.10"
 test = [
     "coverage",  # testing
     "pytest",  # testing
+    "pytest-cov",  # coverage plugin for pytest
     "ruff",  # linting
     "ty", # checking types
     "ipdb", # debugging
