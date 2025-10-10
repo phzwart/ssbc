@@ -89,8 +89,8 @@ def main():
     n_folds = 5
 
     print(f"   α_target = {alpha_target} (target 90% coverage)")
-    print(f"   δ₁ = {delta_1} (coverage confidence: {1-delta_1:.1%})")
-    print(f"   δ₂ = {delta_2} (rate bounds confidence: {1-delta_2:.1%})")
+    print(f"   δ₁ = {delta_1} (coverage confidence: {1 - delta_1:.1%})")
+    print(f"   δ₂ = {delta_2} (rate bounds confidence: {1 - delta_2:.1%})")
     print(f"   Operational rates: {rate_types}")
     print(f"   Cross-validation folds: {n_folds}")
 
@@ -153,9 +153,7 @@ def main():
     doublet_bounds = sla_result.rate_bounds["doublet"]
     abstention_bounds = sla_result.rate_bounds["abstention"]
 
-    print(
-        f"  • Coverage:        ≥ {sla_result.coverage_guarantee:.1%} " f"(w.p. ≥ {sla_result.coverage_confidence:.1%})"
-    )
+    print(f"  • Coverage:        ≥ {sla_result.coverage_guarantee:.1%} (w.p. ≥ {sla_result.coverage_confidence:.1%})")
     print(
         f"  • Singleton rate:  [{singleton_bounds.lower_bound:.1%}, {singleton_bounds.upper_bound:.1%}] "
         f"(automated decisions)"
@@ -171,7 +169,7 @@ def main():
 
     escalation_lower = doublet_bounds.lower_bound + abstention_bounds.lower_bound
     escalation_upper = doublet_bounds.upper_bound + abstention_bounds.upper_bound
-    print(f"  • Escalation rate: [{escalation_lower:.1%}, {escalation_upper:.1%}] " f"(requires human intervention)")
+    print(f"  • Escalation rate: [{escalation_lower:.1%}, {escalation_upper:.1%}] (requires human intervention)")
 
     # ========== Step 7: Mondrian (Class-Conditional) SLA ==========
     print("\n" + "=" * 80)
@@ -217,7 +215,7 @@ def main():
         f"with {sla_result.coverage_confidence:.1%} confidence"
     )
     print(f"  2. Operational rate bounds hold with {sla_result.rate_confidence:.1%} confidence")
-    print(f"  3. Joint guarantee: {sla_result.joint_confidence:.1%} confidence " "for all bounds simultaneously")
+    print(f"  3. Joint guarantee: {sla_result.joint_confidence:.1%} confidence for all bounds simultaneously")
     print(f"  4. Deploy using threshold q = {sla_result.threshold:.4f}")
     print()
     print("These guarantees are valid for the single refit-on-all conformal predictor")
