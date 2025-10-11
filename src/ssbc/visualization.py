@@ -234,6 +234,7 @@ def report_prediction_stats(
                     if verbose:
                         print(f"\n     {rate_name.upper()}:")
                         print(f"       Bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
+                        print(f"       Count: {bounds.n_successes}/{bounds.n_evaluations}")
 
             # Show conditional singleton rates (conditional on having a singleton)
             has_correct = "correct_in_singleton" in op_bounds.rate_bounds
