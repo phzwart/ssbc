@@ -156,6 +156,7 @@ def test_operational_rate_bounds_dataclass():
         lower_bound=0.6,
         upper_bound=0.85,
         confidence_level=0.95,
+        ci_width=0.95,
         n_evaluations=100,
         n_successes=75,
     )
@@ -175,6 +176,7 @@ def test_operational_bounds_result_dataclass():
         lower_bound=0.7,
         upper_bound=0.9,
         confidence_level=0.95,
+        ci_width=0.95,
         n_evaluations=100,
         n_successes=80,
     )
@@ -182,6 +184,7 @@ def test_operational_bounds_result_dataclass():
     result = OperationalRateBoundsResult(
         rate_bounds={"singleton": singleton_bounds},
         rate_confidence=0.95,
+        ci_width=0.95,
         thresholds=0.5,
         n_calibration=100,
     )

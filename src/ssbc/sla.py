@@ -37,7 +37,9 @@ class OperationalRateBounds:
     upper_bound : float
         Upper bound from Clopper-Pearson on LOO evaluations
     confidence_level : float
-        Confidence level for the bounds (1 - δ_rate)
+        Confidence level for the bounds (1 - δ_rate) - PAC confidence
+    ci_width : float
+        Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
     n_evaluations : int
         Number of LOO evaluations (n for marginal, n_class for per-class)
     n_successes : int
@@ -48,6 +50,7 @@ class OperationalRateBounds:
     lower_bound: float
     upper_bound: float
     confidence_level: float
+    ci_width: float
     n_evaluations: int
     n_successes: int
 
@@ -68,7 +71,9 @@ class OperationalRateBoundsResult:
     rate_bounds : dict[str, OperationalRateBounds]
         Bounds for each operational rate type
     rate_confidence : float
-        Confidence level for rate bounds (1 - δ)
+        PAC confidence level for rate bounds (1 - δ)
+    ci_width : float
+        Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
     thresholds : dict[int, float] | float
         Reference thresholds from full calibration (for display only)
     n_calibration : int
@@ -77,6 +82,7 @@ class OperationalRateBoundsResult:
 
     rate_bounds: dict[str, OperationalRateBounds]
     rate_confidence: float
+    ci_width: float
     thresholds: dict[int, float] | float
     n_calibration: int
 
@@ -295,6 +301,7 @@ def compute_marginal_operational_bounds(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
             confidence_level=pac_confidence,
+            ci_width=ci_width,
             n_evaluations=n,
             n_successes=K,
         )
@@ -321,6 +328,7 @@ def compute_marginal_operational_bounds(
     return OperationalRateBoundsResult(
         rate_bounds=rate_bounds,
         rate_confidence=1 - delta,
+        ci_width=ci_width,
         thresholds=ref_thresholds,
         n_calibration=n,
     )
@@ -541,6 +549,7 @@ def compute_mondrian_operational_bounds(
                 lower_bound=lower_bound,
                 upper_bound=upper_bound,
                 confidence_level=pac_confidence,
+                ci_width=ci_width,
                 n_evaluations=n_class,
                 n_successes=K_class,
             )
@@ -551,6 +560,7 @@ def compute_mondrian_operational_bounds(
         results[class_label] = OperationalRateBoundsResult(
             rate_bounds=rate_bounds,
             rate_confidence=1 - delta_per_class,
+            ci_width=ci_width,
             thresholds=threshold,
             n_calibration=n_class,
         )
