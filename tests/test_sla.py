@@ -270,7 +270,7 @@ def test_operational_rate_bounds_dataclass():
         cross_fit_lower=0.65,
         cross_fit_upper=0.80,
         cushion=0.05,
-        confidence_level=0.95,
+        ci_width=0.95,
         fold_results=[{"fold": 0, "m_f": 20}],
     )
 
@@ -289,7 +289,7 @@ def test_operational_bounds_result_dataclass():
         cross_fit_lower=0.75,
         cross_fit_upper=0.85,
         cushion=0.05,
-        confidence_level=0.95,
+        ci_width=0.95,
         fold_results=[],
     )
 
@@ -351,11 +351,14 @@ def test_rates_not_split_independently_confident():
         random_seed=42,
     )
 
-    # Each class gets delta_per_class = 0.06/2 = 0.03 (97% confidence)
-    # All rates within each class should have SAME confidence (97%)
+    # Each class gets delta_per_class = 0.06/2 = 0.03 (97% PAC confidence)
+    # All rates within each class should use DEFAULT CI width (95%)
     for class_label in [0, 1]:
+        # Check that PAC confidence is correct
+        assert np.isclose(op_bounds[class_label].rate_confidence, 1 - 0.06 / 2)
+
+        # Check that CI width is 95% (default)
         for rate_name in ["singleton", "doublet", "abstention"]:
             if rate_name in op_bounds[class_label].rate_bounds:
-                conf = op_bounds[class_label].rate_bounds[rate_name].confidence_level
-                expected_conf = 1 - (0.06 / 2)  # delta split across 2 classes
-                assert np.isclose(conf, expected_conf), f"{rate_name} should have confidence {expected_conf:.1%}"
+                ci_width = op_bounds[class_label].rate_bounds[rate_name].ci_width
+                assert np.isclose(ci_width, 0.95), f"{rate_name} should use 95% CI width (default)"

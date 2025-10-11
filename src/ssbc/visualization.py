@@ -224,7 +224,10 @@ def report_prediction_stats(
 
             if verbose:
                 print(f"\n  ✅ RIGOROUS Operational Bounds (Cross-Validated, {op_bounds.n_folds} folds)")
-                print(f"     Confidence: {op_bounds.rate_confidence:.1%}")
+                print(f"     PAC confidence: {op_bounds.rate_confidence:.1%}")
+                # Get CI width from first rate (all should have same)
+                first_rate = list(op_bounds.rate_bounds.values())[0]
+                print(f"     CI width: {first_rate.ci_width:.1%}")
 
             # Show main rates (singleton, doublet, abstention)
             for rate_name in ["abstention", "singleton", "doublet"]:
@@ -295,7 +298,10 @@ def report_prediction_stats(
                 f"\n  ✅ RIGOROUS Marginal Bounds "
                 f"(Cross-Validated Mondrian, {marginal_operational_bounds.n_folds} folds)"
             )
-            print(f"     Confidence: {marginal_operational_bounds.rate_confidence:.1%}")
+            print(f"     PAC confidence: {marginal_operational_bounds.rate_confidence:.1%}")
+            # Get CI width from first rate
+            first_rate = list(marginal_operational_bounds.rate_bounds.values())[0]
+            print(f"     CI width: {first_rate.ci_width:.1%}")
 
         # Show main rates
         for rate_name in ["abstention", "singleton", "doublet"]:

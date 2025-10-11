@@ -42,8 +42,8 @@ class OperationalRateBounds:
         Upper bound from cross-fit analysis (before transfer)
     cushion : float
         Transfer cushion ε_n for single rule deployment
-    confidence_level : float
-        Confidence level for the bounds (1 - δ₂)
+    ci_width : float
+        Width of Clopper-Pearson confidence intervals used (e.g., 0.95 for 95% CIs)
     fold_results : list[dict]
         Detailed results from each cross-validation fold
     """
@@ -54,7 +54,7 @@ class OperationalRateBounds:
     cross_fit_lower: float
     cross_fit_upper: float
     cushion: float
-    confidence_level: float
+    ci_width: float
     fold_results: list[dict]
 
 
@@ -666,7 +666,7 @@ def compute_marginal_operational_bounds(
             cross_fit_lower=transferred[rate_type]["cf_lower"],
             cross_fit_upper=transferred[rate_type]["cf_upper"],
             cushion=transferred[rate_type]["cushion"],
-            confidence_level=1 - delta,
+            ci_width=confidence_level,
             fold_results=results[rate_type]["fold_results"],
         )
 
@@ -967,7 +967,7 @@ def compute_mondrian_operational_bounds(
                 cross_fit_lower=transferred[rate_type]["cf_lower"],
                 cross_fit_upper=transferred[rate_type]["cf_upper"],
                 cushion=transferred[rate_type]["cushion"],
-                confidence_level=1 - delta_per_class,
+                ci_width=confidence_level,
                 fold_results=per_class_results[class_label][rate_type]["fold_results"],
             )
 
