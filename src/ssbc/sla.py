@@ -26,7 +26,7 @@ from .utils import compute_operational_rate
 
 @dataclass
 class OperationalRateBounds:
-    """Bounds for a single operational rate with PAC guarantees from full conformal (LOO).
+    """Bounds for a single operational rate with PAC guarantees from LOO-CV.
 
     Attributes
     ----------
@@ -54,10 +54,10 @@ class OperationalRateBounds:
 
 @dataclass
 class OperationalRateBoundsResult:
-    """Operational rate bounds for conformal prediction from full conformal (LOO).
+    """Operational rate bounds for conformal prediction from LOO-CV.
 
     Provides rigorous bounds on operational rates (singleton, doublet, abstention, error)
-    computed via leave-one-out full conformal prediction with Clopper-Pearson CIs.
+    computed via leave-one-out cross-validation (LOO-CV) with Clopper-Pearson CIs.
 
     Use in combination with mondrian_conformal_calibrate() output for complete SLA:
     - Mondrian provides: PAC coverage guarantees (via SSBC)
@@ -82,7 +82,7 @@ class OperationalRateBoundsResult:
 
 
 # ============================================================================
-# Full Conformal (Leave-One-Out) Operational Bounds
+# LOO-CV (Leave-One-Out Cross-Validation) Operational Bounds
 # ============================================================================
 
 
@@ -94,9 +94,9 @@ def compute_marginal_operational_bounds(
     delta: float,
     rate_types: list[str] | None = None,
 ) -> OperationalRateBoundsResult:
-    """Compute marginal operational rate bounds via full conformal (LOO).
+    """Compute marginal operational rate bounds via LOO-CV.
 
-    Uses leave-one-out full conformal prediction on MARGINAL (mixed-class) data:
+    Uses leave-one-out cross-validation (LOO-CV) on MARGINAL (mixed-class) data:
     1. For each point i (i=0 to n-1):
        - Train Mondrian on all other points (split by class, compute thresholds)
        - Apply Mondrian predictor to held-out point i
@@ -279,7 +279,7 @@ def compute_mondrian_operational_bounds(
     delta: float,
     rate_types: list[str] | None = None,
 ) -> dict[int, OperationalRateBoundsResult]:
-    """Compute PER-CLASS operational rate bounds via full conformal (LOO).
+    """Compute PER-CLASS operational rate bounds via LOO-CV.
 
     Uses leave-one-out on MARGINAL data, then separates results by true class.
     This is the ONLY valid way to get per-class operational bounds for Mondrian,

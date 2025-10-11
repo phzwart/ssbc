@@ -223,7 +223,7 @@ def report_prediction_stats(
             op_bounds = operational_bounds_per_class[class_label]
 
             if verbose:
-                print("\n  ✅ RIGOROUS Operational Bounds (Full Conformal LOO)")
+                print("\n  ✅ RIGOROUS Operational Bounds (LOO-CV)")
                 print(f"     Confidence: {op_bounds.rate_confidence:.1%}")
                 print(f"     Calibration size: n = {op_bounds.n_calibration}")
 
@@ -292,7 +292,7 @@ def report_prediction_stats(
             print(f"{'=' * 80}")
             print(f"  Total samples: n = {marginal_operational_bounds.n_calibration}")
 
-            print("\n  ✅ RIGOROUS Marginal Bounds (Full Conformal LOO)")
+            print("\n  ✅ RIGOROUS Marginal Bounds (LOO-CV)")
             print(f"     Confidence: {marginal_operational_bounds.rate_confidence:.1%}")
             print(f"     Total evaluations: n = {marginal_operational_bounds.n_calibration}")
 
