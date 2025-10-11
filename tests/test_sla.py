@@ -111,12 +111,16 @@ def test_transfer_bounds_to_single_rule(binary_classification_data):
 
     cf_results = cross_fit_cp_bounds(class_data[0], 0, 0.10, 0.05, ["singleton", "doublet"], 3, 0.10, random_seed=42)
 
-    cushions = {
+    cushions_lower = {
+        "singleton": compute_transfer_cushion(class_data[0], 0, cf_results["singleton"], "singleton"),
+        "doublet": compute_transfer_cushion(class_data[0], 0, cf_results["doublet"], "doublet"),
+    }
+    cushions_upper = {
         "singleton": compute_transfer_cushion(class_data[0], 0, cf_results["singleton"], "singleton"),
         "doublet": compute_transfer_cushion(class_data[0], 0, cf_results["doublet"], "doublet"),
     }
 
-    transferred = transfer_bounds_to_single_rule(cf_results, cushions)
+    transferred = transfer_bounds_to_single_rule(cf_results, cushions_lower, cushions_upper)
 
     # Check structure
     assert "singleton" in transferred
@@ -127,7 +131,8 @@ def test_transfer_bounds_to_single_rule(binary_classification_data):
         assert "single_upper" in transferred[rate_type]
         assert "cf_lower" in transferred[rate_type]
         assert "cf_upper" in transferred[rate_type]
-        assert "cushion" in transferred[rate_type]
+        assert "cushion_lower" in transferred[rate_type]
+        assert "cushion_upper" in transferred[rate_type]
 
         # Check bounds are widened appropriately
         assert transferred[rate_type]["single_lower"] <= transferred[rate_type]["cf_lower"]
@@ -269,7 +274,8 @@ def test_operational_rate_bounds_dataclass():
         upper_bound=0.85,
         cross_fit_lower=0.65,
         cross_fit_upper=0.80,
-        cushion=0.05,
+        cushion_lower=0.04,
+        cushion_upper=0.06,
         ci_width=0.95,
         fold_results=[{"fold": 0, "m_f": 20}],
     )
@@ -277,7 +283,8 @@ def test_operational_rate_bounds_dataclass():
     assert bounds.rate_name == "singleton"
     assert bounds.lower_bound == 0.6
     assert bounds.upper_bound == 0.85
-    assert bounds.cushion == 0.05
+    assert bounds.cushion_lower == 0.04
+    assert bounds.cushion_upper == 0.06
 
 
 def test_operational_bounds_result_dataclass():
@@ -288,7 +295,8 @@ def test_operational_bounds_result_dataclass():
         upper_bound=0.9,
         cross_fit_lower=0.75,
         cross_fit_upper=0.85,
-        cushion=0.05,
+        cushion_lower=0.05,
+        cushion_upper=0.05,
         ci_width=0.95,
         fold_results=[],
     )

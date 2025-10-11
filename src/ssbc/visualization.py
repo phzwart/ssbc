@@ -237,7 +237,10 @@ def report_prediction_stats(
                         print(f"\n     {rate_name.upper()}:")
                         print(f"       Deployment bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
                         print(f"       Cross-fit bounds:  [{bounds.cross_fit_lower:.3f}, {bounds.cross_fit_upper:.3f}]")
-                        print(f"       Transfer cushion:  {bounds.cushion:.4f}")
+                        print(
+                            f"       Transfer cushion:  lower={bounds.cushion_lower:.4f}, "
+                            f"upper={bounds.cushion_upper:.4f}"
+                        )
 
             # Show conditional singleton rates (conditional on having a singleton)
             has_correct = "correct_in_singleton" in op_bounds.rate_bounds
@@ -311,7 +314,9 @@ def report_prediction_stats(
                     print(f"\n     {rate_name.upper()}:")
                     print(f"       Deployment bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
                     print(f"       Cross-fit bounds:  [{bounds.cross_fit_lower:.3f}, {bounds.cross_fit_upper:.3f}]")
-                    print(f"       Transfer cushion:  {bounds.cushion:.4f}")
+                    print(
+                        f"       Transfer cushion:  lower={bounds.cushion_lower:.4f}, upper={bounds.cushion_upper:.4f}"
+                    )
 
         # Show conditional singleton rates (marginal)
         has_correct = "correct_in_singleton" in marginal_operational_bounds.rate_bounds
