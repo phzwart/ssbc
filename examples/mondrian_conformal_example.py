@@ -100,30 +100,34 @@ def main():
     print("KEY INSIGHTS")
     print("=" * 80)
 
-    marg = summary["marginal"]
+    # Per-class insights
+    print("\nPer-Class Performance:")
+    for class_label in [0, 1]:
+        if class_label in summary:
+            cls = summary[class_label]
+            print(f"\n  Class {class_label}:")
+            print(f"    Calibration size: n = {cls['n']}")
+            print(f"    Corrected α: {cls['alpha_corrected']:.4f}")
+            print(f"    Threshold: {cls['threshold']:.4f}")
 
-    print("\nDeployment Performance:")
-    print(
-        f"  Coverage:        {marg['coverage']['rate']:.1%} "
-        f"(CI: [{marg['coverage']['ci_95'][0]:.3f}, {marg['coverage']['ci_95'][1]:.3f}])"
-    )
-    print(f"  Singleton rate:  {marg['singletons']['rate']:.1%} (automated decisions)")
-    print(f"  Escalation rate: {marg['abstentions']['rate'] + marg['doublets']['rate']:.1%} (requires human review)")
+            # Singleton stats
+            if "calibration_stats" in cls and "singletons" in cls["calibration_stats"]:
+                sing = cls["calibration_stats"]["singletons"]
+                print(f"    Singletons: {sing['count']}/{cls['n']} = {sing['proportion']:.1%}")
 
-    sing_err = marg["singletons"]["errors"]
-    print("\nSingleton Error Rate:")
-    print(f"  Overall: {sing_err['rate']:.1%} (CI: [{sing_err['ci_95'][0]:.3f}, {sing_err['ci_95'][1]:.3f}])")
+    # PAC bounds check
+    print("\nPAC Coverage Guarantees:")
+    for class_label in [0, 1]:
+        if class_label in summary and "pac_bounds" in summary[class_label]:
+            pac = summary[class_label]["pac_bounds"]
+            if pac.get("rho") is not None:
+                print(f"\n  Class {class_label}:")
+                print(f"    Bound: {pac['alpha_singlet_bound']:.4f}")
+                print(f"    Observed: {pac['alpha_singlet_observed']:.4f}")
+                if pac["alpha_singlet_observed"] <= pac["alpha_singlet_bound"]:
+                    print("    ✓ PAC guarantee satisfied!")
 
-    # Check PAC bounds
-    if marg["pac_bounds"]["rho"] is not None:
-        pac = marg["pac_bounds"]
-        print("\nPAC Bound Check:")
-        print(f"  Theoretical bound: {pac['alpha_singlet_bound']:.4f}")
-        print(f"  Observed rate:     {pac['alpha_singlet_observed']:.4f}")
-        if pac["alpha_singlet_observed"] <= pac["alpha_singlet_bound"]:
-            print("  ✓ PAC guarantee satisfied!")
-        else:
-            print(f"  ✗ PAC guarantee violated (may happen with probability δ={delta})")
+    print("\nNote: For rigorous marginal bounds, use compute_marginal_operational_bounds()")
 
     print("\n" + "=" * 80)
     print("Example completed successfully!")
