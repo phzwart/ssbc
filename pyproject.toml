@@ -48,6 +48,11 @@ dev = [
     "pre-commit",  # git hooks
     "bandit[toml]",  # security linting
 ]
+docs = [
+    "sphinx>=7.0",  # documentation generator
+    "sphinx-rtd-theme",  # Read the Docs theme
+    "myst-parser",  # Markdown support for Sphinx
+]
 
 [project.urls]
 bugs = "https://github.com/phzwart/ssbc/issues"
