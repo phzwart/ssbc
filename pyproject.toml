@@ -53,6 +53,9 @@ docs = [
     "sphinx-rtd-theme",  # Read the Docs theme
     "myst-parser",  # Markdown support for Sphinx
 ]
+mcp = [
+    "fastmcp",  # MCP server framework
+]
 
 [project.urls]
 bugs = "https://github.com/phzwart/ssbc/issues"
