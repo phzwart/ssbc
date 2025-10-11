@@ -1,11 +1,11 @@
-# Usage
+# Usage Guide
 
 ## Overview
 
 SSBC (Small-Sample Beta Correction) provides tools for:
 - **PAC coverage guarantees** for conformal prediction with finite samples
 - **Mondrian conformal prediction** for class-conditional guarantees
-- **Service Level Agreement (SLA) bounds** for operational rates
+- **LOO-CV operational bounds** for deployment rate estimates
 - **Statistical utilities** for exact binomial confidence intervals
 
 ## Installation
@@ -39,111 +39,170 @@ print(f"Use u* = {result.u_star} as threshold index")
 import numpy as np
 from ssbc import split_by_class, mondrian_conformal_calibrate
 
-# Prepare data
+# Prepare data (labels and probabilities from your classifier)
 labels = np.array([0, 1, 0, 1, 0, 1])
 probs = np.array([[0.8, 0.2], [0.3, 0.7], [0.9, 0.1],
                    [0.2, 0.8], [0.85, 0.15], [0.1, 0.9]])
 
-# Split by class
+# Split by class for Mondrian CP
 class_data = split_by_class(labels, probs)
 
-# Calibrate with SSBC
+# Calibrate with SSBC correction
 cal_result, pred_stats = mondrian_conformal_calibrate(
     class_data=class_data,
-    alpha_target=0.10,
-    delta=0.10,
+    alpha_target=0.10,  # Target 90% coverage per class
+    delta=0.10,         # 90% PAC guarantee
     mode="beta"
 )
 
 # View results
 for label in [0, 1]:
-    print(f"Class {label}: threshold = {cal_result[label]['threshold']:.4f}")
+    print(f"Class {label}:")
+    print(f"  Threshold: {cal_result[label]['threshold']:.4f}")
+    print(f"  Corrected α: {cal_result[label]['alpha_corrected']:.4f}")
 ```
 
-## Service Level Agreement (SLA) Bounds
+## Complete Deployment Pipeline
 
-The SLA module provides contract-ready guarantees for conformal prediction deployment, including coverage and operational rate bounds.
-
-### Complete SLA Pipeline
+### Step 1: Calibrate with SSBC (PAC Coverage)
 
 ```python
-import numpy as np
-from ssbc import compute_conformal_sla
+from ssbc import (
+    BinaryClassifierSimulator,
+    split_by_class,
+    mondrian_conformal_calibrate,
+    compute_mondrian_operational_bounds,
+    compute_marginal_operational_bounds,
+    report_prediction_stats,
+)
 
 # Generate or load calibration data
-n_cal = 200
-cal_features = np.random.randn(n_cal, 10)
-cal_labels = np.random.randint(0, 5, n_cal)
+sim = BinaryClassifierSimulator(p_class1=0.5, seed=42)
+labels, probs = sim.generate(n_samples=200)
 
-# Define nonconformity score function
-def score_function(x, y):
-    """Score based on your trained model.
+# Split by class
+class_data = split_by_class(labels, probs)
 
-    In practice, use: 1 - P(y|x) from your classifier.
-    Higher score = less conforming.
-    """
-    # Example: distance-based score
-    class_centers = get_class_centers()  # Your model
-    return np.linalg.norm(x - class_centers[y])
-
-# Compute SLA
-sla_result = compute_conformal_sla(
-    cal_features=cal_features,
-    cal_labels=cal_labels,
-    score_function=score_function,
-    alpha_target=0.10,      # Target 90% coverage
-    delta_1=0.05,           # Coverage confidence: 95%
-    delta_2=0.05,           # Rate bounds confidence: 95%
-    rate_types=["singleton", "doublet", "abstention"],
-    n_folds=5,
-    random_seed=42
+# Get PAC coverage guarantees
+cal_result, pred_stats = mondrian_conformal_calibrate(
+    class_data=class_data,
+    alpha_target=0.10,  # Target 90% coverage
+    delta=0.05,         # 95% PAC confidence
 )
-
-# View guarantees
-print(f"Coverage: ≥ {sla_result.coverage_guarantee:.1%} "
-      f"w.p. ≥ {sla_result.coverage_confidence:.1%}")
-print(f"Threshold: {sla_result.threshold:.4f}")
-
-# Operational rate bounds
-for rate_name, bounds in sla_result.rate_bounds.items():
-    print(f"{rate_name}: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
 ```
 
-### Mondrian SLA (Class-Conditional)
+### Step 2: Estimate Operational Rates (LOO-CV)
 
 ```python
-from ssbc import compute_conformal_sla_mondrian
-
-# Compute class-specific SLAs
-mondrian_results = compute_conformal_sla_mondrian(
-    cal_features=cal_features,
-    cal_labels=cal_labels,
-    score_function=score_function,
-    alpha_target=0.10,
-    delta_1=0.05,
-    delta_2=0.05,
-    n_folds=5,
-    random_seed=42
+# Per-class operational bounds via Leave-One-Out CV
+per_class_bounds = compute_mondrian_operational_bounds(
+    calibration_result=cal_result,
+    labels=labels,
+    probs=probs,
+    ci_width=0.95,  # 95% confidence intervals
+    n_jobs=-1,      # Use all CPU cores for speed
 )
 
-# Each class gets its own threshold and bounds
-for class_label, result in mondrian_results.items():
-    print(f"Class {class_label}:")
-    print(f"  Threshold: {result.threshold:.4f}")
-    print(f"  Coverage: {result.coverage_guarantee:.1%}")
+# Marginal operational bounds (deployment view)
+marginal_bounds = compute_marginal_operational_bounds(
+    labels=labels,
+    probs=probs,
+    alpha_target=0.10,
+    delta_coverage=0.05,
+    ci_width=0.95,
+    n_jobs=-1,
+)
 ```
 
-### Understanding SLA Results
+### Step 3: Generate Deployment Report
 
-The `ConformalSLAResult` provides:
+```python
+# Comprehensive report with all guarantees
+report_prediction_stats(
+    prediction_stats=pred_stats,
+    calibration_result=cal_result,
+    operational_bounds_per_class=per_class_bounds,
+    marginal_operational_bounds=marginal_bounds,
+    verbose=True,
+)
+```
 
-- **Coverage Guarantee**: P(Y ∈ C(X)) ≥ 1 - α with probability ≥ 1 - δ₁
-- **Operational Rate Bounds**:
-  - `singleton`: Single predicted label (automated decision)
-  - `doublet`: Two predicted labels (needs review)
-  - `abstention`: No predicted labels (high uncertainty)
-  - `error_in_singleton`: Singleton prediction that's incorrect
-- **Joint Confidence**: 1 - (δ₁ + δ₂) - all bounds hold simultaneously
+**Report includes:**
+- ✅ PAC coverage guarantees (SSBC)
+- ✅ Operational rate bounds (LOO-CV)
+- ✅ Singleton/doublet/abstention rates
+- ✅ Conditional error rates P(error | singleton)
+- ✅ Per-class and marginal statistics
+
+## Operational Bounds API
+
+### Marginal Operational Bounds
+
+Estimates for overall deployment (ignores true labels):
+
+```python
+from ssbc import compute_marginal_operational_bounds
+
+marginal_bounds = compute_marginal_operational_bounds(
+    labels=labels,                    # True labels
+    probs=probs,                      # Probability matrix (n, 2)
+    alpha_target=0.10,                # Target miscoverage
+    delta_coverage=0.05,              # PAC risk for coverage
+    rate_types=None,                  # All rates (or specify list)
+    ci_width=0.95,                    # 95% CI width
+    n_jobs=1,                         # Parallel jobs (-1 = all cores)
+)
+
+# Access bounds
+singleton_bounds = marginal_bounds.rate_bounds["singleton"]
+print(f"Singleton rate: [{singleton_bounds.lower_bound:.3f}, "
+      f"{singleton_bounds.upper_bound:.3f}]")
+print(f"Count: {singleton_bounds.n_successes}/{singleton_bounds.n_evaluations}")
+```
+
+### Per-Class Operational Bounds
+
+Estimates conditioned on true label (performance by class):
+
+```python
+from ssbc import compute_mondrian_operational_bounds
+
+per_class_bounds = compute_mondrian_operational_bounds(
+    calibration_result=cal_result,   # From mondrian_conformal_calibrate()
+    labels=labels,                    # True labels
+    probs=probs,                      # Probability matrix (n, 2)
+    rate_types=None,                  # All rates (or specify list)
+    ci_width=0.95,                    # 95% CI width
+    n_jobs=1,                         # Parallel jobs (-1 = all cores)
+)
+
+# Access per-class bounds
+for class_label in [0, 1]:
+    class_bounds = per_class_bounds[class_label]
+    singleton = class_bounds.rate_bounds["singleton"]
+    print(f"Class {class_label} singleton rate: "
+          f"[{singleton.lower_bound:.3f}, {singleton.upper_bound:.3f}]")
+```
+
+### Performance Optimization
+
+For large datasets (n > 250), use multiprocessing:
+
+```python
+# Single-threaded (default)
+bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, n_jobs=1)
+
+# Use all CPU cores (recommended for n > 250)
+bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, n_jobs=-1)
+
+# Use specific number of cores
+bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, n_jobs=4)
+```
+
+**Speedup examples:**
+- n=250: ~3.6x speedup with `n_jobs=-1`
+- n=500: ~7.2x speedup with `n_jobs=-1`
+- n=1000: ~10-15x speedup with `n_jobs=-1`
 
 ## Statistical Utilities
 
@@ -152,7 +211,7 @@ The `ConformalSLAResult` provides:
 ```python
 from ssbc import clopper_pearson_lower, clopper_pearson_upper, cp_interval
 
-# One-sided bounds (for PAC guarantees)
+# One-sided bounds
 lower = clopper_pearson_lower(k=45, n=100, confidence=0.95)
 upper = clopper_pearson_upper(k=45, n=100, confidence=0.95)
 
@@ -184,98 +243,116 @@ print(f"Singleton rate: {np.mean(singleton_indicators):.2%}")
 print(f"Error rate: {np.mean(error_indicators):.2%}")
 ```
 
-## Advanced Topics
+### Supported Rate Types
 
-### Custom Rate Types
+- **`"singleton"`**: |C(x)| = 1 (single predicted label)
+- **`"doublet"`**: |C(x)| = 2 (two predicted labels)
+- **`"abstention"`**: |C(x)| = 0 (no prediction)
+- **`"error_in_singleton"`**: |C(x)| = 1 and y ∉ C(x) (singleton error)
+- **`"correct_in_singleton"`**: |C(x)| = 1 and y ∈ C(x) (singleton correct)
 
-The SLA module supports custom operational rates:
-- `"singleton"`: |C(x)| = 1
-- `"doublet"`: |C(x)| = 2
-- `"abstention"`: |C(x)| = 0
-- `"error_in_singleton"`: |C(x)| = 1 and y ∉ C(x)
+## Understanding the Results
 
-You can compute bounds for any combination:
+### OperationalRateBounds Dataclass
+
+Each rate bound contains:
 
 ```python
-sla_result = compute_conformal_sla(
-    cal_features, cal_labels, score_function,
-    alpha_target=0.10, delta_1=0.05, delta_2=0.05,
-    rate_types=["singleton", "error_in_singleton"],
-    n_folds=5
-)
+bounds = marginal_bounds.rate_bounds["singleton"]
+
+print(bounds.rate_name)       # "singleton"
+print(bounds.lower_bound)     # Lower CP bound
+print(bounds.upper_bound)     # Upper CP bound
+print(bounds.ci_width)        # CI width (e.g., 0.95)
+print(bounds.n_evaluations)   # Total LOO evaluations (n)
+print(bounds.n_successes)     # Count (K)
 ```
 
-### Cross-Fit Analysis
-
-For detailed fold-by-fold analysis:
+### OperationalRateBoundsResult Dataclass
 
 ```python
-from ssbc import cross_fit_cp_bounds
+result = marginal_bounds
 
-# Compute cross-fit bounds separately
-cf_results = cross_fit_cp_bounds(
-    cal_features, cal_labels, score_function,
-    alpha_adj=0.08,  # From SSBC correction
-    rate_types=["singleton"],
-    n_folds=5,
-    delta_2=0.05,
-    random_seed=42
-)
-
-# Access fold-level details
-for fold_data in cf_results["singleton"]["fold_results"]:
-    print(f"Fold {fold_data['fold']}: "
-          f"L={fold_data['L_fr']:.3f}, U={fold_data['U_fr']:.3f}")
-```
-
-### Transfer Cushion
-
-The transfer cushion accounts for differences between cross-fit and single-rule thresholds:
-
-```python
-from ssbc import compute_transfer_cushion, transfer_bounds_to_single_rule
-
-# Compute cushions
-cushions = {}
-for rate_type in ["singleton", "doublet"]:
-    cushions[rate_type] = compute_transfer_cushion(
-        cal_features, cal_labels, score_function,
-        cf_results[rate_type], rate_type
-    )
-
-# Transfer bounds to single rule
-transferred = transfer_bounds_to_single_rule(cf_results, cushions)
-
-print(f"Singleton cushion: {cushions['singleton']:.4f}")
+print(result.rate_bounds)      # Dict of OperationalRateBounds
+print(result.ci_width)         # CI width for all bounds
+print(result.thresholds)       # Reference thresholds (display only)
+print(result.n_calibration)    # Calibration set size
 ```
 
 ## Examples
 
 Complete examples are available in the `examples/` directory:
 
-- `examples/basic_usage.py` - Basic SSBC correction
-- `examples/mondrian_conformal_example.py` - Mondrian conformal prediction
-- `examples/sla_example.py` - Complete SLA pipeline with synthetic data
-- `examples/hyperparameter_sweep_example.py` - Hyperparameter optimization
+### 1. Core SSBC Algorithm
+```bash
+python examples/ssbc_core_example.py
+```
+Demonstrates the SSBC algorithm for different calibration set sizes.
 
-Run an example:
+### 2. Mondrian Conformal Prediction
+```bash
+python examples/mondrian_conformal_example.py
+```
+Complete workflow: simulation → calibration → per-class reporting.
 
+### 3. Complete SLA/Deployment Workflow ⭐
 ```bash
 python examples/sla_example.py
 ```
+**Full deployment pipeline**: PAC coverage + LOO-CV operational bounds + comprehensive reporting.
 
-## API Reference
+## Key Concepts
 
-For detailed API documentation, see the module docstrings:
+### PAC Coverage (from SSBC)
 
-```python
-from ssbc import compute_conformal_sla
-help(compute_conformal_sla)
-```
+**Guarantee:** With probability ≥ 1-δ over calibration sets, the conformal predictor
+achieves coverage ≥ 1-α_target on future data.
+
+**Properties:**
+- Valid for ANY sample size n
+- Distribution-free
+- Frequentist (no priors)
+
+### Operational Bounds (from LOO-CV)
+
+**Estimates:** Confidence intervals on deployment rates (singleton, doublet, abstention, error).
+
+**Procedure:**
+1. For each calibration point i, train on all OTHER points
+2. Apply predictor to point i (unbiased evaluation)
+3. Aggregate n evaluations
+4. Apply Clopper-Pearson CIs
+
+**Properties:**
+- Unbiased estimates (LOO ensures no data leakage)
+- Exact binomial CIs (Clopper-Pearson)
+- Standard frequentist interpretation
+
+### Marginal vs Per-Class
+
+**Marginal bounds** (ignore true labels):
+- "What will a user see?"
+- Deployment view
+- Overall automation rate
+
+**Per-class bounds** (conditioned on true label):
+- "How does performance differ by ground truth?"
+- Class-specific rates
+- Identifies minority class challenges
 
 ## References
 
-- **SSBC**: Finite-sample PAC guarantees via Beta distribution bounds
-- **Conformal Prediction**: Distribution-free prediction intervals
-- **Mondrian CP**: Class-conditional conformal prediction
-- **SLA Bounds**: Cross-fit operational rate bounds with transfer to single rule
+### Key Statistical Properties
+
+- **Distribution-Free**: No P(X,Y) assumptions
+- **Model-Agnostic**: Works with any classifier
+- **Frequentist**: Valid frequentist guarantees
+- **Non-Bayesian**: No priors required
+- **Finite-Sample**: Exact for small n (not asymptotic)
+- **Exchangeability Only**: Minimal assumption
+
+### Further Reading
+
+- See [theory.md](theory.md) for detailed theoretical background
+- See [installation.md](installation.md) for setup instructions
+- See `examples/` directory for complete working examples
