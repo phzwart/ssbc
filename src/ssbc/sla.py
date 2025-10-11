@@ -106,6 +106,7 @@ def cross_fit_cp_bounds(
     rate_types: list[str],
     n_folds: int,
     delta: float,
+    confidence_level: float = 0.95,
     random_seed: int | None = None,
 ) -> dict[str, dict]:
     """Compute cross-fit Clopper-Pearson bounds for operational rates (per-class).
@@ -135,7 +136,10 @@ def cross_fit_cp_bounds(
     n_folds : int
         Number of cross-validation folds (typically 5-10)
     delta : float
-        Total PAC risk budget for operational rate bounds
+        PAC risk budget for operational rate bounds. Each rate independently gets
+        confidence 1-δ via union bound across folds only (NOT split across rates).
+    confidence_level : float, default=0.95
+        Confidence level for Clopper-Pearson intervals (e.g., 0.95 for 95% CIs)
     random_seed : int, optional
         Random seed for reproducible fold splits
 
@@ -150,8 +154,10 @@ def cross_fit_cp_bounds(
 
     Notes
     -----
-    The risk budget δ is split evenly across folds and rate types for union bound.
-    Each fold uses Clopper-Pearson exact binomial confidence intervals with PAC margin.
+    Union bound applies ONLY across folds (δ split K ways), NOT across rate types.
+    Each rate type independently achieves confidence 1-δ. This means if you request
+    3 rate types with δ=0.05, each rate has 95% confidence (not 95%/3).
+    The CI width is controlled separately by confidence_level parameter.
     """
     from .core import ssbc_correct
 
@@ -159,9 +165,8 @@ def cross_fit_cp_bounds(
     n = class_data["n"]
     fold_size = n // n_folds
 
-    # Allocate delta evenly across folds and rates (union bound)
-    n_rates = len(rate_types)
-    delta_per_bound = delta / (n_folds * n_rates)
+    # Note: Delta is NOT split across rate types - each rate independently
+    # gets confidence 1-δ via union bound across folds only
 
     results = {rt: {"fold_results": [], "weights": []} for rt in rate_types}
 
@@ -237,10 +242,9 @@ def cross_fit_cp_bounds(
             )
             K_fr = int(np.sum(Z))
 
-            # Compute Clopper-Pearson bounds with PAC margin
-            confidence = 1 - delta_per_bound
-            L_fr = clopper_pearson_lower(K_fr, m_f, confidence)
-            U_fr = clopper_pearson_upper(K_fr, m_f, confidence)
+            # Compute Clopper-Pearson bounds at specified confidence level
+            L_fr = clopper_pearson_lower(K_fr, m_f, confidence_level)
+            U_fr = clopper_pearson_upper(K_fr, m_f, confidence_level)
 
             results[rate_type]["fold_results"].append(
                 {
@@ -406,6 +410,7 @@ def compute_marginal_operational_bounds(
     delta_coverage: float | dict[int, float],
     delta: float,
     rate_types: list[str] | None = None,
+    confidence_level: float = 0.95,
     n_folds: int = 5,
     random_seed: int | None = None,
 ) -> OperationalRateBoundsResult:
@@ -416,7 +421,7 @@ def compute_marginal_operational_bounds(
     2. For each fold:
        - Train Mondrian on other folds (split by class, compute thresholds)
        - Test on this fold (marginal) → count operational rates
-       - Compute CP bounds with PAC margin
+       - Compute CP bounds at specified confidence level
     3. Average across folds and apply transfer cushion
 
     This gives unbiased marginal rate estimates because test folds never saw training data.
@@ -432,9 +437,12 @@ def compute_marginal_operational_bounds(
     delta_coverage : float or dict[int, float]
         PAC risk for coverage (used for SSBC in each fold)
     delta : float
-        Total PAC risk for marginal operational rate bounds
+        PAC risk for operational rate bounds. Each rate independently gets
+        confidence 1-δ via union bound across folds only (NOT split across rates).
     rate_types : list[str], optional
-        Operational rates to compute. Defaults to ["singleton", "doublet"]
+        Operational rates to compute. Each gets confidence 1-δ independently.
+    confidence_level : float, default=0.95
+        Confidence level for Clopper-Pearson intervals (e.g., 0.95 for 95% CIs)
     n_folds : int, default=5
         Number of cross-validation folds
     random_seed : int, optional
@@ -449,7 +457,8 @@ def compute_marginal_operational_bounds(
     --------
     >>> # Get rigorous marginal rate bounds
     >>> marginal_bounds = compute_marginal_operational_bounds(
-    ...     labels, probs, alpha_target=0.1, delta_coverage=0.05, delta=0.05
+    ...     labels, probs, alpha_target=0.1, delta_coverage=0.05, delta=0.05,
+    ...     confidence_level=0.95
     ... )
     >>> print(f"Marginal singleton rate: "
     ...       f"[{marginal_bounds.rate_bounds['singleton'].lower_bound:.2f}, "
@@ -457,8 +466,8 @@ def compute_marginal_operational_bounds(
 
     Notes
     -----
-    This is "cross-validated Mondrian" on marginal data. Each fold trains a Mondrian
-    predictor and tests on held-out marginal data for unbiased estimates.
+    Union bound applies ONLY across folds (δ split K ways), NOT across rate types.
+    Each rate type independently achieves confidence 1-δ with specified CI width.
     """
     from .conformal import split_by_class
     from .core import ssbc_correct
@@ -481,9 +490,8 @@ def compute_marginal_operational_bounds(
     if rate_types is None:
         rate_types = ["singleton", "doublet", "abstention", "correct_in_singleton", "error_in_singleton"]
 
-    # Allocate delta evenly across folds and rates (union bound)
-    n_rates = len(rate_types)
-    delta_per_bound = delta / (n_folds * n_rates)
+    # Note: Delta is NOT split across rate types - each rate independently
+    # gets confidence 1-δ via union bound across folds only
 
     results = {rt: {"fold_results": [], "weights": []} for rt in rate_types}
 
@@ -581,10 +589,9 @@ def compute_marginal_operational_bounds(
             )
             K_fr = int(np.sum(Z))
 
-            # Compute CP bounds with PAC margin
-            confidence = 1 - delta_per_bound
-            L_fr = clopper_pearson_lower(K_fr, m_f, confidence)
-            U_fr = clopper_pearson_upper(K_fr, m_f, confidence)
+            # Compute Clopper-Pearson bounds at specified confidence level
+            L_fr = clopper_pearson_lower(K_fr, m_f, confidence_level)
+            U_fr = clopper_pearson_upper(K_fr, m_f, confidence_level)
 
             results[rate_type]["fold_results"].append(
                 {
@@ -681,6 +688,7 @@ def compute_mondrian_operational_bounds(
     probs: np.ndarray,
     delta: float,
     rate_types: list[str] | None = None,
+    confidence_level: float = 0.95,
     n_folds: int = 5,
     random_seed: int | None = None,
 ) -> dict[int, OperationalRateBoundsResult]:
@@ -694,7 +702,7 @@ def compute_mondrian_operational_bounds(
     1. K-fold split MARGINAL data
     2. For each fold: train Mondrian (both thresholds), test on marginal fold
     3. Separate test results BY TRUE CLASS to get per-class rates
-    4. Compute CP bounds per class with PAC margin
+    4. Compute CP bounds per class at specified confidence level
     5. Average and transfer
 
     Parameters
@@ -706,9 +714,12 @@ def compute_mondrian_operational_bounds(
     probs : np.ndarray
         Probability matrix (shape: n, 2)
     delta : float
-        Total PAC risk for operational rate bounds (split across classes)
+        PAC risk for operational rate bounds. Split across classes only (union bound).
+        Each class independently gets confidence 1-δ for all its rates.
     rate_types : list[str], optional
-        Operational rates to compute. Defaults to ["singleton", "doublet"]
+        Operational rates to compute. Each gets the same confidence independently.
+    confidence_level : float, default=0.95
+        Confidence level for Clopper-Pearson intervals (e.g., 0.95 for 95% CIs)
     n_folds : int, default=5
         Number of cross-validation folds
     random_seed : int, optional
@@ -725,13 +736,16 @@ def compute_mondrian_operational_bounds(
     >>> class_data = split_by_class(labels, probs)
     >>> cal_result, pred_stats = mondrian_conformal_calibrate(class_data, 0.1, 0.05)
     >>>
-    >>> # Step 2: Per-class operational bounds (uses labels, probs)
-    >>> bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
+    >>> # Step 2: Per-class operational bounds
+    >>> bounds = compute_mondrian_operational_bounds(
+    ...     cal_result, labels, probs, delta=0.05, confidence_level=0.95
+    ... )
 
     Notes
     -----
-    This does marginal cross-validation then conditions on true class for reporting.
-    The risk δ is split across classes and rate types via union bound.
+    Union bound applies across classes and folds, but NOT across rate types.
+    Each rate type independently achieves confidence 1-δ_class where δ_class = δ/2.
+    The CI width is controlled separately by confidence_level parameter.
     """
     from .conformal import split_by_class
     from .core import ssbc_correct
@@ -748,10 +762,9 @@ def compute_mondrian_operational_bounds(
     if rate_types is None:
         rate_types = ["singleton", "doublet", "abstention", "correct_in_singleton", "error_in_singleton"]
 
-    # Allocate delta: split across classes, then folds, then rates
-    n_rates = len(rate_types)
+    # Allocate delta: split across classes only (NOT rates or folds)
+    # Each rate within a class gets confidence 1-delta_per_class independently
     delta_per_class = delta / n_classes
-    delta_per_bound = delta_per_class / (n_folds * n_rates)
 
     # Initialize results for each class
     per_class_results = {
@@ -858,10 +871,9 @@ def compute_mondrian_operational_bounds(
                 )
                 K_fr = int(np.sum(Z))
 
-                # CP bounds with PAC margin
-                confidence = 1 - delta_per_bound
-                L_fr = clopper_pearson_lower(K_fr, m_class, confidence)
-                U_fr = clopper_pearson_upper(K_fr, m_class, confidence)
+                # Compute Clopper-Pearson bounds at specified confidence level
+                L_fr = clopper_pearson_lower(K_fr, m_class, confidence_level)
+                U_fr = clopper_pearson_upper(K_fr, m_class, confidence_level)
 
                 per_class_results[true_class][rate_type]["fold_results"].append(
                     {

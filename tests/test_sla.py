@@ -7,6 +7,7 @@ from ssbc import (
     BinaryClassifierSimulator,
     OperationalRateBounds,
     OperationalRateBoundsResult,
+    compute_marginal_operational_bounds,
     compute_mondrian_operational_bounds,
     compute_transfer_cushion,
     cross_fit_cp_bounds,
@@ -305,3 +306,56 @@ def test_operational_bounds_result_dataclass():
     assert result.n_calibration == 100
     assert result.n_folds == 5
     assert "singleton" in result.rate_bounds
+
+
+def test_custom_confidence_level():
+    """Test that custom confidence_level parameter works."""
+    np.random.seed(42)
+    sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(3, 7), beta_params_class1=(7, 3), seed=42)
+    labels, probs = sim.generate(n_samples=100)
+
+    # Marginal bounds with different confidence levels
+    marginal_90 = compute_marginal_operational_bounds(
+        labels, probs, 0.1, 0.05, delta=0.05, confidence_level=0.90, n_folds=3, random_seed=42
+    )
+    marginal_99 = compute_marginal_operational_bounds(
+        labels, probs, 0.1, 0.05, delta=0.05, confidence_level=0.99, n_folds=3, random_seed=42
+    )
+
+    # Higher confidence should give wider intervals
+    sing_90 = marginal_90.rate_bounds["singleton"]
+    sing_99 = marginal_99.rate_bounds["singleton"]
+
+    width_90 = sing_90.upper_bound - sing_90.lower_bound
+    width_99 = sing_99.upper_bound - sing_99.lower_bound
+
+    assert width_99 > width_90, "99% CI should be wider than 90% CI"
+
+
+def test_rates_not_split_independently_confident():
+    """Test that each rate gets the same confidence independently (NOT split)."""
+    np.random.seed(42)
+    sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(3, 7), beta_params_class1=(7, 3), seed=42)
+    labels, probs = sim.generate(n_samples=100)
+    class_data = split_by_class(labels, probs)
+    cal_result, _ = mondrian_conformal_calibrate(class_data, 0.1, 0.05)
+
+    # Request 3 rates with delta=0.06 (94% confidence)
+    op_bounds = compute_mondrian_operational_bounds(
+        cal_result,
+        labels,
+        probs,
+        delta=0.06,  # Per-class delta
+        rate_types=["singleton", "doublet", "abstention"],
+        n_folds=3,
+        random_seed=42,
+    )
+
+    # Each class gets delta_per_class = 0.06/2 = 0.03 (97% confidence)
+    # All rates within each class should have SAME confidence (97%)
+    for class_label in [0, 1]:
+        for rate_name in ["singleton", "doublet", "abstention"]:
+            if rate_name in op_bounds[class_label].rate_bounds:
+                conf = op_bounds[class_label].rate_bounds[rate_name].confidence_level
+                expected_conf = 1 - (0.06 / 2)  # delta split across 2 classes
+                assert np.isclose(conf, expected_conf), f"{rate_name} should have confidence {expected_conf:.1%}"
