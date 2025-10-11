@@ -9,7 +9,6 @@ from ssbc import (
     OperationalRateBoundsResult,
     compute_marginal_operational_bounds,
     compute_mondrian_operational_bounds,
-    cross_fit_cp_bounds,
     mondrian_conformal_calibrate,
     split_by_class,
 )
@@ -30,69 +29,7 @@ def binary_classification_data():
 
 
 # ============================================================================
-# Test Cross-Fit CP Bounds
-# ============================================================================
-
-
-def test_cross_fit_cp_bounds_basic(binary_classification_data):
-    """Test basic cross-fit CP bounds computation."""
-    _, _, class_data = binary_classification_data
-
-    # Test on class 0
-    results = cross_fit_cp_bounds(
-        class_data=class_data[0],
-        true_class=0,
-        alpha_target=0.10,
-        delta_class=0.05,
-        rate_types=["singleton", "doublet"],
-        n_folds=5,
-        delta=0.10,
-        random_seed=42,
-    )
-
-    # Check structure
-    assert "singleton" in results
-    assert "doublet" in results
-
-    for rate_type in ["singleton", "doublet"]:
-        assert "fold_results" in results[rate_type]
-        assert "weights" in results[rate_type]
-        assert "cf_lower" in results[rate_type]
-        assert "cf_upper" in results[rate_type]
-
-        # Check bounds are valid
-        assert 0.0 <= results[rate_type]["cf_lower"] <= results[rate_type]["cf_upper"] <= 1.0
-
-
-def test_cross_fit_cp_bounds_weights_sum_to_one(binary_classification_data):
-    """Test that fold weights sum to approximately 1."""
-    _, _, class_data = binary_classification_data
-
-    results = cross_fit_cp_bounds(class_data[0], 0, 0.10, 0.05, ["singleton"], 5, 0.10, random_seed=42)
-
-    weights = results["singleton"]["weights"]
-    assert np.isclose(sum(weights), 1.0, atol=1e-10)
-
-
-def test_cross_fit_cp_bounds_reproducibility(binary_classification_data):
-    """Test reproducibility with same random seed."""
-    _, _, class_data = binary_classification_data
-
-    results1 = cross_fit_cp_bounds(class_data[0], 0, 0.10, 0.05, ["singleton"], 5, 0.10, random_seed=42)
-
-    results2 = cross_fit_cp_bounds(class_data[0], 0, 0.10, 0.05, ["singleton"], 5, 0.10, random_seed=42)
-
-    assert np.isclose(results1["singleton"]["cf_lower"], results2["singleton"]["cf_lower"])
-    assert np.isclose(results1["singleton"]["cf_upper"], results2["singleton"]["cf_upper"])
-
-
-# ============================================================================
-# Test Transfer Cushion
-# ============================================================================
-
-
-# ============================================================================
-# Test Mondrian Operational Bounds
+# Test Mondrian Operational Bounds (Full Conformal LOO)
 # ============================================================================
 
 
@@ -110,8 +47,6 @@ def test_compute_mondrian_operational_bounds(binary_classification_data):
         probs=probs,
         delta=0.10,
         rate_types=["singleton", "doublet"],
-        n_folds=3,
-        random_seed=42,
     )
 
     # Check structure
@@ -134,7 +69,7 @@ def test_compute_mondrian_operational_bounds_uses_mondrian_params(binary_classif
     cal_result, _ = mondrian_conformal_calibrate(class_data, alpha_target=0.10, delta=0.05)
 
     # Operational bounds
-    results = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.10, n_folds=3, random_seed=42)
+    results = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.10)
 
     # Check that thresholds match
     for class_label in [0, 1]:
@@ -157,7 +92,7 @@ def test_operational_bounds_integration_small_dataset():
     cal_result, _ = mondrian_conformal_calibrate(class_data, alpha_target=0.10, delta=0.10)
 
     # Operational bounds
-    results = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.10, n_folds=3, random_seed=42)
+    results = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.10)
 
     assert isinstance(results, dict)
     assert len(results) > 0  # At least one class should have results
@@ -176,9 +111,7 @@ def test_mondrian_integration_full_workflow():
     cal_result, pred_stats = mondrian_conformal_calibrate(class_data, alpha_target=0.10, delta=0.05)
 
     # Step 3: Operational bounds (marginal CV, then per-class)
-    operational_bounds = compute_mondrian_operational_bounds(
-        cal_result, labels, probs, delta=0.05, n_folds=5, random_seed=42
-    )
+    operational_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
 
     # Verify complete workflow
     assert len(operational_bounds) == 2  # Two classes
@@ -203,9 +136,7 @@ def test_different_alpha_per_class():
     cal_result, _ = mondrian_conformal_calibrate(class_data, alpha_target={0: 0.05, 1: 0.10}, delta=0.05)
 
     # Operational bounds
-    operational_bounds = compute_mondrian_operational_bounds(
-        cal_result, labels, probs, delta=0.05, n_folds=5, random_seed=42
-    )
+    operational_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
 
     assert len(operational_bounds) == 2
     # Verify different alphas were used
@@ -225,13 +156,16 @@ def test_operational_rate_bounds_dataclass():
         lower_bound=0.6,
         upper_bound=0.85,
         confidence_level=0.95,
-        fold_results=[{"fold": 0, "m_f": 20}],
+        n_evaluations=100,
+        n_successes=75,
     )
 
     assert bounds.rate_name == "singleton"
     assert bounds.lower_bound == 0.6
     assert bounds.upper_bound == 0.85
     assert bounds.confidence_level == 0.95
+    assert bounds.n_evaluations == 100
+    assert bounds.n_successes == 75
 
 
 def test_operational_bounds_result_dataclass():
@@ -241,7 +175,8 @@ def test_operational_bounds_result_dataclass():
         lower_bound=0.7,
         upper_bound=0.9,
         confidence_level=0.95,
-        fold_results=[],
+        n_evaluations=100,
+        n_successes=80,
     )
 
     result = OperationalRateBoundsResult(
@@ -249,13 +184,11 @@ def test_operational_bounds_result_dataclass():
         rate_confidence=0.95,
         thresholds=0.5,
         n_calibration=100,
-        n_folds=5,
     )
 
     assert result.rate_confidence == 0.95
     assert result.thresholds == 0.5
     assert result.n_calibration == 100
-    assert result.n_folds == 5
     assert "singleton" in result.rate_bounds
 
 
@@ -266,21 +199,24 @@ def test_custom_confidence_level():
     labels, probs = sim.generate(n_samples=100)
 
     # Marginal bounds with different confidence levels
-    marginal_90 = compute_marginal_operational_bounds(
-        labels, probs, 0.1, 0.05, delta=0.05, confidence_level=0.90, n_folds=3, random_seed=42
-    )
+    marginal_90 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, delta=0.05)
     marginal_99 = compute_marginal_operational_bounds(
-        labels, probs, 0.1, 0.05, delta=0.05, confidence_level=0.99, n_folds=3, random_seed=42
+        labels,
+        probs,
+        0.1,
+        0.05,
+        delta=0.01,  # Tighter confidence
     )
 
-    # Higher confidence should give wider intervals
+    # Lower delta (higher confidence) should give wider intervals
     sing_90 = marginal_90.rate_bounds["singleton"]
     sing_99 = marginal_99.rate_bounds["singleton"]
 
+    # With delta=0.01 (99% confidence), bounds should be wider than delta=0.05 (95%)
     width_90 = sing_90.upper_bound - sing_90.lower_bound
     width_99 = sing_99.upper_bound - sing_99.lower_bound
 
-    assert width_99 > width_90, "99% CI should be wider than 90% CI"
+    assert width_99 > width_90, "99% confidence should give wider intervals than 95%"
 
 
 def test_rates_not_split_independently_confident():
@@ -298,8 +234,6 @@ def test_rates_not_split_independently_confident():
         probs,
         delta=0.06,  # Per-class delta
         rate_types=["singleton", "doublet", "abstention"],
-        n_folds=3,
-        random_seed=42,
     )
 
     # Each class gets delta_per_class = 0.06/2 = 0.03 (97% PAC confidence)

@@ -34,7 +34,6 @@ from .sla import (
     OperationalRateBoundsResult,
     compute_marginal_operational_bounds,
     compute_mondrian_operational_bounds,
-    cross_fit_cp_bounds,
 )
 
 # Statistics utilities
@@ -75,7 +74,6 @@ __all__ = [
     "OperationalRateBoundsResult",
     "compute_marginal_operational_bounds",
     "compute_mondrian_operational_bounds",
-    "cross_fit_cp_bounds",
     # Simulation
     "BinaryClassifierSimulator",
     # Visualization

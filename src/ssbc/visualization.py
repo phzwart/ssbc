@@ -223,8 +223,9 @@ def report_prediction_stats(
             op_bounds = operational_bounds_per_class[class_label]
 
             if verbose:
-                print(f"\n  ✅ RIGOROUS Operational Bounds (Cross-Validated, {op_bounds.n_folds} folds)")
+                print("\n  ✅ RIGOROUS Operational Bounds (Full Conformal LOO)")
                 print(f"     Confidence: {op_bounds.rate_confidence:.1%}")
+                print(f"     Calibration size: n = {op_bounds.n_calibration}")
 
             # Show main rates (singleton, doublet, abstention)
             for rate_name in ["abstention", "singleton", "doublet"]:
@@ -243,27 +244,29 @@ def report_prediction_stats(
                 print("\n     CONDITIONAL RATES (conditioned on singleton, with CP+PAC bounds):")
 
                 singleton_bounds = op_bounds.rate_bounds["singleton"]
-                weights_dummy = [1.0 / len(singleton_bounds.fold_results)] * len(singleton_bounds.fold_results)
+                n_singletons = singleton_bounds.n_successes
 
                 # P(correct | singleton) with rigorous CP bounds
-                if has_correct:
+                if has_correct and n_singletons > 0:
                     correct_bounds = op_bounds.rate_bounds["correct_in_singleton"]
+                    n_correct = correct_bounds.n_successes
 
-                    rate, lower, upper = compute_conditional_rate_bounds(
-                        correct_bounds.fold_results, singleton_bounds.fold_results, weights_dummy
-                    )
+                    # Conditional rate and CP interval
+                    rate = n_correct / n_singletons if n_singletons > 0 else 0.0
+                    ci = cp_interval(n_correct, n_singletons)
 
-                    print(f"       P(correct | singleton) = {rate:.3f}  95% CI: [{lower:.3f}, {upper:.3f}]")
+                    print(f"       P(correct | singleton) = {rate:.3f}  95% CI: [{ci['lower']:.3f}, {ci['upper']:.3f}]")
 
                 # P(error | singleton) with rigorous CP bounds
-                if has_error:
+                if has_error and n_singletons > 0:
                     error_bounds = op_bounds.rate_bounds["error_in_singleton"]
+                    n_error = error_bounds.n_successes
 
-                    rate, lower, upper = compute_conditional_rate_bounds(
-                        error_bounds.fold_results, singleton_bounds.fold_results, weights_dummy
-                    )
+                    # Conditional rate and CP interval
+                    rate = n_error / n_singletons if n_singletons > 0 else 0.0
+                    ci = cp_interval(n_error, n_singletons)
 
-                    print(f"       P(error | singleton)   = {rate:.3f}  95% CI: [{lower:.3f}, {upper:.3f}]")
+                    print(f"       P(error | singleton)   = {rate:.3f}  95% CI: [{ci['lower']:.3f}, {ci['upper']:.3f}]")
 
         # Store in summary
         summary[class_label] = {
@@ -289,11 +292,9 @@ def report_prediction_stats(
             print(f"{'=' * 80}")
             print(f"  Total samples: n = {marginal_operational_bounds.n_calibration}")
 
-            print(
-                f"\n  ✅ RIGOROUS Marginal Bounds "
-                f"(Cross-Validated Mondrian, {marginal_operational_bounds.n_folds} folds)"
-            )
+            print("\n  ✅ RIGOROUS Marginal Bounds (Full Conformal LOO)")
             print(f"     Confidence: {marginal_operational_bounds.rate_confidence:.1%}")
+            print(f"     Total evaluations: n = {marginal_operational_bounds.n_calibration}")
 
         # Show main rates
         for rate_name in ["abstention", "singleton", "doublet"]:
@@ -302,6 +303,7 @@ def report_prediction_stats(
                 if verbose:
                     print(f"\n     {rate_name.upper()}:")
                     print(f"       Bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
+                    print(f"       Count: {bounds.n_successes}/{bounds.n_evaluations}")
 
         # Show conditional singleton rates (marginal)
         has_correct = "correct_in_singleton" in marginal_operational_bounds.rate_bounds
@@ -312,25 +314,27 @@ def report_prediction_stats(
             print("\n     CONDITIONAL RATES (conditioned on singleton, with CP+PAC bounds):")
 
             singleton_bounds = marginal_operational_bounds.rate_bounds["singleton"]
-            weights_dummy = [1.0 / len(singleton_bounds.fold_results)] * len(singleton_bounds.fold_results)
+            n_singletons = singleton_bounds.n_successes
 
-            if has_correct:
+            if has_correct and n_singletons > 0:
                 correct_bounds = marginal_operational_bounds.rate_bounds["correct_in_singleton"]
+                n_correct = correct_bounds.n_successes
 
-                rate, lower, upper = compute_conditional_rate_bounds(
-                    correct_bounds.fold_results, singleton_bounds.fold_results, weights_dummy
-                )
+                # Conditional rate and CP interval
+                rate = n_correct / n_singletons if n_singletons > 0 else 0.0
+                ci = cp_interval(n_correct, n_singletons)
 
-                print(f"       P(correct | singleton) = {rate:.3f}  95% CI: [{lower:.3f}, {upper:.3f}]")
+                print(f"       P(correct | singleton) = {rate:.3f}  95% CI: [{ci['lower']:.3f}, {ci['upper']:.3f}]")
 
-            if has_error:
+            if has_error and n_singletons > 0:
                 error_bounds = marginal_operational_bounds.rate_bounds["error_in_singleton"]
+                n_error = error_bounds.n_successes
 
-                rate, lower, upper = compute_conditional_rate_bounds(
-                    error_bounds.fold_results, singleton_bounds.fold_results, weights_dummy
-                )
+                # Conditional rate and CP interval
+                rate = n_error / n_singletons if n_singletons > 0 else 0.0
+                ci = cp_interval(n_error, n_singletons)
 
-                print(f"       P(error | singleton)   = {rate:.3f}  95% CI: [{lower:.3f}, {upper:.3f}]")
+                print(f"       P(error | singleton)   = {rate:.3f}  95% CI: [{ci['lower']:.3f}, {ci['upper']:.3f}]")
 
         summary["marginal_bounds"] = marginal_operational_bounds
 

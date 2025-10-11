@@ -65,9 +65,7 @@ class TestReportPredictionStats:
         cal_result, pred_stats, labels, probs = sample_data
 
         # Compute operational bounds
-        op_bounds = compute_mondrian_operational_bounds(
-            cal_result, labels, probs, delta=0.05, n_folds=3, random_seed=42
-        )
+        op_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
 
         summary = report_prediction_stats(pred_stats, cal_result, op_bounds, verbose=False)
 
@@ -83,7 +81,7 @@ class TestReportPredictionStats:
 
         # Compute marginal bounds
         marginal_bounds = compute_marginal_operational_bounds(
-            labels, probs, alpha_target=0.1, delta_coverage=0.1, delta=0.05, n_folds=3, random_seed=42
+            labels, probs, alpha_target=0.1, delta_coverage=0.1, delta=0.05
         )
 
         summary = report_prediction_stats(
