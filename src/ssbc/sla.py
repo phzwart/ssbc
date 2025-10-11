@@ -665,6 +665,9 @@ def compute_marginal_operational_bounds(
             epsilon_total += w_f * epsilon_f
 
         # Use same cushion for both lower and upper (conservative)
+        # If cushion is 0, use minimum possible value (1 point / n_total)
+        if epsilon_total == 0.0:
+            epsilon_total = 1.0 / n  # Minimum: one point flipping
         cushions_lower[rate_type] = epsilon_total
         cushions_upper[rate_type] = epsilon_total
 
@@ -939,8 +942,11 @@ def compute_mondrian_operational_bounds(
             weights = per_class_results[class_label][rate_type]["weights"]
 
             if len(fold_res) == 0:
-                cushions_lower[rate_type] = 0.0
-                cushions_upper[rate_type] = 0.0
+                # No folds: use minimum cushion
+                n_class_total = np.sum(labels == class_label)
+                min_cushion = 1.0 / n_class_total if n_class_total > 0 else 0.001
+                cushions_lower[rate_type] = min_cushion
+                cushions_upper[rate_type] = min_cushion
                 continue
 
             for fold_data, w_f in zip(fold_res, weights, strict=False):
@@ -969,6 +975,10 @@ def compute_mondrian_operational_bounds(
                 epsilon_total += w_f * epsilon_f
 
             # Use same cushion for both lower and upper (conservative)
+            # If cushion is 0, use minimum possible value (1 point / n_class)
+            if epsilon_total == 0.0:
+                n_class_total = np.sum(labels == class_label)
+                epsilon_total = 1.0 / n_class_total if n_class_total > 0 else 0.001
             cushions_lower[rate_type] = epsilon_total
             cushions_upper[rate_type] = epsilon_total
 
