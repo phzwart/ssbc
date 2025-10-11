@@ -86,12 +86,11 @@ def main():
         calibration_result=cal_result,
         labels=labels,
         probs=probs,
-        delta=delta_2,
     )
 
     # Also compute marginal bounds
     marginal_bounds = compute_marginal_operational_bounds(
-        labels=labels, probs=probs, alpha_target=alpha_target, delta_coverage=delta_1, delta=delta_2
+        labels=labels, probs=probs, alpha_target=alpha_target, delta_coverage=delta_1
     )
 
     print("   ✓ Operational bounds computation complete")

@@ -45,7 +45,6 @@ def test_compute_mondrian_operational_bounds(binary_classification_data):
         calibration_result=cal_result,
         labels=labels,
         probs=probs,
-        delta=0.10,
         rate_types=["singleton", "doublet"],
     )
 
@@ -69,7 +68,7 @@ def test_compute_mondrian_operational_bounds_uses_mondrian_params(binary_classif
     cal_result, _ = mondrian_conformal_calibrate(class_data, alpha_target=0.10, delta=0.05)
 
     # Operational bounds
-    results = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.10)
+    results = compute_mondrian_operational_bounds(cal_result, labels, probs)
 
     # Check that thresholds match
     for class_label in [0, 1]:
@@ -92,7 +91,7 @@ def test_operational_bounds_integration_small_dataset():
     cal_result, _ = mondrian_conformal_calibrate(class_data, alpha_target=0.10, delta=0.10)
 
     # Operational bounds
-    results = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.10)
+    results = compute_mondrian_operational_bounds(cal_result, labels, probs)
 
     assert isinstance(results, dict)
     assert len(results) > 0  # At least one class should have results
@@ -111,7 +110,7 @@ def test_mondrian_integration_full_workflow():
     cal_result, pred_stats = mondrian_conformal_calibrate(class_data, alpha_target=0.10, delta=0.05)
 
     # Step 3: Operational bounds (marginal CV, then per-class)
-    operational_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
+    operational_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs)
 
     # Verify complete workflow
     assert len(operational_bounds) == 2  # Two classes
@@ -136,7 +135,7 @@ def test_different_alpha_per_class():
     cal_result, _ = mondrian_conformal_calibrate(class_data, alpha_target={0: 0.05, 1: 0.10}, delta=0.05)
 
     # Operational bounds
-    operational_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
+    operational_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs)
 
     assert len(operational_bounds) == 2
     # Verify different alphas were used
@@ -155,7 +154,6 @@ def test_operational_rate_bounds_dataclass():
         rate_name="singleton",
         lower_bound=0.6,
         upper_bound=0.85,
-        confidence_level=0.95,
         ci_width=0.95,
         n_evaluations=100,
         n_successes=75,
@@ -164,7 +162,7 @@ def test_operational_rate_bounds_dataclass():
     assert bounds.rate_name == "singleton"
     assert bounds.lower_bound == 0.6
     assert bounds.upper_bound == 0.85
-    assert bounds.confidence_level == 0.95
+    assert bounds.ci_width == 0.95
     assert bounds.n_evaluations == 100
     assert bounds.n_successes == 75
 
@@ -175,7 +173,6 @@ def test_operational_bounds_result_dataclass():
         rate_name="singleton",
         lower_bound=0.7,
         upper_bound=0.9,
-        confidence_level=0.95,
         ci_width=0.95,
         n_evaluations=100,
         n_successes=80,
@@ -183,13 +180,12 @@ def test_operational_bounds_result_dataclass():
 
     result = OperationalRateBoundsResult(
         rate_bounds={"singleton": singleton_bounds},
-        rate_confidence=0.95,
         ci_width=0.95,
         thresholds=0.5,
         n_calibration=100,
     )
 
-    assert result.rate_confidence == 0.95
+    assert result.ci_width == 0.95
     assert result.thresholds == 0.5
     assert result.n_calibration == 100
     assert "singleton" in result.rate_bounds
@@ -202,10 +198,10 @@ def test_custom_ci_width():
     labels, probs = sim.generate(n_samples=100)
 
     # Marginal bounds with different CI widths
-    marginal_90 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, delta=0.05, ci_width=0.90)
-    marginal_99 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, delta=0.05, ci_width=0.99)
+    marginal_90 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, ci_width=0.90)
+    marginal_99 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, ci_width=0.99)
 
-    # Higher CI width should give wider intervals (same PAC confidence though)
+    # Higher CI width should give wider intervals
     sing_90 = marginal_90.rate_bounds["singleton"]
     sing_99 = marginal_99.rate_bounds["singleton"]
 
@@ -214,9 +210,9 @@ def test_custom_ci_width():
 
     assert width_99 > width_90, "99% CI width should give wider intervals than 90%"
 
-    # Both should have same PAC confidence (1 - delta)
-    assert np.isclose(sing_90.confidence_level, 0.95)
-    assert np.isclose(sing_99.confidence_level, 0.95)
+    # Both should store their CI widths correctly
+    assert np.isclose(sing_90.ci_width, 0.90)
+    assert np.isclose(sing_99.ci_width, 0.99)
 
 
 def test_rates_not_split_independently_confident():
@@ -227,24 +223,23 @@ def test_rates_not_split_independently_confident():
     class_data = split_by_class(labels, probs)
     cal_result, _ = mondrian_conformal_calibrate(class_data, 0.1, 0.05)
 
-    # Request 3 rates with delta=0.06 (94% confidence)
+    # Request 3 rates with custom CI width
     op_bounds = compute_mondrian_operational_bounds(
         cal_result,
         labels,
         probs,
-        delta=0.06,  # Per-class delta
         rate_types=["singleton", "doublet", "abstention"],
+        ci_width=0.90,
     )
 
-    # Each class gets delta_per_class = 0.06/2 = 0.03 (97% PAC confidence)
-    # All rates within each class should have same confidence_level
+    # All rates should have same CI width
     for class_label in [0, 1]:
-        # Check that PAC confidence is correct
-        assert np.isclose(op_bounds[class_label].rate_confidence, 1 - 0.06 / 2)
+        # Check that CI width is correct
+        assert np.isclose(op_bounds[class_label].ci_width, 0.90)
 
-        # Check that all rates have the same confidence level (from delta_per_class)
-        for rate_name in ["singleton", "doublet", "abstention"]:
-            if rate_name in op_bounds[class_label].rate_bounds:
-                conf_level = op_bounds[class_label].rate_bounds[rate_name].confidence_level
-                expected = 1 - 0.06 / 2  # 97%
-                assert np.isclose(conf_level, expected), f"{rate_name} should have confidence {expected:.1%}"
+        # All rates should have same CI width
+        all_ci_widths = [
+            op_bounds[class_label].rate_bounds[rt].ci_width for rt in ["singleton", "doublet", "abstention"]
+        ]
+        assert len(set(all_ci_widths)) == 1  # All same
+        assert np.isclose(all_ci_widths[0], 0.90)

@@ -26,7 +26,7 @@ from .utils import compute_operational_rate
 
 @dataclass
 class OperationalRateBounds:
-    """Bounds for a single operational rate with PAC guarantees from LOO-CV.
+    """Bounds for a single operational rate from LOO-CV.
 
     Attributes
     ----------
@@ -36,8 +36,6 @@ class OperationalRateBounds:
         Lower bound from Clopper-Pearson on LOO evaluations
     upper_bound : float
         Upper bound from Clopper-Pearson on LOO evaluations
-    confidence_level : float
-        Confidence level for the bounds (1 - δ_rate) - PAC confidence
     ci_width : float
         Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
     n_evaluations : int
@@ -49,7 +47,6 @@ class OperationalRateBounds:
     rate_name: str
     lower_bound: float
     upper_bound: float
-    confidence_level: float
     ci_width: float
     n_evaluations: int
     n_successes: int
@@ -59,7 +56,7 @@ class OperationalRateBounds:
 class OperationalRateBoundsResult:
     """Operational rate bounds for conformal prediction from LOO-CV.
 
-    Provides rigorous bounds on operational rates (singleton, doublet, abstention, error)
+    Provides bounds on operational rates (singleton, doublet, abstention, error)
     computed via leave-one-out cross-validation (LOO-CV) with Clopper-Pearson CIs.
 
     Use in combination with mondrian_conformal_calibrate() output for complete SLA:
@@ -70,8 +67,6 @@ class OperationalRateBoundsResult:
     ----------
     rate_bounds : dict[str, OperationalRateBounds]
         Bounds for each operational rate type
-    rate_confidence : float
-        PAC confidence level for rate bounds (1 - δ)
     ci_width : float
         Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
     thresholds : dict[int, float] | float
@@ -81,7 +76,6 @@ class OperationalRateBoundsResult:
     """
 
     rate_bounds: dict[str, OperationalRateBounds]
-    rate_confidence: float
     ci_width: float
     thresholds: dict[int, float] | float
     n_calibration: int
@@ -196,7 +190,6 @@ def compute_marginal_operational_bounds(
     probs: np.ndarray,
     alpha_target: float | dict[int, float],
     delta_coverage: float | dict[int, float],
-    delta: float,
     rate_types: list[str] | None = None,
     ci_width: float = 0.95,
     n_jobs: int = 1,
@@ -222,9 +215,6 @@ def compute_marginal_operational_bounds(
         Target miscoverage rate per class for Mondrian thresholds
     delta_coverage : float or dict[int, float]
         PAC risk for coverage (used for SSBC)
-    delta : float
-        PAC risk for operational rate bounds. Each rate independently gets
-        confidence 1-δ (NOT split across rates).
     rate_types : list[str], optional
         Operational rates to compute. Defaults to singleton, doublet, abstention, and conditional rates.
     ci_width : float, default=0.95
@@ -293,14 +283,10 @@ def compute_marginal_operational_bounds(
         lower_bound = clopper_pearson_lower(K, n, ci_width)
         upper_bound = clopper_pearson_upper(K, n, ci_width)
 
-        # PAC confidence (probability bounds hold) is separate from CI width
-        pac_confidence = 1 - delta
-
         rate_bounds[rate_type] = OperationalRateBounds(
             rate_name=rate_type,
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            confidence_level=pac_confidence,
             ci_width=ci_width,
             n_evaluations=n,
             n_successes=K,
@@ -327,7 +313,6 @@ def compute_marginal_operational_bounds(
 
     return OperationalRateBoundsResult(
         rate_bounds=rate_bounds,
-        rate_confidence=1 - delta,
         ci_width=ci_width,
         thresholds=ref_thresholds,
         n_calibration=n,
@@ -439,7 +424,6 @@ def compute_mondrian_operational_bounds(
     calibration_result: dict[int, dict[str, Any]],
     labels: np.ndarray,
     probs: np.ndarray,
-    delta: float,
     rate_types: list[str] | None = None,
     ci_width: float = 0.95,
     n_jobs: int = 1,
@@ -470,9 +454,6 @@ def compute_mondrian_operational_bounds(
         True labels (shape: n,)
     probs : np.ndarray
         Probability matrix (shape: n, 2)
-    delta : float
-        PAC risk for operational rate bounds. Split across classes only.
-        Each class independently gets confidence 1-δ_class for all its rates.
     rate_types : list[str], optional
         Operational rates to compute. Each gets the same confidence independently.
     ci_width : float, default=0.95
@@ -500,7 +481,6 @@ def compute_mondrian_operational_bounds(
     """
 
     n = len(labels)
-    n_classes = 2
 
     # Get alpha and delta from calibration result
     alpha_target = {k: calibration_result[k]["alpha_target"] for k in [0, 1]}
@@ -509,9 +489,6 @@ def compute_mondrian_operational_bounds(
     # Default rate types (include conditional singleton rates)
     if rate_types is None:
         rate_types = ["singleton", "doublet", "abstention", "correct_in_singleton", "error_in_singleton"]
-
-    # Allocate delta: split across classes only (NOT rates)
-    delta_per_class = delta / n_classes
 
     # Parallel LOO-CV: evaluate each point independently
     from joblib import Parallel, delayed
@@ -541,14 +518,10 @@ def compute_mondrian_operational_bounds(
             lower_bound = clopper_pearson_lower(K_class, n_class, ci_width)
             upper_bound = clopper_pearson_upper(K_class, n_class, ci_width)
 
-            # PAC confidence (probability bounds hold) is separate from CI width
-            pac_confidence = 1 - delta_per_class
-
             rate_bounds[rate_type] = OperationalRateBounds(
                 rate_name=rate_type,
                 lower_bound=lower_bound,
                 upper_bound=upper_bound,
-                confidence_level=pac_confidence,
                 ci_width=ci_width,
                 n_evaluations=n_class,
                 n_successes=K_class,
@@ -559,7 +532,6 @@ def compute_mondrian_operational_bounds(
 
         results[class_label] = OperationalRateBoundsResult(
             rate_bounds=rate_bounds,
-            rate_confidence=1 - delta_per_class,
             ci_width=ci_width,
             thresholds=threshold,
             n_calibration=n_class,
