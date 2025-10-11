@@ -5,6 +5,7 @@
 - [Readme](readme.md)
 - [Installation](installation.md)
 - [Usage](usage.md)
+- [Theory and Deployment Guide](theory.md) ⭐ **New!**
 - [Modules](modules.md)
 - [Contributing](contributing.md)
 - [History](history.md)
