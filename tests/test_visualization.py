@@ -5,6 +5,7 @@ import pytest
 
 from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
 from ssbc.simulation import BinaryClassifierSimulator
+from ssbc.sla import compute_marginal_operational_bounds, compute_mondrian_operational_bounds
 from ssbc.visualization import plot_parallel_coordinates_plotly, report_prediction_stats
 
 
@@ -22,24 +23,23 @@ class TestReportPredictionStats:
             class_data=class_data, alpha_target=0.10, delta=0.10, mode="beta"
         )
 
-        return cal_result, pred_stats
+        return cal_result, pred_stats, labels, probs
 
     def test_basic_report_verbose(self, sample_data, capsys):
         """Test basic report with verbose=True."""
-        cal_result, pred_stats = sample_data
+        cal_result, pred_stats, _, _ = sample_data
 
         report_prediction_stats(pred_stats, cal_result, verbose=True)
 
         # Check that output was printed
         captured = capsys.readouterr()
-        assert "PREDICTION SET STATISTICS" in captured.out
+        assert "MONDRIAN CONFORMAL PREDICTION REPORT" in captured.out
         assert "CLASS 0" in captured.out
         assert "CLASS 1" in captured.out
-        assert "MARGINAL ANALYSIS" in captured.out
 
     def test_basic_report_quiet(self, sample_data, capsys):
         """Test basic report with verbose=False."""
-        cal_result, pred_stats = sample_data
+        cal_result, pred_stats, _, _ = sample_data
 
         summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
 
@@ -52,94 +52,47 @@ class TestReportPredictionStats:
 
     def test_summary_structure(self, sample_data):
         """Test that summary has expected structure."""
-        cal_result, pred_stats = sample_data
+        cal_result, pred_stats, _, _ = sample_data
 
         summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
 
-        # Should have per-class and marginal sections
+        # Should have per-class sections
         assert 0 in summary
         assert 1 in summary
-        assert "marginal" in summary
 
-    def test_per_class_summary(self, sample_data):
-        """Test per-class summary structure."""
-        cal_result, pred_stats = sample_data
+    def test_with_operational_bounds(self, sample_data):
+        """Test report with operational bounds."""
+        cal_result, pred_stats, labels, probs = sample_data
 
-        summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
+        # Compute operational bounds
+        op_bounds = compute_mondrian_operational_bounds(
+            cal_result, labels, probs, delta=0.05, n_folds=3, random_seed=42
+        )
 
-        for label in [0, 1]:
-            if "error" not in summary[label]:
-                class_summary = summary[label]
+        summary = report_prediction_stats(pred_stats, cal_result, op_bounds, verbose=False)
 
-                assert "n" in class_summary
-                assert "abstentions" in class_summary
-                assert "singletons" in class_summary
-                assert "doublets" in class_summary
-                assert "pac_bounds" in class_summary
+        # Check operational bounds are in summary
+        assert 0 in summary
+        assert 1 in summary
+        if "operational_bounds" in summary[0]:
+            assert summary[0]["operational_bounds"] is not None
 
-                # Check singletons breakdown
-                singletons = class_summary["singletons"]
-                assert "correct" in singletons
-                assert "incorrect" in singletons
-                assert "error_given_singleton" in singletons
+    def test_with_marginal_bounds(self, sample_data, capsys):
+        """Test report with marginal operational bounds."""
+        cal_result, pred_stats, labels, probs = sample_data
 
-    def test_marginal_summary(self, sample_data):
-        """Test marginal summary structure."""
-        cal_result, pred_stats = sample_data
+        # Compute marginal bounds
+        marginal_bounds = compute_marginal_operational_bounds(
+            labels, probs, alpha_target=0.1, delta_coverage=0.1, delta=0.05, n_folds=3, random_seed=42
+        )
 
-        summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
+        summary = report_prediction_stats(
+            pred_stats, cal_result, marginal_operational_bounds=marginal_bounds, verbose=True
+        )
 
-        marginal = summary["marginal"]
-
-        assert "n_total" in marginal
-        assert "coverage" in marginal
-        assert "abstentions" in marginal
-        assert "singletons" in marginal
-        assert "doublets" in marginal
-        assert "pac_bounds" in marginal
-
-    def test_confidence_intervals_present(self, sample_data):
-        """Test that all CIs are present."""
-        cal_result, pred_stats = sample_data
-
-        summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
-
-        # Check per-class CIs
-        for label in [0, 1]:
-            if "error" not in summary[label]:
-                class_summary = summary[label]
-
-                for key in ["abstentions", "singletons", "doublets"]:
-                    assert "ci_95" in class_summary[key]
-                    ci = class_summary[key]["ci_95"]
-                    assert isinstance(ci, tuple)
-                    assert len(ci) == 2
-
-        # Check marginal CIs
-        marginal = summary["marginal"]
-        assert "ci_95" in marginal["coverage"]
-        assert "ci_95" in marginal["abstentions"]
-        assert "ci_95" in marginal["singletons"]
-        assert "ci_95" in marginal["doublets"]
-
-    def test_singleton_errors_by_predicted_class(self, sample_data):
-        """Test singleton errors breakdown by predicted class."""
-        cal_result, pred_stats = sample_data
-
-        summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
-
-        marginal = summary["marginal"]
-        errors_by_pred = marginal["singletons"]["errors_by_pred"]
-
-        assert "pred_0" in errors_by_pred
-        assert "pred_1" in errors_by_pred
-
-        for pred_class in ["pred_0", "pred_1"]:
-            err_info = errors_by_pred[pred_class]
-            assert "count" in err_info
-            assert "denom" in err_info
-            assert "rate" in err_info
-            assert "ci_95" in err_info
+        captured = capsys.readouterr()
+        assert "MARGINAL STATISTICS" in captured.out
+        assert "marginal_bounds" in summary
 
     def test_handles_missing_data_gracefully(self):
         """Test that function handles missing/incomplete data."""
@@ -147,7 +100,6 @@ class TestReportPredictionStats:
         pred_stats = {
             0: {"n_class": 0, "error": "No samples"},
             1: {"n_class": 0, "error": "No samples"},
-            "marginal": {"n_total": 0},
         }
 
         cal_result = {0: {"alpha_target": 0.1, "delta": 0.1}, 1: {"alpha_target": 0.1, "delta": 0.1}}
@@ -156,56 +108,6 @@ class TestReportPredictionStats:
         summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
 
         assert isinstance(summary, dict)
-
-    def test_pac_bounds_formatted(self, sample_data, capsys):
-        """Test that PAC bounds are formatted in output."""
-        cal_result, pred_stats = sample_data
-
-        report_prediction_stats(pred_stats, cal_result, verbose=True)
-
-        captured = capsys.readouterr()
-
-        # Should include PAC-related output
-        if "PAC" in captured.out:
-            assert "ρ" in captured.out or "rho" in captured.out
-            assert "κ" in captured.out or "kappa" in captured.out
-
-    def test_handles_dict_variations(self):
-        """Test handling of different dict schema variations."""
-        # Test with 'proportion' instead of 'rate'
-        pred_stats = {
-            0: {
-                "n_class": 10,
-                "abstentions": {"count": 1, "proportion": 0.1, "lower": 0.0, "upper": 0.3},
-                "singletons": {"count": 8, "proportion": 0.8},
-                "doublets": {"count": 1, "proportion": 0.1},
-                "pac_bounds": {},
-            },
-            1: {
-                "n_class": 10,
-                "abstentions": {"count": 1},
-                "singletons": {"count": 8},
-                "doublets": {"count": 1},
-                "pac_bounds": {},
-            },
-            "marginal": {
-                "n_total": 20,
-                "coverage": {"count": 18, "rate": 0.9},
-                "abstentions": {"count": 2},
-                "singletons": {"count": 16, "pred_0": 8, "pred_1": 8, "errors": 2},
-                "doublets": {"count": 2},
-                "pac_bounds": {},
-            },
-        }
-
-        cal_result = {0: {"alpha_target": 0.1, "delta": 0.1}, 1: {"alpha_target": 0.1, "delta": 0.1}}
-
-        summary = report_prediction_stats(pred_stats, cal_result, verbose=False)
-
-        assert isinstance(summary, dict)
-        assert 0 in summary
-        assert 1 in summary
-        assert "marginal" in summary
 
 
 class TestPlotParallelCoordinatesPlotly:

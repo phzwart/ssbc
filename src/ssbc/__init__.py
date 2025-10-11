@@ -28,13 +28,12 @@ from .simulation import (
     BinaryClassifierSimulator,
 )
 
-# SLA (Service Level Agreement) bounds
+# SLA (Service Level Agreement) - operational rate bounds
 from .sla import (
-    ConformalSLAResult,
     OperationalRateBounds,
-    compute_conformal_sla,
-    compute_conformal_sla_mondrian,
-    compute_pac_coverage,
+    OperationalRateBoundsResult,
+    compute_marginal_operational_bounds,
+    compute_mondrian_operational_bounds,
     compute_transfer_cushion,
     cross_fit_cp_bounds,
     transfer_bounds_to_single_rule,
@@ -73,12 +72,11 @@ __all__ = [
     "cp_interval",
     # Utilities
     "compute_operational_rate",
-    # SLA
-    "ConformalSLAResult",
+    # SLA - Operational rate bounds
     "OperationalRateBounds",
-    "compute_conformal_sla",
-    "compute_conformal_sla_mondrian",
-    "compute_pac_coverage",
+    "OperationalRateBoundsResult",
+    "compute_marginal_operational_bounds",
+    "compute_mondrian_operational_bounds",
     "compute_transfer_cushion",
     "cross_fit_cp_bounds",
     "transfer_bounds_to_single_rule",

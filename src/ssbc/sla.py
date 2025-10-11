@@ -1,25 +1,25 @@
-"""Service Level Agreement (SLA) bounds for conformal prediction.
+"""Service Level Agreement (SLA) operational rate bounds for conformal prediction.
 
-Implements PAC coverage guarantees and operational rate bounds using:
-- SSBC correction for finite-sample PAC coverage
+Implements rigorous operational rate bounds using:
 - Cross-fit Clopper-Pearson bounds for operational rates
 - Transfer bounds from cross-fit to single refit-on-all rule
 
-This enables contract-ready guarantees on:
-- Coverage: P(Y ∈ C(X)) ≥ 1 - α with probability ≥ 1 - δ₁
-- Operational rates: singleton, doublet, abstention, error rates with probability ≥ 1 - δ₂
+This provides contract-ready guarantees on operational rates:
+- Singleton, doublet, abstention, error rates with probability ≥ 1 - δ
+
+Works in tandem with mondrian_conformal_calibrate() which handles PAC coverage guarantees.
+The workflow is:
+1. Use mondrian_conformal_calibrate() to get SSBC-corrected thresholds with coverage guarantees
+2. Use this module to add rigorous CP bounds on operational rates via cross-validation
 
 Reference: Based on Appendix B of the SSBC theoretical framework.
 """
 
-import math
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 
-from .core import ssbc_correct
 from .statistics import clopper_pearson_lower, clopper_pearson_upper
 from .utils import compute_operational_rate
 
@@ -59,109 +59,38 @@ class OperationalRateBounds:
 
 
 @dataclass
-class ConformalSLAResult:
-    """Complete SLA result with coverage and operational rate bounds.
+class OperationalRateBoundsResult:
+    """Operational rate bounds for conformal prediction deployment.
 
-    Provides joint guarantees on coverage and operational rates that hold
-    simultaneously with probability ≥ 1 - (δ₁ + δ₂).
+    Provides rigorous bounds on operational rates (singleton, doublet, abstention, error)
+    computed via cross-validation and transferred to single refit-on-all rule.
+
+    Use in combination with mondrian_conformal_calibrate() output for complete SLA:
+    - Mondrian provides: PAC coverage guarantees (via SSBC)
+    - This provides: Operational rate bounds (via cross-fit Clopper-Pearson)
 
     Attributes
     ----------
-    alpha_target : float
-        Target miscoverage rate
-    alpha_adjusted : float
-        SSBC-adjusted miscoverage rate for PAC guarantee
-    coverage_guarantee : float
-        Guaranteed coverage (1 - α_target)
-    coverage_confidence : float
-        Confidence level for coverage (1 - δ₁)
     rate_bounds : dict[str, OperationalRateBounds]
-        Bounds for each operational rate
+        Bounds for each operational rate type
     rate_confidence : float
-        Confidence level for rate bounds (1 - δ₂)
-    joint_confidence : float
-        Joint confidence for all guarantees (1 - (δ₁ + δ₂))
-    threshold : float
-        Conformal prediction threshold
+        Confidence level for rate bounds (1 - δ)
+    thresholds : dict[int, float] | float
+        Conformal prediction thresholds used (per-class for Mondrian, scalar otherwise)
     n_calibration : int
-        Calibration set size
+        Total calibration set size
     n_folds : int
         Number of cross-validation folds used
     """
 
-    # Coverage guarantees
-    alpha_target: float
-    alpha_adjusted: float
-    coverage_guarantee: float  # 1 - alpha_target
-    coverage_confidence: float  # 1 - delta_1
-
     # Operational rate bounds
     rate_bounds: dict[str, OperationalRateBounds]
-    rate_confidence: float  # 1 - delta_2
-
-    # Joint guarantee
-    joint_confidence: float  # 1 - (delta_1 + delta_2)
+    rate_confidence: float  # 1 - delta
 
     # Deployment info
-    threshold: float
+    thresholds: dict[int, float] | float
     n_calibration: int
     n_folds: int
-
-
-# ============================================================================
-# PAC Coverage via SSBC
-# ============================================================================
-
-
-def compute_pac_coverage(scores: np.ndarray, alpha_target: float, delta_1: float) -> tuple[float, float, int]:
-    """Compute SSBC-adjusted miscoverage for PAC coverage guarantee.
-
-    Uses SSBC correction to ensure P(Coverage ≥ 1 - α_target) ≥ 1 - δ₁
-    for the conformal prediction rule.
-
-    Parameters
-    ----------
-    scores : np.ndarray
-        Nonconformity scores A(X_i, Y_i) for calibration set
-    alpha_target : float
-        Target miscoverage rate
-    delta_1 : float
-        Risk tolerance for coverage guarantee
-
-    Returns
-    -------
-    alpha_adj : float
-        Adjusted miscoverage rate (≤ α_target)
-    threshold : float
-        Score threshold q for conformal prediction
-    u_star : int
-        Threshold index (u_star-th order statistic)
-
-    Examples
-    --------
-    >>> scores = np.random.rand(100)
-    >>> alpha_adj, threshold, u_star = compute_pac_coverage(scores, 0.1, 0.05)
-    >>> print(f"Adjusted alpha: {alpha_adj:.4f}")
-
-    Notes
-    -----
-    The threshold is the u_star-th order statistic of the calibration scores.
-    The prediction rule is: predict y if A(x, y) ≤ threshold.
-    """
-    n = len(scores)
-
-    # Run SSBC to get adjusted alpha
-    ssbc_result = ssbc_correct(alpha_target=alpha_target, n=n, delta=delta_1, mode="beta")
-
-    alpha_adj = ssbc_result.alpha_corrected
-    u_star = ssbc_result.u_star
-
-    # Compute threshold from adjusted alpha
-    # u = ceil((n+1)*alpha), q is the u-th order statistic
-    sorted_scores = np.sort(scores)
-    threshold = sorted_scores[u_star - 1] if u_star <= n else np.inf
-
-    return alpha_adj, threshold, u_star
 
 
 # ============================================================================
@@ -170,39 +99,43 @@ def compute_pac_coverage(scores: np.ndarray, alpha_target: float, delta_1: float
 
 
 def cross_fit_cp_bounds(
-    cal_features: np.ndarray,
-    cal_labels: np.ndarray,
-    score_function: Callable,
-    alpha_adj: float,
+    class_data: dict[str, Any],
+    true_class: int,
+    alpha_target: float,
+    delta_class: float,
     rate_types: list[str],
     n_folds: int,
-    delta_2: float,
+    delta: float,
     random_seed: int | None = None,
 ) -> dict[str, dict]:
-    """Compute cross-fit Clopper-Pearson bounds for operational rates.
+    """Compute cross-fit Clopper-Pearson bounds for operational rates (per-class).
 
-    Uses K-fold cross-validation to compute PAC bounds on operational rates
-    (singleton, doublet, abstention, error rates) without overfitting to
-    the calibration set.
+    Uses K-fold cross-validation on the same calibration data used for Mondrian
+    conformal prediction. For each fold:
+    1. Compute SSBC-corrected threshold on training folds
+    2. Apply to test fold to get operational rates
+    3. Compute Clopper-Pearson bounds with PAC margin
 
     Parameters
     ----------
-    cal_features : np.ndarray
-        Calibration features X_i (shape: n × d)
-    cal_labels : np.ndarray
-        Calibration labels Y_i (shape: n,)
-    score_function : Callable
-        Nonconformity score function A(x, y) that takes (features, label)
-        and returns a score (higher = less conforming)
-    alpha_adj : float
-        SSBC-adjusted miscoverage rate from PAC coverage step
+    class_data : dict
+        Per-class data from split_by_class() containing:
+        - 'probs': probability matrix (n, 2)
+        - 'labels': true labels (all same class)
+        - 'n': number of samples
+    true_class : int
+        The class label (0 or 1) for this data
+    alpha_target : float
+        Target miscoverage rate for this class
+    delta_class : float
+        PAC risk for coverage (used for SSBC in each fold)
     rate_types : list[str]
         List of operational rates to compute. Options:
-        "singleton", "doublet", "abstention", "error_in_singleton"
+        "singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"
     n_folds : int
         Number of cross-validation folds (typically 5-10)
-    delta_2 : float
-        Total risk budget for all rate bounds
+    delta : float
+        Total PAC risk budget for operational rate bounds
     random_seed : int, optional
         Random seed for reproducible fold splits
 
@@ -217,15 +150,18 @@ def cross_fit_cp_bounds(
 
     Notes
     -----
-    The risk budget δ₂ is split evenly across folds and rate types.
-    Each fold uses Clopper-Pearson exact binomial confidence intervals.
+    The risk budget δ is split evenly across folds and rate types for union bound.
+    Each fold uses Clopper-Pearson exact binomial confidence intervals with PAC margin.
     """
-    n = len(cal_labels)
+    from .core import ssbc_correct
+
+    probs = class_data["probs"]
+    n = class_data["n"]
     fold_size = n // n_folds
 
-    # Allocate delta evenly across folds and rates
+    # Allocate delta evenly across folds and rates (union bound)
     n_rates = len(rate_types)
-    delta_per_bound = delta_2 / (n_folds * n_rates)
+    delta_per_bound = delta / (n_folds * n_rates)
 
     results = {rt: {"fold_results": [], "weights": []} for rt in rate_types}
 
@@ -244,40 +180,64 @@ def cross_fit_cp_bounds(
         m_f = len(test_indices)
         n_train = len(train_indices)
 
-        # Compute threshold q^{(-f)} on training fold
-        train_scores = np.array([score_function(cal_features[i], cal_labels[i]) for i in train_indices])
+        # Compute nonconformity scores on training fold: s = 1 - P(true_class|x)
+        train_probs = probs[train_indices]
+        train_scores = 1.0 - train_probs[:, true_class]
 
-        u_f = math.ceil((n_train + 1) * alpha_adj)
-        u_f = min(u_f, n_train)
+        # Apply SSBC to get corrected alpha for this fold
+        ssbc_result = ssbc_correct(alpha_target=alpha_target, n=n_train, delta=delta_class, mode="beta")
+        alpha_corrected = ssbc_result.alpha_corrected
+
+        # Compute threshold: k-th order statistic where k = ceil((n+1)*(1-alpha_corrected))
+        k = int(np.ceil((n_train + 1) * (1 - alpha_corrected)))
+        k = min(k, n_train)
         sorted_train_scores = np.sort(train_scores)
-        q_minus_f = sorted_train_scores[u_f - 1] if u_f > 0 else -np.inf
+        q_minus_f = sorted_train_scores[k - 1] if k > 0 else sorted_train_scores[0]
 
-        # Also get the adjacent order statistics for cushion computation
-        q_minus_f_lower = sorted_train_scores[u_f - 2] if u_f >= 2 else -np.inf
-        q_minus_f_upper = sorted_train_scores[u_f] if u_f < n_train else np.inf
+        # Band for cushion: [S_(k), S_(k+1)] per paper Eq. B.4
+        # This is [threshold, next_order_statistic]
+        # If k >= n_train, there's no next order statistic - use a tight band around threshold
+        q_band_lower = sorted_train_scores[k - 1] if k >= 1 else -np.inf  # S_(k) = threshold
+        if k < n_train:
+            q_band_upper = sorted_train_scores[k]  # S_(k+1)
+        else:
+            # Edge case: threshold is at/beyond last order statistic
+            # Use threshold itself as both bounds (no flip risk)
+            q_band_upper = sorted_train_scores[k - 1] if k >= 1 else np.inf
 
-        # Generate prediction sets on test fold using frozen threshold
-        # Infer label space from calibration set
-        possible_labels = np.unique(cal_labels)
-
+        # Generate prediction sets on test fold using this threshold
+        test_probs = probs[test_indices]
         test_prediction_sets = []
-        for i in test_indices:
-            x_i = cal_features[i]
-            pred_set = {y for y in possible_labels if score_function(x_i, y) <= q_minus_f}
+
+        for i in range(m_f):
+            # For each test example, check which labels pass the threshold
+            score_0 = 1.0 - test_probs[i, 0]
+            score_1 = 1.0 - test_probs[i, 1]
+
+            pred_set = []
+            if score_0 <= q_minus_f:
+                pred_set.append(0)
+            if score_1 <= q_minus_f:
+                pred_set.append(1)
+
             test_prediction_sets.append(pred_set)
 
-        test_labels = cal_labels[test_indices]
+        # All test labels are the same (true_class) since this is per-class data
+        test_labels = np.full(m_f, true_class)
 
         # Compute operational rates for this fold
         for rate_type in rate_types:
             Z = compute_operational_rate(
                 test_prediction_sets,
                 test_labels,
-                cast(Literal["singleton", "doublet", "abstention", "error_in_singleton"], rate_type),
+                cast(
+                    Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
+                    rate_type,
+                ),
             )
             K_fr = int(np.sum(Z))
 
-            # Compute Clopper-Pearson bounds (one-sided confidence = 1 - delta_per_bound)
+            # Compute Clopper-Pearson bounds with PAC margin
             confidence = 1 - delta_per_bound
             L_fr = clopper_pearson_lower(K_fr, m_f, confidence)
             U_fr = clopper_pearson_upper(K_fr, m_f, confidence)
@@ -290,7 +250,7 @@ def cross_fit_cp_bounds(
                     "L_fr": L_fr,
                     "U_fr": U_fr,
                     "q_minus_f": q_minus_f,
-                    "q_band": (q_minus_f_lower, q_minus_f_upper),
+                    "q_band": (q_band_lower, q_band_upper),
                     "test_indices": test_indices,
                 }
             )
@@ -316,27 +276,24 @@ def cross_fit_cp_bounds(
 
 
 def compute_transfer_cushion(
-    cal_features: np.ndarray,
-    cal_labels: np.ndarray,
-    score_function: Callable,
+    class_data: dict[str, Any],
+    true_class: int,
     cross_fit_results: dict,
     rate_type: str,
 ) -> float:
     """Compute empirical cushion ε_n for transferring cross-fit bounds to single rule.
 
     The cushion accounts for the difference between cross-fit thresholds
-    (computed on n-1 folds) and the final threshold (computed on all n samples).
+    (computed on K-1 folds) and the final threshold (computed on all n samples).
     Points near the threshold boundary may flip between different prediction
     set sizes.
 
     Parameters
     ----------
-    cal_features : np.ndarray
-        Full calibration features
-    cal_labels : np.ndarray
-        Full calibration labels
-    score_function : Callable
-        Nonconformity score function A(x, y)
+    class_data : dict
+        Per-class data from split_by_class() containing probs and labels
+    true_class : int
+        The class label (0 or 1) for this data
     cross_fit_results : dict
         Results from cross_fit_cp_bounds for this rate_type
     rate_type : str
@@ -351,13 +308,11 @@ def compute_transfer_cushion(
     -----
     The cushion is computed as the weighted average fraction of test points
     in each fold that have at least one label with score in the critical band
-    [q^{(-f)}_{u-1}, q^{(-f)}_{u+1}] around the threshold.
+    [q^{(-f)}_{k-1}, q^{(-f)}_{k+1}] around the threshold.
     """
+    probs = class_data["probs"]
     fold_results = cross_fit_results["fold_results"]
     weights = cross_fit_results["weights"]
-
-    # Get all possible labels
-    possible_labels = np.unique(cal_labels)
 
     epsilon_total = 0.0
 
@@ -367,13 +322,14 @@ def compute_transfer_cushion(
         test_indices = fold_data["test_indices"]
         m_f = len(test_indices)
 
-        # Count points in test fold where any label has score in the band
+        # Count points in test fold where any label has score in the critical band
         flip_count = 0
         for i in test_indices:
-            x_i = cal_features[i]
+            test_probs = probs[i]
             # Check if any label has score in the critical band
-            for y in possible_labels:
-                score = score_function(x_i, y)
+            # Score for each label: 1 - P(y|x)
+            for y in [0, 1]:
+                score = 1.0 - test_probs[y]
                 if q_lower <= score <= q_upper:
                     flip_count += 1
                     break  # Count this point once
@@ -439,44 +395,46 @@ def transfer_bounds_to_single_rule(cross_fit_results: dict, cushions: dict[str, 
 
 
 # ============================================================================
-# Complete SLA Pipeline
+# Mondrian Operational Bounds
 # ============================================================================
 
 
-def compute_conformal_sla(
-    cal_features: np.ndarray,
-    cal_labels: np.ndarray,
-    score_function: Callable,
-    alpha_target: float,
-    delta_1: float,
-    delta_2: float,
+def compute_marginal_operational_bounds(
+    labels: np.ndarray,
+    probs: np.ndarray,
+    alpha_target: float | dict[int, float],
+    delta_coverage: float | dict[int, float],
+    delta: float,
     rate_types: list[str] | None = None,
     n_folds: int = 5,
     random_seed: int | None = None,
-) -> ConformalSLAResult:
-    """Complete SLA pipeline: PAC coverage + operational rate bounds.
+) -> OperationalRateBoundsResult:
+    """Compute marginal operational rate bounds via cross-validated Mondrian.
 
-    Computes comprehensive service-level guarantees for conformal prediction:
-    1. PAC coverage guarantee using SSBC
-    2. Cross-fit operational rate bounds
-    3. Transfer to single refit-on-all rule for deployment
+    Uses K-fold cross-validation on the MARGINAL (mixed-class) data:
+    1. Split marginal data into K folds
+    2. For each fold:
+       - Train Mondrian on other folds (split by class, compute thresholds)
+       - Test on this fold (marginal) → count operational rates
+       - Compute CP bounds with PAC margin
+    3. Average across folds and apply transfer cushion
+
+    This gives unbiased marginal rate estimates because test folds never saw training data.
 
     Parameters
     ----------
-    cal_features : np.ndarray
-        Calibration features (shape: n × d)
-    cal_labels : np.ndarray
-        Calibration labels (shape: n,)
-    score_function : Callable
-        Nonconformity score function A(x, y)
-    alpha_target : float
-        Target miscoverage rate (e.g., 0.1 for 90% coverage)
-    delta_1 : float
-        Risk for coverage guarantee (e.g., 0.05 for 95% confidence)
-    delta_2 : float
-        Risk for operational rate bounds (e.g., 0.05 for 95% confidence)
+    labels : np.ndarray
+        True labels (shape: n,)
+    probs : np.ndarray
+        Probability matrix (shape: n, 2)
+    alpha_target : float or dict[int, float]
+        Target miscoverage rate per class
+    delta_coverage : float or dict[int, float]
+        PAC risk for coverage (used for SSBC in each fold)
+    delta : float
+        Total PAC risk for marginal operational rate bounds
     rate_types : list[str], optional
-        Operational rates to compute. Defaults to ["singleton", "doublet", "abstention"]
+        Operational rates to compute. Defaults to ["singleton", "doublet"]
     n_folds : int, default=5
         Number of cross-validation folds
     random_seed : int, optional
@@ -484,48 +442,214 @@ def compute_conformal_sla(
 
     Returns
     -------
-    result : ConformalSLAResult
-        Complete SLA with coverage and rate guarantees
+    result : OperationalRateBoundsResult
+        Marginal operational rate bounds with CP guarantees
 
     Examples
     --------
-    >>> n = 200
-    >>> cal_features = np.random.randn(n, 10)
-    >>> cal_labels = np.random.randint(0, 5, n)
-    >>> def score_fn(x, y): return np.linalg.norm(x - y)
-    >>> sla = compute_conformal_sla(cal_features, cal_labels, score_fn, 0.1, 0.05, 0.05)
-    >>> print(f"Coverage: {sla.coverage_guarantee:.1%} @ {sla.coverage_confidence:.1%}")
+    >>> # Get rigorous marginal rate bounds
+    >>> marginal_bounds = compute_marginal_operational_bounds(
+    ...     labels, probs, alpha_target=0.1, delta_coverage=0.05, delta=0.05
+    ... )
+    >>> print(f"Marginal singleton rate: "
+    ...       f"[{marginal_bounds.rate_bounds['singleton'].lower_bound:.2f}, "
+    ...       f"{marginal_bounds.rate_bounds['singleton'].upper_bound:.2f}]")
 
     Notes
     -----
-    The joint confidence is 1 - (δ₁ + δ₂) by union bound. All guarantees
-    (coverage and rate bounds) hold simultaneously with at least this probability.
+    This is "cross-validated Mondrian" on marginal data. Each fold trains a Mondrian
+    predictor and tests on held-out marginal data for unbiased estimates.
     """
-    n = len(cal_labels)
+    from .conformal import split_by_class
+    from .core import ssbc_correct
 
-    # Default rate types
+    n = len(labels)
+    fold_size = n // n_folds
+
+    # Handle scalar or dict inputs for alpha and delta
+    if isinstance(alpha_target, int | float):
+        alpha_dict = {0: float(alpha_target), 1: float(alpha_target)}
+    else:
+        alpha_dict = {k: float(v) for k, v in alpha_target.items()}
+
+    if isinstance(delta_coverage, int | float):
+        delta_dict = {0: float(delta_coverage), 1: float(delta_coverage)}
+    else:
+        delta_dict = {k: float(v) for k, v in delta_coverage.items()}
+
+    # Default rate types (include conditional singleton rates)
     if rate_types is None:
-        rate_types = ["singleton", "doublet", "abstention"]
+        rate_types = ["singleton", "doublet", "abstention", "correct_in_singleton", "error_in_singleton"]
 
-    # Step 1: Compute PAC coverage
-    all_scores = np.array([score_function(cal_features[i], cal_labels[i]) for i in range(n)])
-    alpha_adj, threshold, u_star = compute_pac_coverage(all_scores, alpha_target, delta_1)
+    # Allocate delta evenly across folds and rates (union bound)
+    n_rates = len(rate_types)
+    delta_per_bound = delta / (n_folds * n_rates)
 
-    # Step 2: Cross-fit CP bounds
-    cf_results = cross_fit_cp_bounds(
-        cal_features, cal_labels, score_function, alpha_adj, rate_types, n_folds, delta_2, random_seed
-    )
+    results = {rt: {"fold_results": [], "weights": []} for rt in rate_types}
 
-    # Step 3: Compute cushions and transfer bounds
+    # Create fold indices with optional random seed
+    indices = np.arange(n)
+    rng = np.random.RandomState(random_seed) if random_seed is not None else np.random
+    rng.shuffle(indices)
+
+    # Store Mondrian thresholds for each fold (for cushion computation)
+    fold_thresholds = []
+
+    for f in range(n_folds):
+        # Define fold
+        start_idx = f * fold_size
+        end_idx = (f + 1) * fold_size if f < n_folds - 1 else n
+        test_indices = indices[start_idx:end_idx]
+        train_indices = np.setdiff1d(indices, test_indices)
+
+        m_f = len(test_indices)
+
+        # Train: split training data by class and compute Mondrian thresholds
+        train_labels = labels[train_indices]
+        train_probs = probs[train_indices]
+
+        # Split training data by class
+        train_class_data = split_by_class(train_labels, train_probs)
+
+        # Compute Mondrian thresholds and bands for each class
+        thresholds = {}
+        bands = {}
+        for class_label in [0, 1]:
+            class_data = train_class_data[class_label]
+            n_class = class_data["n"]
+
+            if n_class == 0:
+                thresholds[class_label] = np.inf
+                bands[class_label] = (-np.inf, np.inf)
+                continue
+
+            # Compute scores for this class
+            class_probs = class_data["probs"]
+            class_scores = 1.0 - class_probs[:, class_label]
+
+            # Apply SSBC
+            ssbc_result = ssbc_correct(
+                alpha_target=alpha_dict[class_label], n=n_class, delta=delta_dict[class_label], mode="beta"
+            )
+            alpha_corrected = ssbc_result.alpha_corrected
+
+            # Compute threshold index
+            k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
+            k = min(k, n_class)
+            sorted_scores = np.sort(class_scores)
+            thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
+
+            # Band for cushion: [S_(k), S_(k+1)] per paper Eq. B.4
+            band_lower = sorted_scores[k - 1] if k >= 1 else -np.inf  # S_(k) = threshold
+            if k < n_class:
+                band_upper = sorted_scores[k]  # S_(k+1)
+            else:
+                # Edge case: no next order statistic, use threshold (no flip risk)
+                band_upper = sorted_scores[k - 1] if k >= 1 else np.inf
+            bands[class_label] = (band_lower, band_upper)
+
+        fold_thresholds.append(thresholds)
+
+        # Test: apply Mondrian thresholds to test fold (marginal data)
+        test_probs = probs[test_indices]
+        test_labels = labels[test_indices]
+
+        test_prediction_sets = []
+        for i in range(m_f):
+            # Compute scores for each class
+            score_0 = 1.0 - test_probs[i, 0]
+            score_1 = 1.0 - test_probs[i, 1]
+
+            # Apply Mondrian thresholds
+            pred_set = []
+            if score_0 <= thresholds[0]:
+                pred_set.append(0)
+            if score_1 <= thresholds[1]:
+                pred_set.append(1)
+
+            test_prediction_sets.append(pred_set)
+
+        # Compute marginal operational rates for this fold
+        for rate_type in rate_types:
+            Z = compute_operational_rate(
+                test_prediction_sets,
+                test_labels,
+                cast(
+                    Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
+                    rate_type,
+                ),
+            )
+            K_fr = int(np.sum(Z))
+
+            # Compute CP bounds with PAC margin
+            confidence = 1 - delta_per_bound
+            L_fr = clopper_pearson_lower(K_fr, m_f, confidence)
+            U_fr = clopper_pearson_upper(K_fr, m_f, confidence)
+
+            results[rate_type]["fold_results"].append(
+                {
+                    "fold": f,
+                    "m_f": m_f,
+                    "K_fr": K_fr,
+                    "L_fr": L_fr,
+                    "U_fr": U_fr,
+                    "thresholds": thresholds.copy(),
+                    "bands": bands.copy(),
+                    "test_indices": test_indices,
+                }
+            )
+            results[rate_type]["weights"].append(m_f / n)
+
+    # Aggregate cross-fit bounds (weighted average)
+    for rate_type in rate_types:
+        fold_res = results[rate_type]["fold_results"]
+        weights = results[rate_type]["weights"]
+
+        cf_lower = sum(w * fr["L_fr"] for w, fr in zip(weights, fold_res, strict=False))
+        cf_upper = sum(w * fr["U_fr"] for w, fr in zip(weights, fold_res, strict=False))
+
+        results[rate_type]["cf_lower"] = cf_lower
+        results[rate_type]["cf_upper"] = cf_upper
+
+    # Compute transfer cushions using bands per paper Eq. B.4
+    # Cushion = fraction of test points where ANY label has score in the band
     cushions = {}
     for rate_type in rate_types:
-        cushions[rate_type] = compute_transfer_cushion(
-            cal_features, cal_labels, score_function, cf_results[rate_type], rate_type
-        )
+        epsilon_total = 0.0
+        fold_res = results[rate_type]["fold_results"]
+        weights = results[rate_type]["weights"]
 
-    transferred = transfer_bounds_to_single_rule(cf_results, cushions)
+        for fold_data, w_f in zip(fold_res, weights, strict=False):
+            test_indices = fold_data["test_indices"]
+            bands_f = fold_data["bands"]
+            m_f = len(test_indices)
 
-    # Step 4: Package results
+            # Count test points where ANY label has score in ANY class band
+            flip_count = 0
+            for i in test_indices:
+                test_probs_i = probs[i]
+
+                # Check if any label has score in any class band
+                in_band = False
+                for class_label in [0, 1]:
+                    score = 1.0 - test_probs_i[class_label]
+                    band_lower, band_upper = bands_f[class_label]
+                    if band_lower <= score <= band_upper:
+                        in_band = True
+                        break
+
+                if in_band:
+                    flip_count += 1
+
+            epsilon_f = flip_count / m_f if m_f > 0 else 0.0
+            epsilon_total += w_f * epsilon_f
+
+        cushions[rate_type] = epsilon_total
+
+    # Transfer bounds to single rule
+    transferred = transfer_bounds_to_single_rule(results, cushions)
+
+    # Package results
     rate_bounds = {}
     for rate_type in rate_types:
         rate_bounds[rate_type] = OperationalRateBounds(
@@ -535,61 +659,56 @@ def compute_conformal_sla(
             cross_fit_lower=transferred[rate_type]["cf_lower"],
             cross_fit_upper=transferred[rate_type]["cf_upper"],
             cushion=transferred[rate_type]["cushion"],
-            confidence_level=1 - delta_2,
-            fold_results=cf_results[rate_type]["fold_results"],
+            confidence_level=1 - delta,
+            fold_results=results[rate_type]["fold_results"],
         )
 
-    return ConformalSLAResult(
-        alpha_target=alpha_target,
-        alpha_adjusted=alpha_adj,
-        coverage_guarantee=1 - alpha_target,
-        coverage_confidence=1 - delta_1,
+    # Thresholds dict from last fold (for reference)
+    final_thresholds = fold_thresholds[-1] if fold_thresholds else {0: 0.0, 1: 0.0}
+
+    return OperationalRateBoundsResult(
         rate_bounds=rate_bounds,
-        rate_confidence=1 - delta_2,
-        joint_confidence=1 - (delta_1 + delta_2),
-        threshold=threshold,
+        rate_confidence=1 - delta,
+        thresholds=final_thresholds,
         n_calibration=n,
         n_folds=n_folds,
     )
 
 
-# ============================================================================
-# Mondrian (Class-Conditional) Extension
-# ============================================================================
-
-
-def compute_conformal_sla_mondrian(
-    cal_features: np.ndarray,
-    cal_labels: np.ndarray,
-    score_function: Callable,
-    alpha_target: float,
-    delta_1: float,
-    delta_2: float,
+def compute_mondrian_operational_bounds(
+    calibration_result: dict[int, dict[str, Any]],
+    labels: np.ndarray,
+    probs: np.ndarray,
+    delta: float,
     rate_types: list[str] | None = None,
     n_folds: int = 5,
     random_seed: int | None = None,
-) -> dict[int, ConformalSLAResult]:
-    """Mondrian (class-conditional) conformal prediction with SLA.
+) -> dict[int, OperationalRateBoundsResult]:
+    """Compute PER-CLASS operational rate bounds via cross-validated Mondrian.
 
-    Runs the full SLA pipeline separately for each class, providing
-    class-conditional guarantees. Uses union bound to split δ₂ across classes.
+    Uses cross-validation on MARGINAL data, then separates results by true class.
+    This is the ONLY valid way to get per-class operational bounds for Mondrian,
+    because Mondrian prediction sets require BOTH class thresholds simultaneously.
+
+    Process:
+    1. K-fold split MARGINAL data
+    2. For each fold: train Mondrian (both thresholds), test on marginal fold
+    3. Separate test results BY TRUE CLASS to get per-class rates
+    4. Compute CP bounds per class with PAC margin
+    5. Average and transfer
 
     Parameters
     ----------
-    cal_features : np.ndarray
-        Calibration features (shape: n × d)
-    cal_labels : np.ndarray
-        Calibration labels (shape: n,)
-    score_function : Callable
-        Nonconformity score function A(x, y)
-    alpha_target : float
-        Target miscoverage rate per class
-    delta_1 : float
-        Risk for coverage guarantee per class
-    delta_2 : float
-        Total risk for operational rate bounds (split across classes)
+    calibration_result : dict[int, dict]
+        Output from mondrian_conformal_calibrate() (provides alpha_target, delta)
+    labels : np.ndarray
+        True labels (shape: n,)
+    probs : np.ndarray
+        Probability matrix (shape: n, 2)
+    delta : float
+        Total PAC risk for operational rate bounds (split across classes)
     rate_types : list[str], optional
-        Operational rates to compute
+        Operational rates to compute. Defaults to ["singleton", "doublet"]
     n_folds : int, default=5
         Number of cross-validation folds
     random_seed : int, optional
@@ -597,40 +716,258 @@ def compute_conformal_sla_mondrian(
 
     Returns
     -------
-    results : dict[int, ConformalSLAResult]
-        Dictionary mapping class_label -> ConformalSLAResult
+    results : dict[int, OperationalRateBoundsResult]
+        Dictionary mapping class_label -> OperationalRateBoundsResult
+
+    Examples
+    --------
+    >>> # Step 1: Mondrian calibration
+    >>> class_data = split_by_class(labels, probs)
+    >>> cal_result, pred_stats = mondrian_conformal_calibrate(class_data, 0.1, 0.05)
+    >>>
+    >>> # Step 2: Per-class operational bounds (uses labels, probs)
+    >>> bounds = compute_mondrian_operational_bounds(cal_result, labels, probs, delta=0.05)
 
     Notes
     -----
-    The risk δ₂ is split evenly across classes using union bound.
-    Each class gets its own threshold and rate bounds.
-    This is useful when different classes have different prevalences
-    or difficulty levels.
+    This does marginal cross-validation then conditions on true class for reporting.
+    The risk δ is split across classes and rate types via union bound.
     """
-    unique_classes = np.unique(cal_labels)
-    n_classes = len(unique_classes)
+    from .conformal import split_by_class
+    from .core import ssbc_correct
 
-    # Split delta_2 across classes (union bound)
-    delta_2_per_class = delta_2 / n_classes
+    n = len(labels)
+    fold_size = n // n_folds
+    n_classes = 2
 
+    # Get alpha and delta from calibration result
+    alpha_target = {k: calibration_result[k]["alpha_target"] for k in [0, 1]}
+    delta_coverage = {k: calibration_result[k]["delta"] for k in [0, 1]}
+
+    # Default rate types (include conditional singleton rates)
+    if rate_types is None:
+        rate_types = ["singleton", "doublet", "abstention", "correct_in_singleton", "error_in_singleton"]
+
+    # Allocate delta: split across classes, then folds, then rates
+    n_rates = len(rate_types)
+    delta_per_class = delta / n_classes
+    delta_per_bound = delta_per_class / (n_folds * n_rates)
+
+    # Initialize results for each class
+    per_class_results = {
+        class_label: {rt: {"fold_results": [], "weights": []} for rt in rate_types} for class_label in [0, 1]
+    }
+
+    # Create fold indices
+    indices = np.arange(n)
+    rng = np.random.RandomState(random_seed) if random_seed is not None else np.random
+    rng.shuffle(indices)
+
+    fold_thresholds_all = []
+
+    for f in range(n_folds):
+        # Define fold
+        start_idx = f * fold_size
+        end_idx = (f + 1) * fold_size if f < n_folds - 1 else n
+        test_indices = indices[start_idx:end_idx]
+        train_indices = np.setdiff1d(indices, test_indices)
+
+        m_f = len(test_indices)
+
+        # Train: compute BOTH Mondrian thresholds on training data
+        train_labels = labels[train_indices]
+        train_probs = probs[train_indices]
+        train_class_data = split_by_class(train_labels, train_probs)
+
+        thresholds = {}
+        bands = {}
+        for class_label in [0, 1]:
+            class_data = train_class_data[class_label]
+            n_class = class_data["n"]
+
+            if n_class == 0:
+                thresholds[class_label] = np.inf
+                bands[class_label] = (-np.inf, np.inf)
+                continue
+
+            # Compute scores
+            class_probs = class_data["probs"]
+            class_scores = 1.0 - class_probs[:, class_label]
+
+            # SSBC correction
+            ssbc_result = ssbc_correct(
+                alpha_target=alpha_target[class_label], n=n_class, delta=delta_coverage[class_label], mode="beta"
+            )
+            alpha_corrected = ssbc_result.alpha_corrected
+
+            # Threshold index
+            k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
+            k = min(k, n_class)
+            sorted_scores = np.sort(class_scores)
+            thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
+
+            # Band for cushion: [S_(k), S_(k+1)] per paper Eq. B.4
+            band_lower = sorted_scores[k - 1] if k >= 1 else -np.inf  # S_(k) = threshold
+            if k < n_class:
+                band_upper = sorted_scores[k]  # S_(k+1)
+            else:
+                # Edge case: no next order statistic, use threshold (no flip risk)
+                band_upper = sorted_scores[k - 1] if k >= 1 else np.inf
+            bands[class_label] = (band_lower, band_upper)
+
+        fold_thresholds_all.append(thresholds)
+
+        # Test: apply Mondrian to test fold, THEN separate by true class
+        test_probs = probs[test_indices]
+        test_labels = labels[test_indices]
+
+        # Generate prediction sets using BOTH Mondrian thresholds
+        test_prediction_sets = []
+        for i in range(m_f):
+            score_0 = 1.0 - test_probs[i, 0]
+            score_1 = 1.0 - test_probs[i, 1]
+
+            pred_set = []
+            if score_0 <= thresholds[0]:
+                pred_set.append(0)
+            if score_1 <= thresholds[1]:
+                pred_set.append(1)
+
+            test_prediction_sets.append(pred_set)
+
+        # NOW separate by true class and compute rates PER CLASS
+        for true_class in [0, 1]:
+            # Filter test data to this true class
+            class_mask = test_labels == true_class
+            class_pred_sets = [test_prediction_sets[i] for i in range(m_f) if class_mask[i]]
+            class_test_labels = test_labels[class_mask]
+            m_class = len(class_test_labels)
+
+            if m_class == 0:
+                continue
+
+            # Compute operational rates for this class
+            for rate_type in rate_types:
+                Z = compute_operational_rate(
+                    class_pred_sets,
+                    class_test_labels,
+                    cast(
+                        Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
+                        rate_type,
+                    ),
+                )
+                K_fr = int(np.sum(Z))
+
+                # CP bounds with PAC margin
+                confidence = 1 - delta_per_bound
+                L_fr = clopper_pearson_lower(K_fr, m_class, confidence)
+                U_fr = clopper_pearson_upper(K_fr, m_class, confidence)
+
+                per_class_results[true_class][rate_type]["fold_results"].append(
+                    {
+                        "fold": f,
+                        "m_f": m_class,
+                        "K_fr": K_fr,
+                        "L_fr": L_fr,
+                        "U_fr": U_fr,
+                        "thresholds": thresholds.copy(),
+                        "bands": bands.copy(),
+                        "test_indices": test_indices[class_mask],
+                    }
+                )
+                # Weight by class size in this fold
+                n_class_total = np.sum(labels == true_class)
+                per_class_results[true_class][rate_type]["weights"].append(m_class / n_class_total)
+
+    # Aggregate for each class
     results = {}
-    for class_label in unique_classes:
-        # Filter to this class
-        class_mask = cal_labels == class_label
-        class_features = cal_features[class_mask]
-        class_labels = cal_labels[class_mask]
+    for class_label in [0, 1]:
+        # Aggregate cross-fit bounds
+        for rate_type in rate_types:
+            fold_res = per_class_results[class_label][rate_type]["fold_results"]
+            weights = per_class_results[class_label][rate_type]["weights"]
 
-        # Run standard pipeline on this class
-        results[int(class_label)] = compute_conformal_sla(
-            class_features,
-            class_labels,
-            score_function,
-            alpha_target,
-            delta_1,
-            delta_2_per_class,
-            rate_types,
-            n_folds,
-            random_seed,
+            if len(fold_res) == 0:
+                continue
+
+            # Normalize weights to sum to 1
+            total_weight = sum(weights)
+            if total_weight > 0:
+                weights = [w / total_weight for w in weights]
+
+            cf_lower = sum(w * fr["L_fr"] for w, fr in zip(weights, fold_res, strict=False))
+            cf_upper = sum(w * fr["U_fr"] for w, fr in zip(weights, fold_res, strict=False))
+
+            per_class_results[class_label][rate_type]["cf_lower"] = cf_lower
+            per_class_results[class_label][rate_type]["cf_upper"] = cf_upper
+
+        # Compute transfer cushions using bands per paper Eq. B.4
+        cushions = {}
+        for rate_type in rate_types:
+            epsilon_total = 0.0
+            fold_res = per_class_results[class_label][rate_type]["fold_results"]
+            weights = per_class_results[class_label][rate_type]["weights"]
+
+            if len(fold_res) == 0:
+                cushions[rate_type] = 0.0
+                continue
+
+            for fold_data, w_f in zip(fold_res, weights, strict=False):
+                test_indices = fold_data["test_indices"]
+                bands_f = fold_data["bands"]
+                m_f = len(test_indices)
+
+                # Count test points where ANY label has score in ANY class band
+                flip_count = 0
+                for idx in test_indices:
+                    test_probs_i = probs[idx]
+
+                    # Check if any label has score in any class band
+                    in_band = False
+                    for c_label in [0, 1]:
+                        score = 1.0 - test_probs_i[c_label]
+                        band_lower, band_upper = bands_f[c_label]
+                        if band_lower <= score <= band_upper:
+                            in_band = True
+                            break
+
+                    if in_band:
+                        flip_count += 1
+
+                epsilon_f = flip_count / m_f if m_f > 0 else 0.0
+                epsilon_total += w_f * epsilon_f
+
+            cushions[rate_type] = epsilon_total
+
+        # Transfer bounds
+        transferred = transfer_bounds_to_single_rule(per_class_results[class_label], cushions)
+
+        # Package results
+        rate_bounds = {}
+        for rate_type in rate_types:
+            if rate_type not in transferred:
+                continue
+
+            rate_bounds[rate_type] = OperationalRateBounds(
+                rate_name=rate_type,
+                lower_bound=transferred[rate_type]["single_lower"],
+                upper_bound=transferred[rate_type]["single_upper"],
+                cross_fit_lower=transferred[rate_type]["cf_lower"],
+                cross_fit_upper=transferred[rate_type]["cf_upper"],
+                cushion=transferred[rate_type]["cushion"],
+                confidence_level=1 - delta_per_class,
+                fold_results=per_class_results[class_label][rate_type]["fold_results"],
+            )
+
+        threshold = calibration_result[class_label]["threshold"]
+        n_class_total = np.sum(labels == class_label)
+
+        results[class_label] = OperationalRateBoundsResult(
+            rate_bounds=rate_bounds,
+            rate_confidence=1 - delta_per_class,
+            thresholds=threshold,
+            n_calibration=n_class_total,
+            n_folds=n_folds,
         )
 
     return results
