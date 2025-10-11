@@ -10,6 +10,32 @@ rates. Unlike asymptotic methods that assume large samples, SSBC accounts for th
 discrete nature of order statistics and provides rigorous guarantees even when
 calibration data is limited.
 
+## Core Statistical Framework
+
+SSBC operates within a rigorous frequentist framework with minimal assumptions:
+
+- **Distribution-Free**: No assumptions about the data generating distribution. Works
+  for any P(X,Y) without needing to know or estimate it.
+
+- **Model-Agnostic**: Works with ANY probabilistic classifier (neural nets, random
+  forests, logistic regression, etc.) as long as it outputs calibrated probabilities
+  or conformity scores.
+
+- **Frequentist Guarantees**: Valid frequentist statements with exact coverage. The
+  probability is over the randomness of the calibration set, not over any posterior
+  distribution.
+
+- **Non-Bayesian**: No priors, no hyperpriors, no posterior distributions. The
+  guarantees are purely frequentist: "Over repeated draws of calibration sets, the
+  fraction meeting the guarantee ≥ 1-δ."
+
+- **Finite-Sample**: Exact guarantees for ANY n, including small samples (n=20, 50,
+  100). Not asymptotic approximations that only hold as n→∞.
+
+- **Exchangeability Only**: The only assumption is that calibration and test data are
+  exchangeable (e.g., i.i.d. from the same distribution). No parametric assumptions
+  about that distribution.
+
 ## The Coverage Guarantee
 
 With probability ≥ 1-δ over the calibration set, the deployed conformal predictor
@@ -124,6 +150,20 @@ to predict operational behavior BEFORE going live. Questions like:
 - "What error rate should we expect in automated decisions?"
 
 ...require quantitative answers with statistical guarantees.
+
+**Crucially**, these guarantees are:
+- **Distribution-free**: Valid regardless of how your data is distributed
+- **Model-agnostic**: Valid for ANY classifier (deep learning, tree ensembles, etc.)
+- **Frequentist**: No Bayesian assumptions, no priors, no hyperparameters to tune
+- **Finite-sample**: Valid with n=50, n=100, not just n→∞
+- **Non-parametric**: No assumptions about functional forms or parametric families
+
+This makes SSBC deployable in domains where:
+- Data distributions are unknown or non-standard
+- Sample sizes are limited by cost or rarity
+- Frequentist guarantees are required (medical, legal, regulatory)
+- Bayesian priors are unavailable or unjustifiable
+- Black-box models are used (neural networks, vendor APIs)
 
 ### Our Framework Provides
 

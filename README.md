@@ -32,6 +32,15 @@ Unlike asymptotic methods, SSBC provides:
    - Resource planning (human oversight needs)
    - SLA compliance (performance bounds)
 
+### Core Statistical Properties
+
+🎯 **Distribution-Free**: No assumptions about data distribution
+🎯 **Model-Agnostic**: Works with ANY probabilistic classifier
+🎯 **Frequentist**: Valid frequentist guarantees, no prior needed
+🎯 **Non-Bayesian**: No Bayesian assumptions or hyperpriors
+🎯 **Finite-Sample**: Exact guarantees for small n, not asymptotic
+🎯 **Exchangeability Only**: Minimal assumption (test/calibration exchangeable)
+
 **📖 For detailed theory and deployment guide, see [docs/theory.md](docs/theory.md)**
 
 ### Key Features
