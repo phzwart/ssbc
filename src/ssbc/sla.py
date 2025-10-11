@@ -86,6 +86,105 @@ class OperationalRateBoundsResult:
 # ============================================================================
 
 
+def _evaluate_loo_marginal(
+    i: int,
+    labels: np.ndarray,
+    probs: np.ndarray,
+    alpha_dict: dict[int, float],
+    delta_dict: dict[int, float],
+    rate_types: list[str],
+) -> dict[str, bool]:
+    """Evaluate single LOO iteration for marginal operational bounds.
+
+    Parameters
+    ----------
+    i : int
+        Index of held-out point
+    labels : np.ndarray
+        All labels
+    probs : np.ndarray
+        All probabilities
+    alpha_dict : dict[int, float]
+        Alpha values per class
+    delta_dict : dict[int, float]
+        Delta values per class
+    rate_types : list[str]
+        Rate types to evaluate
+
+    Returns
+    -------
+    dict[str, bool]
+        Dictionary mapping rate_type -> whether event occurred
+    """
+    from .conformal import split_by_class
+    from .core import ssbc_correct
+
+    n = len(labels)
+
+    # Create training set = all points except i
+    train_indices = np.concatenate([np.arange(0, i), np.arange(i + 1, n)])
+    train_labels = labels[train_indices]
+    train_probs = probs[train_indices]
+
+    # Split training data by class
+    train_class_data = split_by_class(train_labels, train_probs)
+
+    # Compute Mondrian thresholds for each class
+    thresholds = {}
+    for class_label in [0, 1]:
+        class_data = train_class_data[class_label]
+        n_class = class_data["n"]
+
+        if n_class == 0:
+            thresholds[class_label] = np.inf
+            continue
+
+        # Compute nonconformity scores for this class
+        class_probs = class_data["probs"]
+        class_scores = 1.0 - class_probs[:, class_label]
+
+        # Apply SSBC
+        ssbc_result = ssbc_correct(
+            alpha_target=alpha_dict[class_label], n=n_class, delta=delta_dict[class_label], mode="beta"
+        )
+        alpha_corrected = ssbc_result.alpha_corrected
+
+        # Conformal threshold
+        k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
+        k = min(k, n_class)
+        sorted_scores = np.sort(class_scores)
+        thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
+
+    # Apply Mondrian predictor to held-out point i
+    test_prob = probs[i]
+    test_label = labels[i]
+
+    # Generate prediction set
+    score_0 = 1.0 - test_prob[0]
+    score_1 = 1.0 - test_prob[1]
+
+    pred_set = []
+    if score_0 <= thresholds[0]:
+        pred_set.append(0)
+    if score_1 <= thresholds[1]:
+        pred_set.append(1)
+
+    # Evaluate each rate type
+    results = {}
+    for rate_type in rate_types:
+        event_occurred = compute_operational_rate(
+            [pred_set],
+            np.array([test_label]),
+            cast(
+                Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
+                rate_type,
+            ),
+        )[0]
+        results[rate_type] = bool(event_occurred)
+
+    return results
+
+
 def compute_marginal_operational_bounds(
     labels: np.ndarray,
     probs: np.ndarray,
@@ -94,6 +193,7 @@ def compute_marginal_operational_bounds(
     delta: float,
     rate_types: list[str] | None = None,
     ci_width: float = 0.95,
+    n_jobs: int = 1,
 ) -> OperationalRateBoundsResult:
     """Compute marginal operational rate bounds via LOO-CV.
 
@@ -123,6 +223,8 @@ def compute_marginal_operational_bounds(
         Operational rates to compute. Defaults to singleton, doublet, abstention, and conditional rates.
     ci_width : float, default=0.95
         Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
+    n_jobs : int, default=1
+        Number of parallel jobs. 1 = single-threaded, -1 = use all cores, N = use N cores
 
     Returns
     -------
@@ -163,70 +265,18 @@ def compute_marginal_operational_bounds(
     if rate_types is None:
         rate_types = ["singleton", "doublet", "abstention", "correct_in_singleton", "error_in_singleton"]
 
-    # Initialize indicator arrays for each rate type
+    # Parallel LOO-CV: evaluate each point independently
+    from joblib import Parallel, delayed
+
+    loo_results = Parallel(n_jobs=n_jobs)(
+        delayed(_evaluate_loo_marginal)(i, labels, probs, alpha_dict, delta_dict, rate_types) for i in range(n)
+    )
+
+    # Aggregate indicators from parallel results
     indicators = {rt: np.zeros(n, dtype=bool) for rt in rate_types}
-
-    # Leave-one-out: for each point, train on all others and test on it
-    for i in range(n):
-        # Create training set = all points except i
-        train_indices = np.concatenate([np.arange(0, i), np.arange(i + 1, n)])
-        train_labels = labels[train_indices]
-        train_probs = probs[train_indices]
-
-        # Split training data by class
-        train_class_data = split_by_class(train_labels, train_probs)
-
-        # Compute Mondrian thresholds for each class
-        thresholds = {}
-        for class_label in [0, 1]:
-            class_data = train_class_data[class_label]
-            n_class = class_data["n"]
-
-            if n_class == 0:
-                thresholds[class_label] = np.inf
-                continue
-
-            # Compute nonconformity scores for this class
-            class_probs = class_data["probs"]
-            class_scores = 1.0 - class_probs[:, class_label]
-
-            # Apply SSBC
-            ssbc_result = ssbc_correct(
-                alpha_target=alpha_dict[class_label], n=n_class, delta=delta_dict[class_label], mode="beta"
-            )
-            alpha_corrected = ssbc_result.alpha_corrected
-
-            # Conformal threshold: k-th order statistic where k = ceil((n+1) * (1-alpha))
-            k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
-            k = min(k, n_class)
-            sorted_scores = np.sort(class_scores)
-            thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
-
-        # Apply Mondrian predictor to held-out point i
-        test_prob = probs[i]
-        test_label = labels[i]
-
-        # Compute scores and generate prediction set
-        score_0 = 1.0 - test_prob[0]
-        score_1 = 1.0 - test_prob[1]
-
-        pred_set = []
-        if score_0 <= thresholds[0]:
-            pred_set.append(0)
-        if score_1 <= thresholds[1]:
-            pred_set.append(1)
-
-        # Evaluate each rate type for this point
+    for i, result in enumerate(loo_results):
         for rate_type in rate_types:
-            event_occurred = compute_operational_rate(
-                [pred_set],
-                np.array([test_label]),
-                cast(
-                    Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
-                    rate_type,
-                ),
-            )[0]
-            indicators[rate_type][i] = bool(event_occurred)
+            indicators[rate_type][i] = result[rate_type]
 
     # Compute Clopper-Pearson bounds for each rate type
     rate_bounds = {}
@@ -276,6 +326,107 @@ def compute_marginal_operational_bounds(
     )
 
 
+def _evaluate_loo_mondrian(
+    i: int,
+    labels: np.ndarray,
+    probs: np.ndarray,
+    alpha_target: dict[int, float],
+    delta_coverage: dict[int, float],
+    rate_types: list[str],
+) -> tuple[int, dict[str, bool]]:
+    """Evaluate single LOO iteration for Mondrian per-class operational bounds.
+
+    Parameters
+    ----------
+    i : int
+        Index of held-out point
+    labels : np.ndarray
+        All labels
+    probs : np.ndarray
+        All probabilities
+    alpha_target : dict[int, float]
+        Alpha values per class
+    delta_coverage : dict[int, float]
+        Delta values per class
+    rate_types : list[str]
+        Rate types to evaluate
+
+    Returns
+    -------
+    true_class : int
+        True class of held-out point
+    results : dict[str, bool]
+        Dictionary mapping rate_type -> whether event occurred
+    """
+    from .conformal import split_by_class
+    from .core import ssbc_correct
+
+    n = len(labels)
+
+    # Create training set = all points except i
+    train_indices = np.concatenate([np.arange(0, i), np.arange(i + 1, n)])
+    train_labels = labels[train_indices]
+    train_probs = probs[train_indices]
+
+    # Split training data by class
+    train_class_data = split_by_class(train_labels, train_probs)
+
+    # Compute BOTH Mondrian thresholds
+    thresholds = {}
+    for class_label in [0, 1]:
+        class_data = train_class_data[class_label]
+        n_class = class_data["n"]
+
+        if n_class == 0:
+            thresholds[class_label] = np.inf
+            continue
+
+        # Compute nonconformity scores for this class
+        class_probs = class_data["probs"]
+        class_scores = 1.0 - class_probs[:, class_label]
+
+        # Apply SSBC
+        ssbc_result = ssbc_correct(
+            alpha_target=alpha_target[class_label], n=n_class, delta=delta_coverage[class_label], mode="beta"
+        )
+        alpha_corrected = ssbc_result.alpha_corrected
+
+        # Conformal threshold
+        k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
+        k = min(k, n_class)
+        sorted_scores = np.sort(class_scores)
+        thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
+
+    # Apply Mondrian predictor to held-out point i
+    test_prob = probs[i]
+    test_label = labels[i]
+
+    # Generate prediction set using BOTH thresholds
+    score_0 = 1.0 - test_prob[0]
+    score_1 = 1.0 - test_prob[1]
+
+    pred_set = []
+    if score_0 <= thresholds[0]:
+        pred_set.append(0)
+    if score_1 <= thresholds[1]:
+        pred_set.append(1)
+
+    # Evaluate each rate type
+    results = {}
+    for rate_type in rate_types:
+        event_occurred = compute_operational_rate(
+            [pred_set],
+            np.array([test_label]),
+            cast(
+                Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
+                rate_type,
+            ),
+        )[0]
+        results[rate_type] = bool(event_occurred)
+
+    return int(test_label), results
+
+
 def compute_mondrian_operational_bounds(
     calibration_result: dict[int, dict[str, Any]],
     labels: np.ndarray,
@@ -283,6 +434,7 @@ def compute_mondrian_operational_bounds(
     delta: float,
     rate_types: list[str] | None = None,
     ci_width: float = 0.95,
+    n_jobs: int = 1,
 ) -> dict[int, OperationalRateBoundsResult]:
     """Compute PER-CLASS operational rate bounds via LOO-CV.
 
@@ -317,6 +469,8 @@ def compute_mondrian_operational_bounds(
         Operational rates to compute. Each gets the same confidence independently.
     ci_width : float, default=0.95
         Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
+    n_jobs : int, default=1
+        Number of parallel jobs. 1 = single-threaded, -1 = use all cores, N = use N cores
 
     Returns
     -------
@@ -336,8 +490,6 @@ def compute_mondrian_operational_bounds(
     Union bound applies across classes only, NOT across rate types.
     Each rate within a class independently achieves confidence 1-δ_class where δ_class = δ/2.
     """
-    from .conformal import split_by_class
-    from .core import ssbc_correct
 
     n = len(labels)
     n_classes = 2
@@ -353,71 +505,19 @@ def compute_mondrian_operational_bounds(
     # Allocate delta: split across classes only (NOT rates)
     delta_per_class = delta / n_classes
 
-    # Initialize indicator arrays for each rate type (indexed by original point index)
-    # We'll store (indicator, true_class) pairs
+    # Parallel LOO-CV: evaluate each point independently
+    from joblib import Parallel, delayed
+
+    loo_results = Parallel(n_jobs=n_jobs)(
+        delayed(_evaluate_loo_mondrian)(i, labels, probs, alpha_target, delta_coverage, rate_types) for i in range(n)
+    )
+
+    # Aggregate indicators by true class from parallel results
     indicators_per_class = {class_label: {rt: [] for rt in rate_types} for class_label in [0, 1]}
 
-    # Leave-one-out: for each point, train on all others and test on it
-    for i in range(n):
-        # Create training set = all points except i
-        train_indices = np.concatenate([np.arange(0, i), np.arange(i + 1, n)])
-        train_labels = labels[train_indices]
-        train_probs = probs[train_indices]
-
-        # Split training data by class
-        train_class_data = split_by_class(train_labels, train_probs)
-
-        # Compute BOTH Mondrian thresholds
-        thresholds = {}
-        for class_label in [0, 1]:
-            class_data = train_class_data[class_label]
-            n_class = class_data["n"]
-
-            if n_class == 0:
-                thresholds[class_label] = np.inf
-                continue
-
-            # Compute nonconformity scores for this class
-            class_probs = class_data["probs"]
-            class_scores = 1.0 - class_probs[:, class_label]
-
-            # Apply SSBC
-            ssbc_result = ssbc_correct(
-                alpha_target=alpha_target[class_label], n=n_class, delta=delta_coverage[class_label], mode="beta"
-            )
-            alpha_corrected = ssbc_result.alpha_corrected
-
-            # Conformal threshold
-            k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
-            k = min(k, n_class)
-            sorted_scores = np.sort(class_scores)
-            thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
-
-        # Apply Mondrian predictor to held-out point i
-        test_prob = probs[i]
-        test_label = labels[i]
-
-        # Generate prediction set using BOTH thresholds
-        score_0 = 1.0 - test_prob[0]
-        score_1 = 1.0 - test_prob[1]
-
-        pred_set = []
-        if score_0 <= thresholds[0]:
-            pred_set.append(0)
-        if score_1 <= thresholds[1]:
-            pred_set.append(1)
-
-        # Evaluate each rate type and store by true class
+    for true_class, result in loo_results:
         for rate_type in rate_types:
-            event_occurred = compute_operational_rate(
-                [pred_set],
-                np.array([test_label]),
-                cast(
-                    Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
-                    rate_type,
-                ),
-            )[0]
-            indicators_per_class[test_label][rate_type].append(bool(event_occurred))
+            indicators_per_class[true_class][rate_type].append(result[rate_type])
 
     # Compute Clopper-Pearson bounds for each class
     results = {}
