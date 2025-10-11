@@ -9,11 +9,9 @@ from ssbc import (
     OperationalRateBoundsResult,
     compute_marginal_operational_bounds,
     compute_mondrian_operational_bounds,
-    compute_transfer_cushion,
     cross_fit_cp_bounds,
     mondrian_conformal_calibrate,
     split_by_class,
-    transfer_bounds_to_single_rule,
 )
 
 # ============================================================================
@@ -91,52 +89,6 @@ def test_cross_fit_cp_bounds_reproducibility(binary_classification_data):
 # ============================================================================
 # Test Transfer Cushion
 # ============================================================================
-
-
-def test_compute_transfer_cushion(binary_classification_data):
-    """Test transfer cushion computation."""
-    _, _, class_data = binary_classification_data
-
-    cf_results = cross_fit_cp_bounds(class_data[0], 0, 0.10, 0.05, ["singleton"], 3, 0.10, random_seed=42)
-
-    cushion = compute_transfer_cushion(class_data[0], 0, cf_results["singleton"], "singleton")
-
-    # Cushion should be non-negative and reasonable
-    assert 0.0 <= cushion <= 1.0
-
-
-def test_transfer_bounds_to_single_rule(binary_classification_data):
-    """Test transferring bounds to single rule."""
-    _, _, class_data = binary_classification_data
-
-    cf_results = cross_fit_cp_bounds(class_data[0], 0, 0.10, 0.05, ["singleton", "doublet"], 3, 0.10, random_seed=42)
-
-    cushions_lower = {
-        "singleton": compute_transfer_cushion(class_data[0], 0, cf_results["singleton"], "singleton"),
-        "doublet": compute_transfer_cushion(class_data[0], 0, cf_results["doublet"], "doublet"),
-    }
-    cushions_upper = {
-        "singleton": compute_transfer_cushion(class_data[0], 0, cf_results["singleton"], "singleton"),
-        "doublet": compute_transfer_cushion(class_data[0], 0, cf_results["doublet"], "doublet"),
-    }
-
-    transferred = transfer_bounds_to_single_rule(cf_results, cushions_lower, cushions_upper)
-
-    # Check structure
-    assert "singleton" in transferred
-    assert "doublet" in transferred
-
-    for rate_type in ["singleton", "doublet"]:
-        assert "single_lower" in transferred[rate_type]
-        assert "single_upper" in transferred[rate_type]
-        assert "cf_lower" in transferred[rate_type]
-        assert "cf_upper" in transferred[rate_type]
-        assert "cushion_lower" in transferred[rate_type]
-        assert "cushion_upper" in transferred[rate_type]
-
-        # Check bounds are widened appropriately
-        assert transferred[rate_type]["single_lower"] <= transferred[rate_type]["cf_lower"]
-        assert transferred[rate_type]["single_upper"] >= transferred[rate_type]["cf_upper"]
 
 
 # ============================================================================
@@ -272,19 +224,14 @@ def test_operational_rate_bounds_dataclass():
         rate_name="singleton",
         lower_bound=0.6,
         upper_bound=0.85,
-        cross_fit_lower=0.65,
-        cross_fit_upper=0.80,
-        cushion_lower=0.04,
-        cushion_upper=0.06,
-        ci_width=0.95,
+        confidence_level=0.95,
         fold_results=[{"fold": 0, "m_f": 20}],
     )
 
     assert bounds.rate_name == "singleton"
     assert bounds.lower_bound == 0.6
     assert bounds.upper_bound == 0.85
-    assert bounds.cushion_lower == 0.04
-    assert bounds.cushion_upper == 0.06
+    assert bounds.confidence_level == 0.95
 
 
 def test_operational_bounds_result_dataclass():
@@ -293,11 +240,7 @@ def test_operational_bounds_result_dataclass():
         rate_name="singleton",
         lower_bound=0.7,
         upper_bound=0.9,
-        cross_fit_lower=0.75,
-        cross_fit_upper=0.85,
-        cushion_lower=0.05,
-        cushion_upper=0.05,
-        ci_width=0.95,
+        confidence_level=0.95,
         fold_results=[],
     )
 
@@ -360,13 +303,14 @@ def test_rates_not_split_independently_confident():
     )
 
     # Each class gets delta_per_class = 0.06/2 = 0.03 (97% PAC confidence)
-    # All rates within each class should use DEFAULT CI width (95%)
+    # All rates within each class should have same confidence_level
     for class_label in [0, 1]:
         # Check that PAC confidence is correct
         assert np.isclose(op_bounds[class_label].rate_confidence, 1 - 0.06 / 2)
 
-        # Check that CI width is 95% (default)
+        # Check that all rates have the same confidence level (from delta_per_class)
         for rate_name in ["singleton", "doublet", "abstention"]:
             if rate_name in op_bounds[class_label].rate_bounds:
-                ci_width = op_bounds[class_label].rate_bounds[rate_name].ci_width
-                assert np.isclose(ci_width, 0.95), f"{rate_name} should use 95% CI width (default)"
+                conf_level = op_bounds[class_label].rate_bounds[rate_name].confidence_level
+                expected = 1 - 0.06 / 2  # 97%
+                assert np.isclose(conf_level, expected), f"{rate_name} should have confidence {expected:.1%}"

@@ -33,31 +33,24 @@ class OperationalRateBounds:
     rate_name : str
         Name of the operational rate (e.g., "singleton", "doublet")
     lower_bound : float
-        Lower bound for deployment on single refit-on-all rule
+        Lower bound from cross-validated Clopper-Pearson analysis
     upper_bound : float
-        Upper bound for deployment on single refit-on-all rule
-    cross_fit_lower : float
-        Lower bound from cross-fit analysis (before transfer)
-    cross_fit_upper : float
-        Upper bound from cross-fit analysis (before transfer)
-    cushion_lower : float
-        Transfer cushion for lower bound (ε_lower)
-    cushion_upper : float
-        Transfer cushion for upper bound (ε_upper)
-    ci_width : float
-        Width of Clopper-Pearson confidence intervals used (e.g., 0.95 for 95% CIs)
+        Upper bound from cross-validated Clopper-Pearson analysis
+    confidence_level : float
+        Confidence level for the bounds (1 - δ)
     fold_results : list[dict]
         Detailed results from each cross-validation fold
+
+    Notes
+    -----
+    These bounds are exact for a randomized deployment using the CV mixture.
+    They are approximate but conservative for a single refit-on-all threshold.
     """
 
     rate_name: str
     lower_bound: float
     upper_bound: float
-    cross_fit_lower: float
-    cross_fit_upper: float
-    cushion_lower: float
-    cushion_upper: float
-    ci_width: float
+    confidence_level: float
     fold_results: list[dict]
 
 
@@ -278,138 +271,6 @@ def cross_fit_cp_bounds(
 
 
 # ============================================================================
-# Transfer to Single Refit-On-All Rule
-# ============================================================================
-
-
-def compute_transfer_cushion(
-    class_data: dict[str, Any],
-    true_class: int,
-    cross_fit_results: dict,
-    rate_type: str,
-) -> float:
-    """Compute empirical cushion ε_n for transferring cross-fit bounds to single rule.
-
-    The cushion accounts for the difference between cross-fit thresholds
-    (computed on K-1 folds) and the final threshold (computed on all n samples).
-    Points near the threshold boundary may flip between different prediction
-    set sizes.
-
-    Parameters
-    ----------
-    class_data : dict
-        Per-class data from split_by_class() containing probs and labels
-    true_class : int
-        The class label (0 or 1) for this data
-    cross_fit_results : dict
-        Results from cross_fit_cp_bounds for this rate_type
-    rate_type : str
-        Operational rate type being analyzed
-
-    Returns
-    -------
-    epsilon_n : float
-        Aggregate cushion for rate transfer (≥ 0)
-
-    Notes
-    -----
-    The cushion is computed as the weighted average fraction of test points
-    in each fold that have at least one label with score in the critical band
-    [q^{(-f)}_{k-1}, q^{(-f)}_{k+1}] around the threshold.
-    """
-    probs = class_data["probs"]
-    fold_results = cross_fit_results["fold_results"]
-    weights = cross_fit_results["weights"]
-
-    epsilon_total = 0.0
-
-    for fold_data, w_f in zip(fold_results, weights, strict=False):
-        q_band = fold_data["q_band"]
-        q_lower, q_upper = q_band
-        test_indices = fold_data["test_indices"]
-        m_f = len(test_indices)
-
-        # Count points in test fold where any label has score in the critical band
-        flip_count = 0
-        for i in test_indices:
-            test_probs = probs[i]
-            # Check if any label has score in the critical band
-            # Score for each label: 1 - P(y|x)
-            for y in [0, 1]:
-                score = 1.0 - test_probs[y]
-                if q_lower <= score <= q_upper:
-                    flip_count += 1
-                    break  # Count this point once
-
-        epsilon_f = flip_count / m_f if m_f > 0 else 0.0
-        epsilon_total += w_f * epsilon_f
-
-    return epsilon_total
-
-
-def transfer_bounds_to_single_rule(
-    cross_fit_results: dict, cushions_lower: dict[str, float], cushions_upper: dict[str, float]
-) -> dict[str, dict]:
-    """Transfer cross-fit CP bounds to single refit-on-all rule with asymmetric cushions.
-
-    Applies empirical cushions to widen the cross-fit bounds, accounting
-    for the difference between K-fold thresholds and the final single threshold.
-    Uses asymmetric cushions for lower and upper bounds.
-
-    Parameters
-    ----------
-    cross_fit_results : dict
-        Results from cross_fit_cp_bounds
-    cushions_lower : dict[str, float]
-        Cushions for lower bounds (ε_lower) for each rate type
-    cushions_upper : dict[str, float]
-        Cushions for upper bounds (ε_upper) for each rate type
-
-    Returns
-    -------
-    transferred_bounds : dict[str, dict]
-        For each rate type, contains:
-        - "single_lower": lower bound for single rule
-        - "single_upper": upper bound for single rule
-        - "cf_lower": original cross-fit lower bound
-        - "cf_upper": original cross-fit upper bound
-        - "cushion_lower": cushion applied to lower bound
-        - "cushion_upper": cushion applied to upper bound
-
-    Notes
-    -----
-    The transferred bounds use asymmetric cushions:
-    - L_single = L_cf - ε_lower
-    - U_single = U_cf + ε_upper
-
-    These bounds are valid for the single refit-on-all conformal predictor
-    deployed in production.
-    """
-    transferred = {}
-
-    for rate_type in cross_fit_results.keys():
-        cf_lower = cross_fit_results[rate_type]["cf_lower"]
-        cf_upper = cross_fit_results[rate_type]["cf_upper"]
-        eps_lower = cushions_lower[rate_type]
-        eps_upper = cushions_upper[rate_type]
-
-        # Apply asymmetric cushions (widen bounds for safety)
-        single_lower = max(0.0, cf_lower - eps_lower)  # Clamp to [0, 1]
-        single_upper = min(1.0, cf_upper + eps_upper)
-
-        transferred[rate_type] = {
-            "single_lower": single_lower,
-            "single_upper": single_upper,
-            "cf_lower": cf_lower,
-            "cf_upper": cf_upper,
-            "cushion_lower": eps_lower,
-            "cushion_upper": eps_upper,
-        }
-
-    return transferred
-
-
-# ============================================================================
 # Mondrian Operational Bounds
 # ============================================================================
 
@@ -618,74 +479,21 @@ def compute_marginal_operational_bounds(
             )
             results[rate_type]["weights"].append(m_f / n)
 
-    # Aggregate cross-fit bounds (weighted average)
-    for rate_type in rate_types:
-        fold_res = results[rate_type]["fold_results"]
-        weights = results[rate_type]["weights"]
-
-        cf_lower = sum(w * fr["L_fr"] for w, fr in zip(weights, fold_res, strict=False))
-        cf_upper = sum(w * fr["U_fr"] for w, fr in zip(weights, fold_res, strict=False))
-
-        results[rate_type]["cf_lower"] = cf_lower
-        results[rate_type]["cf_upper"] = cf_upper
-
-    # Compute transfer cushions using bands per paper Eq. B.4
-    # Cushion = fraction of test points where ANY label has score in the band
-    # Use same cushion for both lower and upper (conservative)
-    cushions_lower = {}
-    cushions_upper = {}
-    for rate_type in rate_types:
-        epsilon_total = 0.0
-        fold_res = results[rate_type]["fold_results"]
-        weights = results[rate_type]["weights"]
-
-        for fold_data, w_f in zip(fold_res, weights, strict=False):
-            test_indices = fold_data["test_indices"]
-            bands_f = fold_data["bands"]
-            m_f = len(test_indices)
-
-            # Count test points where ANY label has score in ANY class band
-            flip_count = 0
-            for i in test_indices:
-                test_probs_i = probs[i]
-
-                # Check if any label has score in any class band
-                in_band = False
-                for class_label in [0, 1]:
-                    score = 1.0 - test_probs_i[class_label]
-                    band_lower, band_upper = bands_f[class_label]
-                    if band_lower <= score <= band_upper:
-                        in_band = True
-                        break
-
-                if in_band:
-                    flip_count += 1
-
-            epsilon_f = flip_count / m_f if m_f > 0 else 0.0
-            epsilon_total += w_f * epsilon_f
-
-        # Use same cushion for both lower and upper (conservative)
-        # If cushion is 0, use minimum possible value (1 point / n_total)
-        if epsilon_total == 0.0:
-            epsilon_total = 1.0 / n  # Minimum: one point flipping
-        cushions_lower[rate_type] = epsilon_total
-        cushions_upper[rate_type] = epsilon_total
-
-    # Transfer bounds to single rule
-    transferred = transfer_bounds_to_single_rule(results, cushions_lower, cushions_upper)
-
-    # Package results
+    # Aggregate cross-fit bounds (weighted average) and package results
     rate_bounds = {}
     for rate_type in rate_types:
+        fold_res = results[rate_type]["fold_results"]
+        weights = results[rate_type]["weights"]
+
+        # Weighted average of Clopper-Pearson bounds across folds
+        lower_bound = sum(w * fr["L_fr"] for w, fr in zip(weights, fold_res, strict=False))
+        upper_bound = sum(w * fr["U_fr"] for w, fr in zip(weights, fold_res, strict=False))
+
         rate_bounds[rate_type] = OperationalRateBounds(
             rate_name=rate_type,
-            lower_bound=transferred[rate_type]["single_lower"],
-            upper_bound=transferred[rate_type]["single_upper"],
-            cross_fit_lower=transferred[rate_type]["cf_lower"],
-            cross_fit_upper=transferred[rate_type]["cf_upper"],
-            cushion_lower=transferred[rate_type]["cushion_lower"],
-            cushion_upper=transferred[rate_type]["cushion_upper"],
-            ci_width=confidence_level,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            confidence_level=1 - delta,
             fold_results=results[rate_type]["fold_results"],
         )
 
@@ -913,7 +721,8 @@ def compute_mondrian_operational_bounds(
     # Aggregate for each class
     results = {}
     for class_label in [0, 1]:
-        # Aggregate cross-fit bounds
+        # Aggregate cross-fit bounds and package results
+        rate_bounds = {}
         for rate_type in rate_types:
             fold_res = per_class_results[class_label][rate_type]["fold_results"]
             weights = per_class_results[class_label][rate_type]["weights"]
@@ -926,80 +735,15 @@ def compute_mondrian_operational_bounds(
             if total_weight > 0:
                 weights = [w / total_weight for w in weights]
 
-            cf_lower = sum(w * fr["L_fr"] for w, fr in zip(weights, fold_res, strict=False))
-            cf_upper = sum(w * fr["U_fr"] for w, fr in zip(weights, fold_res, strict=False))
-
-            per_class_results[class_label][rate_type]["cf_lower"] = cf_lower
-            per_class_results[class_label][rate_type]["cf_upper"] = cf_upper
-
-        # Compute transfer cushions using bands per paper Eq. B.4
-        # Use same cushion for both lower and upper (conservative)
-        cushions_lower = {}
-        cushions_upper = {}
-        for rate_type in rate_types:
-            epsilon_total = 0.0
-            fold_res = per_class_results[class_label][rate_type]["fold_results"]
-            weights = per_class_results[class_label][rate_type]["weights"]
-
-            if len(fold_res) == 0:
-                # No folds: use minimum cushion
-                n_class_total = np.sum(labels == class_label)
-                min_cushion = 1.0 / n_class_total if n_class_total > 0 else 0.001
-                cushions_lower[rate_type] = min_cushion
-                cushions_upper[rate_type] = min_cushion
-                continue
-
-            for fold_data, w_f in zip(fold_res, weights, strict=False):
-                test_indices = fold_data["test_indices"]
-                bands_f = fold_data["bands"]
-                m_f = len(test_indices)
-
-                # Count test points where ANY label has score in ANY class band
-                flip_count = 0
-                for idx in test_indices:
-                    test_probs_i = probs[idx]
-
-                    # Check if any label has score in any class band
-                    in_band = False
-                    for c_label in [0, 1]:
-                        score = 1.0 - test_probs_i[c_label]
-                        band_lower, band_upper = bands_f[c_label]
-                        if band_lower <= score <= band_upper:
-                            in_band = True
-                            break
-
-                    if in_band:
-                        flip_count += 1
-
-                epsilon_f = flip_count / m_f if m_f > 0 else 0.0
-                epsilon_total += w_f * epsilon_f
-
-            # Use same cushion for both lower and upper (conservative)
-            # If cushion is 0, use minimum possible value (1 point / n_class)
-            if epsilon_total == 0.0:
-                n_class_total = np.sum(labels == class_label)
-                epsilon_total = 1.0 / n_class_total if n_class_total > 0 else 0.001
-            cushions_lower[rate_type] = epsilon_total
-            cushions_upper[rate_type] = epsilon_total
-
-        # Transfer bounds
-        transferred = transfer_bounds_to_single_rule(per_class_results[class_label], cushions_lower, cushions_upper)
-
-        # Package results
-        rate_bounds = {}
-        for rate_type in rate_types:
-            if rate_type not in transferred:
-                continue
+            # Weighted average of Clopper-Pearson bounds across folds
+            lower_bound = sum(w * fr["L_fr"] for w, fr in zip(weights, fold_res, strict=False))
+            upper_bound = sum(w * fr["U_fr"] for w, fr in zip(weights, fold_res, strict=False))
 
             rate_bounds[rate_type] = OperationalRateBounds(
                 rate_name=rate_type,
-                lower_bound=transferred[rate_type]["single_lower"],
-                upper_bound=transferred[rate_type]["single_upper"],
-                cross_fit_lower=transferred[rate_type]["cf_lower"],
-                cross_fit_upper=transferred[rate_type]["cf_upper"],
-                cushion_lower=transferred[rate_type]["cushion_lower"],
-                cushion_upper=transferred[rate_type]["cushion_upper"],
-                ci_width=confidence_level,
+                lower_bound=lower_bound,
+                upper_bound=upper_bound,
+                confidence_level=1 - delta_per_class,
                 fold_results=per_class_results[class_label][rate_type]["fold_results"],
             )
 

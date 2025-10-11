@@ -224,10 +224,7 @@ def report_prediction_stats(
 
             if verbose:
                 print(f"\n  ✅ RIGOROUS Operational Bounds (Cross-Validated, {op_bounds.n_folds} folds)")
-                print(f"     PAC confidence: {op_bounds.rate_confidence:.1%}")
-                # Get CI width from first rate (all should have same)
-                first_rate = list(op_bounds.rate_bounds.values())[0]
-                print(f"     CI width: {first_rate.ci_width:.1%}")
+                print(f"     Confidence: {op_bounds.rate_confidence:.1%}")
 
             # Show main rates (singleton, doublet, abstention)
             for rate_name in ["abstention", "singleton", "doublet"]:
@@ -235,12 +232,7 @@ def report_prediction_stats(
                     bounds = op_bounds.rate_bounds[rate_name]
                     if verbose:
                         print(f"\n     {rate_name.upper()}:")
-                        print(f"       Deployment bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
-                        print(f"       Cross-fit bounds:  [{bounds.cross_fit_lower:.3f}, {bounds.cross_fit_upper:.3f}]")
-                        print(
-                            f"       Transfer cushion:  lower={bounds.cushion_lower:.4f}, "
-                            f"upper={bounds.cushion_upper:.4f}"
-                        )
+                        print(f"       Bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
 
             # Show conditional singleton rates (conditional on having a singleton)
             has_correct = "correct_in_singleton" in op_bounds.rate_bounds
@@ -301,10 +293,7 @@ def report_prediction_stats(
                 f"\n  ✅ RIGOROUS Marginal Bounds "
                 f"(Cross-Validated Mondrian, {marginal_operational_bounds.n_folds} folds)"
             )
-            print(f"     PAC confidence: {marginal_operational_bounds.rate_confidence:.1%}")
-            # Get CI width from first rate
-            first_rate = list(marginal_operational_bounds.rate_bounds.values())[0]
-            print(f"     CI width: {first_rate.ci_width:.1%}")
+            print(f"     Confidence: {marginal_operational_bounds.rate_confidence:.1%}")
 
         # Show main rates
         for rate_name in ["abstention", "singleton", "doublet"]:
@@ -312,11 +301,7 @@ def report_prediction_stats(
                 bounds = marginal_operational_bounds.rate_bounds[rate_name]
                 if verbose:
                     print(f"\n     {rate_name.upper()}:")
-                    print(f"       Deployment bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
-                    print(f"       Cross-fit bounds:  [{bounds.cross_fit_lower:.3f}, {bounds.cross_fit_upper:.3f}]")
-                    print(
-                        f"       Transfer cushion:  lower={bounds.cushion_lower:.4f}, upper={bounds.cushion_upper:.4f}"
-                    )
+                    print(f"       Bounds: [{bounds.lower_bound:.3f}, {bounds.upper_bound:.3f}]")
 
         # Show conditional singleton rates (marginal)
         has_correct = "correct_in_singleton" in marginal_operational_bounds.rate_bounds
