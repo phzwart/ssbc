@@ -1,0 +1,64 @@
+# Cursor AI Rules for SSBC Project
+
+## Python Environment
+- Use conda environment: `cctbx`
+- Python 3.10+ required
+- All code must have type hints
+
+## Code Style & Quality
+- Follow Ruff formatting (120 character line length)
+- Use type annotations from `typing` module
+- NumPy-style docstrings for all public functions
+- Descriptive variable names (no single letters except i, j, k in loops)
+- No commented-out code in commits
+
+## Testing Requirements
+- All new functions need corresponding tests in `tests/`
+- Use pytest fixtures for test data
+- Maintain >90% code coverage
+- Tests must pass before committing
+- Mirror source structure: `test_module.py` for `module.py`
+
+## Documentation Standards
+- NumPy-style docstrings with Parameters, Returns, Examples sections
+- Update `docs/` when adding features or changing APIs
+- Keep examples minimal and well-documented
+- No TODO/FIXME comments without corresponding issues
+
+## Statistical Code Guidelines
+- **Distribution-free methods preferred** - no parametric assumptions
+- **Finite-sample guarantees** - not asymptotic approximations
+- **Frequentist framework** - no Bayesian assumptions without justification
+- **Clear separation**:
+  - Coverage guarantees → SSBC in `core.py` / `conformal.py`
+  - Operational bounds → LOO-CV in `sla.py`
+- Validate statistical claims with unit tests
+
+## Module Organization
+- Core algorithms → `src/ssbc/`
+- Unit tests → `tests/`
+- Examples → `examples/` (keep minimal)
+- Documentation → `docs/`
+- Public API exports in `src/ssbc/__init__.py`
+
+## Git & Commit Workflow
+- Descriptive commit messages (use emojis for categorization)
+- All pre-commit hooks must pass (ruff, ty, bandit, codespell)
+- Don't commit to main without tests passing
+- No force pushes to main
+- Run `pytest -q` before committing
+
+## Key Project Concepts
+- **SSBC**: Small-Sample Beta Correction for PAC coverage guarantees
+- **Mondrian CP**: Per-class conformal prediction for class imbalance
+- **LOO-CV**: Leave-one-out cross-validation for unbiased operational estimates
+- **Operational Rates**: singleton, doublet, abstention, error rates
+- **Clopper-Pearson**: Exact binomial confidence intervals
+- No K-fold cross-validation (removed - use LOO-CV)
+- No transfer cushions (removed - simplified to direct bounds)
+
+## When Making Changes
+- If adding a feature, add it to `__all__` in `__init__.py`
+- If changing API, update examples and docs
+- If adding dependencies, update `pyproject.toml`
+- Prefer parallelization for compute-intensive operations (use joblib)
