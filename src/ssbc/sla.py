@@ -541,8 +541,8 @@ def compute_marginal_operational_bounds(
             )
             alpha_corrected = ssbc_result.alpha_corrected
 
-            # Compute threshold index
-            k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
+            # Conformal threshold: k-th order statistic where k = ceil((n+1) * alpha)
+            k = int(np.ceil((n_class + 1) * alpha_corrected))
             k = min(k, n_class)
             sorted_scores = np.sort(class_scores)
             thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
@@ -813,8 +813,8 @@ def compute_mondrian_operational_bounds(
             )
             alpha_corrected = ssbc_result.alpha_corrected
 
-            # Threshold index
-            k = int(np.ceil((n_class + 1) * (1 - alpha_corrected)))
+            # Conformal threshold: k-th order statistic where k = ceil((n+1) * alpha)
+            k = int(np.ceil((n_class + 1) * alpha_corrected))
             k = min(k, n_class)
             sorted_scores = np.sort(class_scores)
             thresholds[class_label] = sorted_scores[k - 1] if k > 0 else sorted_scores[0]
