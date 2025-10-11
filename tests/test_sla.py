@@ -192,31 +192,28 @@ def test_operational_bounds_result_dataclass():
     assert "singleton" in result.rate_bounds
 
 
-def test_custom_confidence_level():
-    """Test that custom confidence_level parameter works."""
+def test_custom_ci_width():
+    """Test that custom ci_width parameter works."""
     np.random.seed(42)
     sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(3, 7), beta_params_class1=(7, 3), seed=42)
     labels, probs = sim.generate(n_samples=100)
 
-    # Marginal bounds with different confidence levels
-    marginal_90 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, delta=0.05)
-    marginal_99 = compute_marginal_operational_bounds(
-        labels,
-        probs,
-        0.1,
-        0.05,
-        delta=0.01,  # Tighter confidence
-    )
+    # Marginal bounds with different CI widths
+    marginal_90 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, delta=0.05, ci_width=0.90)
+    marginal_99 = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, delta=0.05, ci_width=0.99)
 
-    # Lower delta (higher confidence) should give wider intervals
+    # Higher CI width should give wider intervals (same PAC confidence though)
     sing_90 = marginal_90.rate_bounds["singleton"]
     sing_99 = marginal_99.rate_bounds["singleton"]
 
-    # With delta=0.01 (99% confidence), bounds should be wider than delta=0.05 (95%)
     width_90 = sing_90.upper_bound - sing_90.lower_bound
     width_99 = sing_99.upper_bound - sing_99.lower_bound
 
-    assert width_99 > width_90, "99% confidence should give wider intervals than 95%"
+    assert width_99 > width_90, "99% CI width should give wider intervals than 90%"
+
+    # Both should have same PAC confidence (1 - delta)
+    assert np.isclose(sing_90.confidence_level, 0.95)
+    assert np.isclose(sing_99.confidence_level, 0.95)
 
 
 def test_rates_not_split_independently_confident():

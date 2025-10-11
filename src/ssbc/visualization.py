@@ -224,7 +224,7 @@ def report_prediction_stats(
 
             if verbose:
                 print("\n  ✅ RIGOROUS Operational Bounds (LOO-CV)")
-                print(f"     Confidence: {op_bounds.rate_confidence:.1%}")
+                print(f"     PAC confidence: {op_bounds.rate_confidence:.1%}")
                 print(f"     Calibration size: n = {op_bounds.n_calibration}")
 
             # Show main rates (singleton, doublet, abstention)
@@ -294,7 +294,7 @@ def report_prediction_stats(
             print(f"  Total samples: n = {marginal_operational_bounds.n_calibration}")
 
             print("\n  ✅ RIGOROUS Marginal Bounds (LOO-CV)")
-            print(f"     Confidence: {marginal_operational_bounds.rate_confidence:.1%}")
+            print(f"     PAC confidence: {marginal_operational_bounds.rate_confidence:.1%}")
             print(f"     Total evaluations: n = {marginal_operational_bounds.n_calibration}")
 
         # Show main rates

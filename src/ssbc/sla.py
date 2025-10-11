@@ -93,6 +93,7 @@ def compute_marginal_operational_bounds(
     delta_coverage: float | dict[int, float],
     delta: float,
     rate_types: list[str] | None = None,
+    ci_width: float = 0.95,
 ) -> OperationalRateBoundsResult:
     """Compute marginal operational rate bounds via LOO-CV.
 
@@ -120,6 +121,8 @@ def compute_marginal_operational_bounds(
         confidence 1-δ (NOT split across rates).
     rate_types : list[str], optional
         Operational rates to compute. Defaults to singleton, doublet, abstention, and conditional rates.
+    ci_width : float, default=0.95
+        Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
 
     Returns
     -------
@@ -230,17 +233,18 @@ def compute_marginal_operational_bounds(
     for rate_type in rate_types:
         K = int(np.sum(indicators[rate_type]))  # Number of successes
 
-        # Confidence level per rate (no splitting across rates)
-        conf_level = 1 - delta
+        # Apply Clopper-Pearson at specified CI width
+        lower_bound = clopper_pearson_lower(K, n, ci_width)
+        upper_bound = clopper_pearson_upper(K, n, ci_width)
 
-        lower_bound = clopper_pearson_lower(K, n, conf_level)
-        upper_bound = clopper_pearson_upper(K, n, conf_level)
+        # PAC confidence (probability bounds hold) is separate from CI width
+        pac_confidence = 1 - delta
 
         rate_bounds[rate_type] = OperationalRateBounds(
             rate_name=rate_type,
             lower_bound=lower_bound,
             upper_bound=upper_bound,
-            confidence_level=conf_level,
+            confidence_level=pac_confidence,
             n_evaluations=n,
             n_successes=K,
         )
@@ -278,6 +282,7 @@ def compute_mondrian_operational_bounds(
     probs: np.ndarray,
     delta: float,
     rate_types: list[str] | None = None,
+    ci_width: float = 0.95,
 ) -> dict[int, OperationalRateBoundsResult]:
     """Compute PER-CLASS operational rate bounds via LOO-CV.
 
@@ -310,6 +315,8 @@ def compute_mondrian_operational_bounds(
         Each class independently gets confidence 1-δ_class for all its rates.
     rate_types : list[str], optional
         Operational rates to compute. Each gets the same confidence independently.
+    ci_width : float, default=0.95
+        Width of Clopper-Pearson confidence intervals (e.g., 0.95 for 95% CIs)
 
     Returns
     -------
@@ -422,17 +429,18 @@ def compute_mondrian_operational_bounds(
             class_indicators = indicators_per_class[class_label][rate_type]
             K_class = int(np.sum(class_indicators))  # Number of successes for this class
 
-            # Confidence level per rate within this class
-            conf_level = 1 - delta_per_class
+            # Apply Clopper-Pearson at specified CI width
+            lower_bound = clopper_pearson_lower(K_class, n_class, ci_width)
+            upper_bound = clopper_pearson_upper(K_class, n_class, ci_width)
 
-            lower_bound = clopper_pearson_lower(K_class, n_class, conf_level)
-            upper_bound = clopper_pearson_upper(K_class, n_class, conf_level)
+            # PAC confidence (probability bounds hold) is separate from CI width
+            pac_confidence = 1 - delta_per_class
 
             rate_bounds[rate_type] = OperationalRateBounds(
                 rate_name=rate_type,
                 lower_bound=lower_bound,
                 upper_bound=upper_bound,
-                confidence_level=conf_level,
+                confidence_level=pac_confidence,
                 n_evaluations=n_class,
                 n_successes=K_class,
             )
