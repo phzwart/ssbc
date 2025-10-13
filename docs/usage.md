@@ -62,6 +62,48 @@ for label in [0, 1]:
     print(f"  Corrected α: {cal_result[label]['alpha_corrected']:.4f}")
 ```
 
+### Alpha Scan Analysis
+
+Analyze how prediction set statistics vary across all possible alpha thresholds:
+
+```python
+from ssbc import alpha_scan
+
+# Scan all possible alpha thresholds (without fixed threshold)
+df = alpha_scan(labels, probs)
+
+# View results
+print(f"Scanned {len(df)} alpha values")
+print(df.head())
+
+# Find optimal operating point
+max_singleton_idx = df['n_singletons'].idxmax()
+optimal = df.loc[max_singleton_idx]
+print(f"\nMaximum singleton rate at alpha={optimal['alpha']:.4f}:")
+print(f"  Singletons: {optimal['n_singletons']}")
+print(f"  Singleton coverage: {optimal['singleton_coverage']:.4f}")
+
+# Optionally compare with a fixed threshold
+df, fixed_result = alpha_scan(labels, probs, fixed_threshold=0.5)
+print(f"\nFixed threshold (qhat=0.5):")
+print(f"  Equivalent alpha: {fixed_result['alpha']:.4f}")
+print(f"  Singletons: {fixed_result['n_singletons']}")
+print(f"  Coverage: {fixed_result['singleton_coverage']:.4f}")
+```
+
+**Output:**
+- Without `fixed_threshold`: Returns `pd.DataFrame` with scan results
+- With `fixed_threshold`: Returns `(pd.DataFrame, dict)` where dict contains fixed threshold results
+
+**DataFrame columns:**
+- `alpha`: miscoverage rate
+- `qhat_0`, `qhat_1`: per-class thresholds
+- `n_abstentions`, `n_singletons`, `n_doublets`: prediction set counts
+- `n_singletons_correct`: correct singleton predictions (marginal)
+- `singleton_coverage`: fraction of singletons that are correct (marginal)
+- `n_singletons_0`, `n_singletons_correct_0`, `singleton_coverage_0`: class 0 metrics
+- `n_singletons_1`, `n_singletons_correct_1`, `singleton_coverage_1`: class 1 metrics
+
 ## Complete Deployment Pipeline
 
 ### Step 1: Calibrate with SSBC (PAC Coverage)
@@ -295,7 +337,13 @@ python examples/mondrian_conformal_example.py
 ```
 Complete workflow: simulation → calibration → per-class reporting.
 
-### 3. Complete SLA/Deployment Workflow ⭐
+### 3. Alpha Scan Analysis
+```bash
+python examples/alpha_scan_example.py
+```
+Scan across all possible alpha thresholds to analyze prediction set statistics and identify optimal operating points.
+
+### 4. Complete SLA/Deployment Workflow ⭐
 ```bash
 python examples/sla_example.py
 ```

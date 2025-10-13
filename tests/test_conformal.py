@@ -1,9 +1,15 @@
 """Tests for the conformal prediction module."""
 
 import numpy as np
+import pandas as pd
 import pytest
 
-from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
+from ssbc.conformal import (
+    alpha_scan,
+    compute_pac_operational_metrics,
+    mondrian_conformal_calibrate,
+    split_by_class,
+)
 from ssbc.simulation import BinaryClassifierSimulator
 
 
@@ -324,3 +330,463 @@ class TestMondrianConformalCalibrate:
             if "alpha_corrected" in cal1[label]:
                 assert cal1[label]["alpha_corrected"] == cal2[label]["alpha_corrected"]
                 assert cal1[label]["threshold"] == cal2[label]["threshold"]
+
+
+class TestAlphaScan:
+    """Test alpha_scan function."""
+
+    @pytest.fixture
+    def simple_calibration_data(self):
+        """Create simple calibration data for testing."""
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 8), beta_params_class1=(8, 2), seed=42)
+        labels, probs = sim.generate(n_samples=50)
+        return labels, probs
+
+    def test_returns_dataframe(self, simple_calibration_data):
+        """Test that alpha_scan returns a DataFrame."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        assert isinstance(df, pd.DataFrame)
+
+    def test_dataframe_columns(self, simple_calibration_data):
+        """Test that DataFrame has expected columns."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        expected_columns = [
+            "alpha",
+            "qhat_0",
+            "qhat_1",
+            "n_abstentions",
+            "n_singletons",
+            "n_doublets",
+            "n_singletons_correct",
+            "singleton_coverage",
+            "n_singletons_0",
+            "n_singletons_correct_0",
+            "singleton_coverage_0",
+            "n_singletons_1",
+            "n_singletons_correct_1",
+            "singleton_coverage_1",
+        ]
+        assert list(df.columns) == expected_columns
+
+    def test_fixed_threshold_included(self, simple_calibration_data):
+        """Test that fixed threshold is returned as dict."""
+        labels, probs = simple_calibration_data
+        result = alpha_scan(labels, probs, fixed_threshold=0.5)
+
+        # Should return a tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+        df, fixed = result
+        assert isinstance(df, pd.DataFrame)
+        assert isinstance(fixed, dict)
+
+        # Check that the fixed threshold is 0.5 for both classes
+        assert fixed["qhat_0"] == 0.5
+        assert fixed["qhat_1"] == 0.5
+
+        # Check that fixed dict has all expected keys
+        expected_keys = [
+            "alpha",
+            "qhat_0",
+            "qhat_1",
+            "n_abstentions",
+            "n_singletons",
+            "n_doublets",
+            "n_singletons_correct",
+            "singleton_coverage",
+            "n_singletons_0",
+            "n_singletons_correct_0",
+            "singleton_coverage_0",
+            "n_singletons_1",
+            "n_singletons_correct_1",
+            "singleton_coverage_1",
+        ]
+        assert set(fixed.keys()) == set(expected_keys)
+
+    def test_counts_sum_to_total(self, simple_calibration_data):
+        """Test that prediction set counts sum to total number of samples."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        n_total = len(labels)
+
+        for _, row in df.iterrows():
+            total_count = row["n_abstentions"] + row["n_singletons"] + row["n_doublets"]
+            assert total_count == n_total
+
+    def test_alpha_values_in_valid_range(self, simple_calibration_data):
+        """Test that alpha values are in [0, 1]."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        assert (df["alpha"] >= 0).all()
+        assert (df["alpha"] <= 1).all()
+
+    def test_threshold_values_in_valid_range(self, simple_calibration_data):
+        """Test that threshold values are in [0, 1]."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        assert (df["qhat_0"] >= 0).all()
+        assert (df["qhat_0"] <= 1).all()
+        assert (df["qhat_1"] >= 0).all()
+        assert (df["qhat_1"] <= 1).all()
+
+    def test_counts_are_non_negative(self, simple_calibration_data):
+        """Test that all counts are non-negative."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        assert (df["n_abstentions"] >= 0).all()
+        assert (df["n_singletons"] >= 0).all()
+        assert (df["n_doublets"] >= 0).all()
+
+    def test_multiple_alpha_values(self, simple_calibration_data):
+        """Test that multiple alpha values are scanned."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        # Should have multiple rows (one for each possible alpha + fixed)
+        assert len(df) > 2
+
+        # Should have multiple unique alpha values
+        unique_alphas = df["alpha"].nunique()
+        assert unique_alphas > 2
+
+    def test_custom_fixed_threshold(self, simple_calibration_data):
+        """Test with custom fixed threshold."""
+        labels, probs = simple_calibration_data
+        fixed_threshold = 0.3
+        df, fixed = alpha_scan(labels, probs, fixed_threshold=fixed_threshold)
+
+        assert fixed["qhat_0"] == fixed_threshold
+        assert fixed["qhat_1"] == fixed_threshold
+
+    def test_no_fixed_threshold(self, simple_calibration_data):
+        """Test that no fixed threshold returns just DataFrame."""
+        labels, probs = simple_calibration_data
+        result = alpha_scan(labels, probs)
+
+        # Should return just a DataFrame, not a tuple
+        assert isinstance(result, pd.DataFrame)
+        assert not isinstance(result, tuple)
+
+    def test_small_dataset(self):
+        """Test with a small dataset."""
+        labels = np.array([0, 1, 0, 1])
+        probs = np.array([[0.8, 0.2], [0.3, 0.7], [0.9, 0.1], [0.2, 0.8]])
+
+        df = alpha_scan(labels, probs)
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) > 0
+
+        # All counts should sum to 4
+        for _, row in df.iterrows():
+            total = row["n_abstentions"] + row["n_singletons"] + row["n_doublets"]
+            assert total == 4
+
+    def test_all_same_class(self):
+        """Test with all samples from the same class."""
+        labels = np.zeros(10, dtype=int)
+        probs = np.random.rand(10, 2)
+        probs = probs / probs.sum(axis=1, keepdims=True)
+
+        df = alpha_scan(labels, probs)
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) > 0
+
+    def test_extreme_probabilities(self):
+        """Test with extreme probability values."""
+        labels = np.array([0, 1, 0, 1])
+        # Very confident predictions
+        probs = np.array([[0.99, 0.01], [0.01, 0.99], [0.95, 0.05], [0.05, 0.95]])
+
+        df = alpha_scan(labels, probs)
+
+        assert isinstance(df, pd.DataFrame)
+        # With confident predictions, we should see more singletons at some alpha values
+        max_singletons = df["n_singletons"].max()
+        assert max_singletons > 0
+
+    def test_reproducibility(self, simple_calibration_data):
+        """Test that results are reproducible."""
+        labels, probs = simple_calibration_data
+        df1 = alpha_scan(labels, probs)
+        df2 = alpha_scan(labels, probs)
+
+        pd.testing.assert_frame_equal(df1, df2)
+
+    def test_alpha_ordering(self, simple_calibration_data):
+        """Test that DataFrame can be sorted by alpha."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        # Sort by alpha
+        df_sorted = df.sort_values("alpha")
+
+        # Should not raise any errors
+        assert len(df_sorted) == len(df)
+
+    def test_fixed_counts_sum_to_total(self, simple_calibration_data):
+        """Test that fixed threshold counts sum to total."""
+        labels, probs = simple_calibration_data
+        df, fixed = alpha_scan(labels, probs, fixed_threshold=0.5)
+
+        n_total = len(labels)
+        total_count = fixed["n_abstentions"] + fixed["n_singletons"] + fixed["n_doublets"]
+        assert total_count == n_total
+
+    def test_singleton_coverage_values(self, simple_calibration_data):
+        """Test that singleton coverage values are in valid range."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        # All coverage values should be between 0 and 1
+        assert (df["singleton_coverage"] >= 0).all()
+        assert (df["singleton_coverage"] <= 1).all()
+        assert (df["singleton_coverage_0"] >= 0).all()
+        assert (df["singleton_coverage_0"] <= 1).all()
+        assert (df["singleton_coverage_1"] >= 0).all()
+        assert (df["singleton_coverage_1"] <= 1).all()
+
+    def test_singleton_coverage_consistency(self, simple_calibration_data):
+        """Test that singleton coverage is consistent with counts."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        for _, row in df.iterrows():
+            # Check marginal coverage calculation
+            if row["n_singletons"] > 0:
+                expected_coverage = row["n_singletons_correct"] / row["n_singletons"]
+                assert abs(row["singleton_coverage"] - expected_coverage) < 1e-10
+            else:
+                assert row["singleton_coverage"] == 0.0
+
+            # Check class 0 coverage
+            if row["n_singletons_0"] > 0:
+                expected_coverage_0 = row["n_singletons_correct_0"] / row["n_singletons_0"]
+                assert abs(row["singleton_coverage_0"] - expected_coverage_0) < 1e-10
+            else:
+                assert row["singleton_coverage_0"] == 0.0
+
+            # Check class 1 coverage
+            if row["n_singletons_1"] > 0:
+                expected_coverage_1 = row["n_singletons_correct_1"] / row["n_singletons_1"]
+                assert abs(row["singleton_coverage_1"] - expected_coverage_1) < 1e-10
+            else:
+                assert row["singleton_coverage_1"] == 0.0
+
+    def test_singleton_counts_consistency(self, simple_calibration_data):
+        """Test that per-class singleton counts sum to total."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        for _, row in df.iterrows():
+            # Per-class singletons should sum to total singletons
+            assert row["n_singletons_0"] + row["n_singletons_1"] == row["n_singletons"]
+            # Per-class correct singletons should sum to total correct singletons
+            assert row["n_singletons_correct_0"] + row["n_singletons_correct_1"] == row["n_singletons_correct"]
+
+    def test_correct_singletons_bounded(self, simple_calibration_data):
+        """Test that correct singletons don't exceed total singletons."""
+        labels, probs = simple_calibration_data
+        df = alpha_scan(labels, probs)
+
+        assert (df["n_singletons_correct"] <= df["n_singletons"]).all()
+        assert (df["n_singletons_correct_0"] <= df["n_singletons_0"]).all()
+        assert (df["n_singletons_correct_1"] <= df["n_singletons_1"]).all()
+
+    def test_high_coverage_with_confident_predictions(self):
+        """Test that confident predictions lead to high singleton coverage."""
+        labels = np.array([0, 1, 0, 1, 0, 1] * 10)
+        # Very confident and correct predictions
+        probs = np.array([[0.95, 0.05], [0.05, 0.95], [0.98, 0.02], [0.02, 0.98], [0.97, 0.03], [0.03, 0.97]] * 10)
+
+        df = alpha_scan(labels, probs)
+
+        # With very confident correct predictions, we should see high coverage
+        # at some alpha values
+        max_coverage = df["singleton_coverage"].max()
+        assert max_coverage > 0.9  # Should have very high coverage somewhere
+
+
+class TestComputePACOperationalMetrics:
+    """Test compute_pac_operational_metrics function."""
+
+    @pytest.fixture
+    def calibration_data(self):
+        """Generate calibration data for testing."""
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 7), beta_params_class1=(7, 2), seed=42)
+        labels, probs = sim.generate(n_samples=100)
+        return labels, probs
+
+    def test_basic_execution(self, calibration_data):
+        """Test that function executes without error."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        # Check that result is a dict with expected keys
+        assert isinstance(result, dict)
+        expected_keys = [
+            "alpha_adj",
+            "singleton_rate_ci",
+            "doublet_rate_ci",
+            "abstention_rate_ci",
+            "expected_singleton_rate",
+            "expected_doublet_rate",
+            "expected_abstention_rate",
+            "alpha_grid",
+            "singleton_fractions",
+            "doublet_fractions",
+            "abstention_fractions",
+            "beta_weights",
+            "n_calibration",
+        ]
+        for key in expected_keys:
+            assert key in result
+
+    def test_output_types(self, calibration_data):
+        """Test that output has correct types."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        assert isinstance(result["alpha_adj"], float)
+        assert isinstance(result["singleton_rate_ci"], list)
+        assert len(result["singleton_rate_ci"]) == 2
+        assert isinstance(result["expected_singleton_rate"], float)
+        assert isinstance(result["alpha_grid"], list)
+        assert isinstance(result["beta_weights"], list)
+        assert isinstance(result["n_calibration"], (int, np.integer))
+
+    def test_bounds_validity(self, calibration_data):
+        """Test that bounds are valid (lower <= upper)."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        # Check singleton bounds
+        assert result["singleton_rate_ci"][0] <= result["singleton_rate_ci"][1]
+        # Check abstention bounds
+        assert result["abstention_rate_ci"][0] <= result["abstention_rate_ci"][1]
+
+    def test_rates_in_valid_range(self, calibration_data):
+        """Test that all rates are in [0, 1]."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        # Check expected rates
+        assert 0 <= result["expected_singleton_rate"] <= 1
+        assert 0 <= result["expected_abstention_rate"] <= 1
+        assert 0 <= result["expected_doublet_rate"] <= 1
+
+        # Check bounds
+        assert 0 <= result["singleton_rate_ci"][0] <= 1
+        assert 0 <= result["singleton_rate_ci"][1] <= 1
+        assert 0 <= result["abstention_rate_ci"][0] <= 1
+        assert 0 <= result["abstention_rate_ci"][1] <= 1
+
+    def test_rates_sum_to_one(self, calibration_data):
+        """Test that singleton + doublet + abstention ≈ 1."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        rate_sum = (
+            result["expected_singleton_rate"] + result["expected_doublet_rate"] + result["expected_abstention_rate"]
+        )
+        assert abs(rate_sum - 1.0) < 1e-10
+
+    def test_beta_weights_sum_to_one(self, calibration_data):
+        """Test that Beta weights sum to 1."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        weight_sum = sum(result["beta_weights"])
+        assert abs(weight_sum - 1.0) < 1e-10
+
+    def test_alpha_grid_size(self, calibration_data):
+        """Test that alpha grid has correct size."""
+        labels, probs = calibration_data
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        # Grid size should equal number of calibration points for class_label
+        n_class1 = np.sum(labels == 1)
+        assert len(result["alpha_grid"]) == n_class1
+        assert len(result["singleton_fractions"]) == n_class1
+        assert len(result["beta_weights"]) == n_class1
+
+    def test_different_class_labels(self, calibration_data):
+        """Test with different class labels."""
+        labels, probs = calibration_data
+
+        result_0 = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=0
+        )
+
+        result_1 = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        # Results should be different for different classes
+        assert result_0["n_calibration"] != result_1["n_calibration"]
+
+    def test_1d_probabilities(self, calibration_data):
+        """Test with 1D probability array."""
+        labels, probs = calibration_data
+
+        # Use 1D array (P(class=1))
+        probs_1d = probs[:, 1]
+
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs_1d, alpha=0.1, delta=0.1, ci_level=0.95, class_label=1
+        )
+
+        assert isinstance(result, dict)
+        assert result["n_calibration"] > 0
+
+    def test_invalid_inputs(self, calibration_data):
+        """Test that invalid inputs raise errors."""
+        labels, probs = calibration_data
+
+        # Invalid alpha
+        with pytest.raises(ValueError):
+            compute_pac_operational_metrics(y_cal=labels, probs_cal=probs, alpha=1.5, delta=0.1, class_label=1)
+
+        # Invalid delta
+        with pytest.raises(ValueError):
+            compute_pac_operational_metrics(y_cal=labels, probs_cal=probs, alpha=0.1, delta=-0.1, class_label=1)
+
+        # Invalid class_label
+        with pytest.raises(ValueError):
+            compute_pac_operational_metrics(y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, class_label=2)
+
+    def test_small_sample_size(self):
+        """Test with small calibration set."""
+        labels = np.array([1, 1, 1, 1, 1])
+        probs = np.array([0.8, 0.9, 0.7, 0.85, 0.75])
+
+        result = compute_pac_operational_metrics(
+            y_cal=labels, probs_cal=probs, alpha=0.2, delta=0.2, ci_level=0.90, class_label=1
+        )
+
+        assert result["n_calibration"] == 5
+        assert len(result["alpha_grid"]) == 5

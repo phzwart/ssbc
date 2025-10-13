@@ -9,6 +9,8 @@ __version__ = version("ssbc")  # Read from package metadata (pyproject.toml)
 # Core SSBC algorithm
 # Conformal prediction
 from .conformal import (
+    alpha_scan,
+    compute_pac_operational_metrics,
     mondrian_conformal_calibrate,
     split_by_class,
 )
@@ -21,6 +23,11 @@ from .core import (
 from .hyperparameter import (
     sweep_and_plot_parallel_plotly,
     sweep_hyperparams_and_collect,
+)
+
+# Visualization and reporting
+from .rigorous_report import (
+    generate_rigorous_pac_report,
 )
 
 # Simulation (for testing and examples)
@@ -48,8 +55,6 @@ from .statistics import (
 from .utils import (
     compute_operational_rate,
 )
-
-# Visualization and reporting
 from .visualization import (
     plot_parallel_coordinates_plotly,
     report_prediction_stats,
@@ -60,6 +65,8 @@ __all__ = [
     "SSBCResult",
     "ssbc_correct",
     # Conformal
+    "alpha_scan",
+    "compute_pac_operational_metrics",
     "mondrian_conformal_calibrate",
     "split_by_class",
     # Statistics
@@ -79,6 +86,8 @@ __all__ = [
     # Visualization
     "report_prediction_stats",
     "plot_parallel_coordinates_plotly",
+    # Rigorous reporting
+    "generate_rigorous_pac_report",
     # Hyperparameter
     "sweep_hyperparams_and_collect",
     "sweep_and_plot_parallel_plotly",
