@@ -560,6 +560,96 @@ def compute_mondrian_response_curve(
     }
 
 
+def _evaluate_loo_scenario_marginal(
+    alpha_0: float,
+    alpha_1: float,
+    labels: np.ndarray,
+    probs: np.ndarray,
+) -> tuple[int, int, int, int]:
+    """Evaluate LOO-CV for a single (alpha_0, alpha_1) scenario (helper for parallelization).
+    
+    Returns
+    -------
+    tuple[int, int, int, int]
+        (n_singletons, n_doublets, n_abstentions, n_singletons_correct)
+    """
+    n = len(labels)
+    n_abstentions = 0
+    n_singletons = 0
+    n_doublets = 0
+    n_singletons_correct = 0
+    
+    # Get per-class masks
+    mask_0 = labels == 0
+    mask_1 = labels == 1
+    
+    for idx in range(n):
+        # Compute thresholds leaving out sample idx
+        # Class 0 threshold (leave-one-out)
+        if mask_0[idx]:
+            scores_0_loo = 1.0 - probs[mask_0, 0]
+            mask_0_indices = np.where(mask_0)[0]
+            loo_idx_in_class0 = np.where(mask_0_indices == idx)[0][0]
+            scores_0_loo = np.delete(scores_0_loo, loo_idx_in_class0)
+            n_0_loo = len(scores_0_loo)
+        else:
+            scores_0_loo = 1.0 - probs[mask_0, 0]
+            n_0_loo = len(scores_0_loo)
+        
+        # Class 1 threshold (leave-one-out)
+        if mask_1[idx]:
+            scores_1_loo = 1.0 - probs[mask_1, 1]
+            mask_1_indices = np.where(mask_1)[0]
+            loo_idx_in_class1 = np.where(mask_1_indices == idx)[0][0]
+            scores_1_loo = np.delete(scores_1_loo, loo_idx_in_class1)
+            n_1_loo = len(scores_1_loo)
+        else:
+            scores_1_loo = 1.0 - probs[mask_1, 1]
+            n_1_loo = len(scores_1_loo)
+        
+        # Compute thresholds at (alpha_0, alpha_1) for this LOO fold
+        k_0_loo = int(np.ceil((n_0_loo + 1) * (1 - alpha_0)))
+        k_0_loo = min(k_0_loo, n_0_loo)
+        k_0_loo = max(k_0_loo, 1)
+        
+        k_1_loo = int(np.ceil((n_1_loo + 1) * (1 - alpha_1)))
+        k_1_loo = min(k_1_loo, n_1_loo)
+        k_1_loo = max(k_1_loo, 1)
+        
+        sorted_scores_0_loo = np.sort(scores_0_loo)
+        sorted_scores_1_loo = np.sort(scores_1_loo)
+        
+        threshold_0_loo = sorted_scores_0_loo[k_0_loo - 1]
+        threshold_1_loo = sorted_scores_1_loo[k_1_loo - 1]
+        
+        # Evaluate on held-out sample idx
+        score_0 = 1.0 - probs[idx, 0]
+        score_1 = 1.0 - probs[idx, 1]
+        true_label = labels[idx]
+        
+        in_0 = score_0 <= threshold_0_loo
+        in_1 = score_1 <= threshold_1_loo
+        
+        # Build prediction set
+        pred_set = []
+        if in_0:
+            pred_set.append(0)
+        if in_1:
+            pred_set.append(1)
+        
+        # Count by set size
+        if len(pred_set) == 0:
+            n_abstentions += 1
+        elif len(pred_set) == 1:
+            n_singletons += 1
+            if true_label in pred_set:
+                n_singletons_correct += 1
+        else:  # len == 2
+            n_doublets += 1
+    
+    return n_singletons, n_doublets, n_abstentions, n_singletons_correct
+
+
 def compute_pac_operational_bounds_marginal(
     ssbc_result_0: SSBCResult,
     ssbc_result_1: SSBCResult,
@@ -569,6 +659,7 @@ def compute_pac_operational_bounds_marginal(
     ci_level: float = 0.95,
     pac_level: float = 0.95,
     use_union_bound: bool = True,
+    n_jobs: int = 1,
 ) -> dict[str, float | list]:
     """Compute marginal PAC-controlled operational bounds with coverage volatility.
 
@@ -603,6 +694,10 @@ def compute_pac_operational_bounds_marginal(
         If True, applies Bonferroni correction for simultaneous guarantees
         on all 4 metrics (singleton, doublet, abstention, singleton_error).
         Recommended for operational deployment.
+    n_jobs : int, default=1
+        Number of parallel jobs for LOO-CV computation.
+        1 = single-threaded, -1 = use all cores, N = use N cores.
+        Parallelization provides significant speedup for large datasets.
 
     Returns
     -------
@@ -668,135 +763,72 @@ def compute_pac_operational_bounds_marginal(
     pmf_0_active = pmf_0[idx_0_active]
     pmf_1_active = pmf_1[idx_1_active]
 
-    # Iterate over joint grid
-    for i, (alpha_0, p_0) in enumerate(zip(alpha_0_active, pmf_0_active, strict=False)):
-        for j, (alpha_1, p_1) in enumerate(zip(alpha_1_active, pmf_1_active, strict=False)):
-            # Joint probability (independence assumption)
+    # Build list of scenarios to evaluate  
+    scenarios = []
+    joint_probs = []
+    
+    for alpha_0, p_0 in zip(alpha_0_active, pmf_0_active, strict=False):
+        for alpha_1, p_1 in zip(alpha_1_active, pmf_1_active, strict=False):
             joint_prob = p_0 * p_1
-
+            
             if joint_prob < threshold:
                 continue
-
-            # Compute operational metrics at this (alpha_0, alpha_1) pair
-            # LOO-CV style evaluation to avoid bias
-            # For each sample, compute threshold on OTHER samples and evaluate on held-out
-            n = len(labels)
-            n_abstentions = 0
-            n_singletons = 0
-            n_doublets = 0
-            n_singletons_correct = 0
-
-            # Get per-class masks
-            mask_0 = labels == 0
-            mask_1 = labels == 1
-
-            for idx in range(n):
-                # Compute thresholds leaving out sample idx
-                # Class 0 threshold (leave-one-out)
-                if mask_0[idx]:
-                    # This sample is class 0, exclude from class 0 calibration
-                    scores_0_loo = 1.0 - probs[mask_0, 0]
-                    mask_0_indices = np.where(mask_0)[0]
-                    loo_idx_in_class0 = np.where(mask_0_indices == idx)[0][0]
-                    scores_0_loo = np.delete(scores_0_loo, loo_idx_in_class0)
-                    n_0_loo = len(scores_0_loo)
-                else:
-                    # This sample is class 1, use all class 0 for calibration
-                    scores_0_loo = 1.0 - probs[mask_0, 0]
-                    n_0_loo = len(scores_0_loo)
-
-                # Class 1 threshold (leave-one-out)
-                if mask_1[idx]:
-                    # This sample is class 1, exclude from class 1 calibration
-                    scores_1_loo = 1.0 - probs[mask_1, 1]
-                    mask_1_indices = np.where(mask_1)[0]
-                    loo_idx_in_class1 = np.where(mask_1_indices == idx)[0][0]
-                    scores_1_loo = np.delete(scores_1_loo, loo_idx_in_class1)
-                    n_1_loo = len(scores_1_loo)
-                else:
-                    # This sample is class 0, use all class 1 for calibration
-                    scores_1_loo = 1.0 - probs[mask_1, 1]
-                    n_1_loo = len(scores_1_loo)
-
-                # Compute thresholds at (alpha_0, alpha_1) for this LOO fold
-                k_0_loo = int(np.ceil((n_0_loo + 1) * (1 - alpha_0)))
-                k_0_loo = min(k_0_loo, n_0_loo)
-                k_0_loo = max(k_0_loo, 1)
-
-                k_1_loo = int(np.ceil((n_1_loo + 1) * (1 - alpha_1)))
-                k_1_loo = min(k_1_loo, n_1_loo)
-                k_1_loo = max(k_1_loo, 1)
-
-                sorted_scores_0_loo = np.sort(scores_0_loo)
-                sorted_scores_1_loo = np.sort(scores_1_loo)
-
-                threshold_0_loo = sorted_scores_0_loo[k_0_loo - 1]
-                threshold_1_loo = sorted_scores_1_loo[k_1_loo - 1]
-
-                # Evaluate on held-out sample idx
-                score_0 = 1.0 - probs[idx, 0]
-                score_1 = 1.0 - probs[idx, 1]
-                true_label = labels[idx]
-
-                in_0 = score_0 <= threshold_0_loo
-                in_1 = score_1 <= threshold_1_loo
-
-                # Build prediction set
-                pred_set = []
-                if in_0:
-                    pred_set.append(0)
-                if in_1:
-                    pred_set.append(1)
-
-                # Count by set size
-                if len(pred_set) == 0:
-                    n_abstentions += 1
-                elif len(pred_set) == 1:
-                    n_singletons += 1
-                    if true_label in pred_set:
-                        n_singletons_correct += 1
-                else:  # len == 2
-                    n_doublets += 1
-
-            # Compute rates
-            singleton_rate = n_singletons / n
-            doublet_rate = n_doublets / n
-            abstention_rate = n_abstentions / n
-
-            # Singleton error rate (conditioned on singleton)
-            singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else 0.0
-
-            # Clopper-Pearson bounds on operational rates
-            s_lower = clopper_pearson_lower(n_singletons, n, ci_level)
-            s_upper = clopper_pearson_upper(n_singletons, n, ci_level)
-            d_lower = clopper_pearson_lower(n_doublets, n, ci_level)
-            d_upper = clopper_pearson_upper(n_doublets, n, ci_level)
-            a_lower = clopper_pearson_lower(n_abstentions, n, ci_level)
-            a_upper = clopper_pearson_upper(n_abstentions, n, ci_level)
-
-            # CP bounds on singleton error rate (conditioned on singletons)
-            n_singletons_incorrect = n_singletons - n_singletons_correct
-            if n_singletons > 0:
-                se_lower = clopper_pearson_lower(n_singletons_incorrect, n_singletons, ci_level)
-                se_upper = clopper_pearson_upper(n_singletons_incorrect, n_singletons, ci_level)
-            else:
-                se_lower = 0.0
-                se_upper = 1.0
-
-            # Store with weight
-            singleton_rates_weighted.append(singleton_rate)
-            doublet_rates_weighted.append(doublet_rate)
-            abstention_rates_weighted.append(abstention_rate)
-            singleton_ci_lower_weighted.append(s_lower)
-            singleton_ci_upper_weighted.append(s_upper)
-            doublet_ci_lower_weighted.append(d_lower)
-            doublet_ci_upper_weighted.append(d_upper)
-            abstention_ci_lower_weighted.append(a_lower)
-            abstention_ci_upper_weighted.append(a_upper)
-            singleton_error_rates.append(singleton_error_rate)
-            singleton_error_ci_lower.append(se_lower)
-            singleton_error_ci_upper.append(se_upper)
-            joint_weights.append(joint_prob)
+            
+            scenarios.append((alpha_0, alpha_1))
+            joint_probs.append(joint_prob)
+    
+    # Parallel LOO-CV evaluation for each scenario
+    from joblib import Parallel, delayed
+    
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_evaluate_loo_scenario_marginal)(alpha_0, alpha_1, labels, probs)
+        for alpha_0, alpha_1 in scenarios
+    )
+    
+    # Process results
+    n = len(labels)
+    for (alpha_0, alpha_1), joint_prob, (n_singletons, n_doublets, n_abstentions, n_singletons_correct) in zip(
+        scenarios, joint_probs, results, strict=False
+    ):
+        # Compute rates
+        singleton_rate = n_singletons / n
+        doublet_rate = n_doublets / n
+        abstention_rate = n_abstentions / n
+        
+        # Singleton error rate (conditioned on singleton)
+        singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else 0.0
+        
+        # Clopper-Pearson bounds on operational rates
+        s_lower = clopper_pearson_lower(n_singletons, n, ci_level)
+        s_upper = clopper_pearson_upper(n_singletons, n, ci_level)
+        d_lower = clopper_pearson_lower(n_doublets, n, ci_level)
+        d_upper = clopper_pearson_upper(n_doublets, n, ci_level)
+        a_lower = clopper_pearson_lower(n_abstentions, n, ci_level)
+        a_upper = clopper_pearson_upper(n_abstentions, n, ci_level)
+        
+        # CP bounds on singleton error rate (conditioned on singletons)
+        n_singletons_incorrect = n_singletons - n_singletons_correct
+        if n_singletons > 0:
+            se_lower = clopper_pearson_lower(n_singletons_incorrect, n_singletons, ci_level)
+            se_upper = clopper_pearson_upper(n_singletons_incorrect, n_singletons, ci_level)
+        else:
+            se_lower = 0.0
+            se_upper = 1.0
+        
+        # Store with weight
+        singleton_rates_weighted.append(singleton_rate)
+        doublet_rates_weighted.append(doublet_rate)
+        abstention_rates_weighted.append(abstention_rate)
+        singleton_ci_lower_weighted.append(s_lower)
+        singleton_ci_upper_weighted.append(s_upper)
+        doublet_ci_lower_weighted.append(d_lower)
+        doublet_ci_upper_weighted.append(d_upper)
+        abstention_ci_lower_weighted.append(a_lower)
+        abstention_ci_upper_weighted.append(a_upper)
+        singleton_error_rates.append(singleton_error_rate)
+        singleton_error_ci_lower.append(se_lower)
+        singleton_error_ci_upper.append(se_upper)
+        joint_weights.append(joint_prob)
 
     # Convert to arrays and normalize weights
     joint_weights = np.array(joint_weights)
@@ -883,6 +915,104 @@ def compute_pac_operational_bounds_marginal(
     }
 
 
+def _evaluate_loo_scenario_perclass(
+    alpha_0: float,
+    alpha_1: float,
+    labels: np.ndarray,
+    probs: np.ndarray,
+    class_label: int,
+) -> tuple[int, int, int, int]:
+    """Evaluate LOO-CV for a single (alpha_0, alpha_1) scenario per-class (helper for parallelization).
+    
+    Returns
+    -------
+    tuple[int, int, int, int]
+        (n_singletons, n_doublets, n_abstentions, n_singletons_correct)
+    """
+    # Filter to class_label samples
+    mask = labels == class_label
+    labels_class = labels[mask]
+    probs_class = probs[mask]
+    n_class = len(labels_class)
+    
+    n_abstentions = 0
+    n_singletons = 0
+    n_doublets = 0
+    n_singletons_correct = 0
+    
+    # Get full masks (needed for LOO)
+    mask_0_full = labels == 0
+    mask_1_full = labels == 1
+    
+    # For each class_label sample, compute LOO thresholds and evaluate
+    for local_idx in range(n_class):
+        # Map to global index
+        global_idx = np.where(mask)[0][local_idx]
+        
+        # Compute thresholds with LOO
+        # Class 0 threshold
+        if mask_0_full[global_idx]:
+            scores_0_loo = 1.0 - probs[mask_0_full, 0]
+            mask_0_indices = np.where(mask_0_full)[0]
+            loo_idx_in_class0 = np.where(mask_0_indices == global_idx)[0][0]
+            scores_0_loo = np.delete(scores_0_loo, loo_idx_in_class0)
+            n_0_loo = len(scores_0_loo)
+        else:
+            scores_0_loo = 1.0 - probs[mask_0_full, 0]
+            n_0_loo = len(scores_0_loo)
+        
+        # Class 1 threshold
+        if mask_1_full[global_idx]:
+            scores_1_loo = 1.0 - probs[mask_1_full, 1]
+            mask_1_indices = np.where(mask_1_full)[0]
+            loo_idx_in_class1 = np.where(mask_1_indices == global_idx)[0][0]
+            scores_1_loo = np.delete(scores_1_loo, loo_idx_in_class1)
+            n_1_loo = len(scores_1_loo)
+        else:
+            scores_1_loo = 1.0 - probs[mask_1_full, 1]
+            n_1_loo = len(scores_1_loo)
+        
+        # Compute thresholds at (alpha_0, alpha_1)
+        k_0_loo = int(np.ceil((n_0_loo + 1) * (1 - alpha_0)))
+        k_0_loo = min(k_0_loo, n_0_loo)
+        k_0_loo = max(k_0_loo, 1)
+        
+        k_1_loo = int(np.ceil((n_1_loo + 1) * (1 - alpha_1)))
+        k_1_loo = min(k_1_loo, n_1_loo)
+        k_1_loo = max(k_1_loo, 1)
+        
+        sorted_scores_0_loo = np.sort(scores_0_loo)
+        sorted_scores_1_loo = np.sort(scores_1_loo)
+        
+        threshold_0_loo = sorted_scores_0_loo[k_0_loo - 1]
+        threshold_1_loo = sorted_scores_1_loo[k_1_loo - 1]
+        
+        # Evaluate on held-out sample
+        score_0 = 1.0 - probs_class[local_idx, 0]
+        score_1 = 1.0 - probs_class[local_idx, 1]
+        true_label = labels_class[local_idx]
+        
+        in_0 = score_0 <= threshold_0_loo
+        in_1 = score_1 <= threshold_1_loo
+        
+        pred_set = []
+        if in_0:
+            pred_set.append(0)
+        if in_1:
+            pred_set.append(1)
+        
+        if len(pred_set) == 0:
+            n_abstentions += 1
+        elif len(pred_set) == 1:
+            n_singletons += 1
+            if true_label in pred_set:
+                n_singletons_correct += 1
+        else:
+            n_doublets += 1
+    
+    return n_singletons, n_doublets, n_abstentions, n_singletons_correct
+
+
 def compute_pac_operational_bounds_perclass(
     ssbc_result_0: SSBCResult,
     ssbc_result_1: SSBCResult,
@@ -893,6 +1023,7 @@ def compute_pac_operational_bounds_perclass(
     ci_level: float = 0.95,
     pac_level: float = 0.95,
     use_union_bound: bool = True,
+    n_jobs: int = 1,
 ) -> dict[str, float | list]:
     """Compute per-class PAC-controlled operational bounds.
 
@@ -920,6 +1051,9 @@ def compute_pac_operational_bounds_perclass(
     use_union_bound : bool, default=True
         If True, applies Bonferroni correction for simultaneous guarantees.
         Recommended for operational deployment.
+    n_jobs : int, default=1
+        Number of parallel jobs for LOO-CV computation.
+        1 = single-threaded, -1 = use all cores, N = use N cores.
 
     Returns
     -------
@@ -975,132 +1109,69 @@ def compute_pac_operational_bounds_perclass(
     alpha_1_active = alpha_from_cov_1[idx_1_active]
     pmf_0_active = pmf_0[idx_0_active]
     pmf_1_active = pmf_1[idx_1_active]
-
-    # Iterate over joint grid
-    for i, (alpha_0, p_0) in enumerate(zip(alpha_0_active, pmf_0_active, strict=False)):
-        for j, (alpha_1, p_1) in enumerate(zip(alpha_1_active, pmf_1_active, strict=False)):
+    
+    # Build list of scenarios to evaluate
+    scenarios = []
+    joint_probs = []
+    
+    for alpha_0, p_0 in zip(alpha_0_active, pmf_0_active, strict=False):
+        for alpha_1, p_1 in zip(alpha_1_active, pmf_1_active, strict=False):
             joint_prob = p_0 * p_1
-
+            
             if joint_prob < threshold:
                 continue
-
-            # LOO-CV evaluation on class_label samples
-            # To avoid bias, use leave-one-out for each sample
-            n_abstentions = 0
-            n_singletons = 0
-            n_doublets = 0
-            n_singletons_correct = 0
-
-            # Get full masks (needed for LOO)
-            mask_0_full = labels == 0
-            mask_1_full = labels == 1
-
-            # For each class_label sample, compute LOO thresholds and evaluate
-            for local_idx in range(n_class):
-                # Map to global index
-                global_idx = np.where(mask)[0][local_idx]
-
-                # Compute thresholds with LOO
-                # Class 0 threshold
-                if mask_0_full[global_idx]:
-                    # This sample is class 0, exclude from class 0 calibration
-                    scores_0_loo = 1.0 - probs[mask_0_full, 0]
-                    mask_0_indices = np.where(mask_0_full)[0]
-                    loo_idx_in_class0 = np.where(mask_0_indices == global_idx)[0][0]
-                    scores_0_loo = np.delete(scores_0_loo, loo_idx_in_class0)
-                    n_0_loo = len(scores_0_loo)
-                else:
-                    # This sample is class 1, use all class 0
-                    scores_0_loo = 1.0 - probs[mask_0_full, 0]
-                    n_0_loo = len(scores_0_loo)
-
-                # Class 1 threshold
-                if mask_1_full[global_idx]:
-                    # This sample is class 1, exclude from class 1 calibration
-                    scores_1_loo = 1.0 - probs[mask_1_full, 1]
-                    mask_1_indices = np.where(mask_1_full)[0]
-                    loo_idx_in_class1 = np.where(mask_1_indices == global_idx)[0][0]
-                    scores_1_loo = np.delete(scores_1_loo, loo_idx_in_class1)
-                    n_1_loo = len(scores_1_loo)
-                else:
-                    # This sample is class 0, use all class 1
-                    scores_1_loo = 1.0 - probs[mask_1_full, 1]
-                    n_1_loo = len(scores_1_loo)
-
-                # Compute thresholds at (alpha_0, alpha_1)
-                k_0_loo = int(np.ceil((n_0_loo + 1) * (1 - alpha_0)))
-                k_0_loo = min(k_0_loo, n_0_loo)
-                k_0_loo = max(k_0_loo, 1)
-
-                k_1_loo = int(np.ceil((n_1_loo + 1) * (1 - alpha_1)))
-                k_1_loo = min(k_1_loo, n_1_loo)
-                k_1_loo = max(k_1_loo, 1)
-
-                sorted_scores_0_loo = np.sort(scores_0_loo)
-                sorted_scores_1_loo = np.sort(scores_1_loo)
-
-                threshold_0_loo = sorted_scores_0_loo[k_0_loo - 1]
-                threshold_1_loo = sorted_scores_1_loo[k_1_loo - 1]
-
-                # Evaluate on held-out sample
-                score_0 = 1.0 - probs_class[local_idx, 0]
-                score_1 = 1.0 - probs_class[local_idx, 1]
-                true_label = labels_class[local_idx]
-
-                in_0 = score_0 <= threshold_0_loo
-                in_1 = score_1 <= threshold_1_loo
-
-                pred_set = []
-                if in_0:
-                    pred_set.append(0)
-                if in_1:
-                    pred_set.append(1)
-
-                if len(pred_set) == 0:
-                    n_abstentions += 1
-                elif len(pred_set) == 1:
-                    n_singletons += 1
-                    if true_label in pred_set:
-                        n_singletons_correct += 1
-                else:
-                    n_doublets += 1
-
-            # Rates
-            singleton_rate = n_singletons / n_class
-            doublet_rate = n_doublets / n_class
-            abstention_rate = n_abstentions / n_class
-            singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else 0.0
-
-            # Clopper-Pearson bounds
-            s_lower = clopper_pearson_lower(n_singletons, n_class, ci_level)
-            s_upper = clopper_pearson_upper(n_singletons, n_class, ci_level)
-            d_lower = clopper_pearson_lower(n_doublets, n_class, ci_level)
-            d_upper = clopper_pearson_upper(n_doublets, n_class, ci_level)
-            a_lower = clopper_pearson_lower(n_abstentions, n_class, ci_level)
-            a_upper = clopper_pearson_upper(n_abstentions, n_class, ci_level)
-
-            n_singletons_incorrect = n_singletons - n_singletons_correct
-            if n_singletons > 0:
-                se_lower = clopper_pearson_lower(n_singletons_incorrect, n_singletons, ci_level)
-                se_upper = clopper_pearson_upper(n_singletons_incorrect, n_singletons, ci_level)
-            else:
-                se_lower = 0.0
-                se_upper = 1.0
-
-            # Store
-            singleton_rates.append(singleton_rate)
-            doublet_rates.append(doublet_rate)
-            abstention_rates.append(abstention_rate)
-            singleton_ci_lower_list.append(s_lower)
-            singleton_ci_upper_list.append(s_upper)
-            doublet_ci_lower_list.append(d_lower)
-            doublet_ci_upper_list.append(d_upper)
-            abstention_ci_lower_list.append(a_lower)
-            abstention_ci_upper_list.append(a_upper)
-            singleton_error_rates.append(singleton_error_rate)
-            singleton_error_ci_lower.append(se_lower)
-            singleton_error_ci_upper.append(se_upper)
-            joint_weights.append(joint_prob)
+            
+            scenarios.append((alpha_0, alpha_1))
+            joint_probs.append(joint_prob)
+    
+    # Parallel LOO-CV evaluation for each scenario
+    from joblib import Parallel, delayed
+    
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_evaluate_loo_scenario_perclass)(alpha_0, alpha_1, labels, probs, class_label)
+        for alpha_0, alpha_1 in scenarios
+    )
+    
+    # Process results
+    for (alpha_0, alpha_1), joint_prob, (n_singletons, n_doublets, n_abstentions, n_singletons_correct) in zip(
+        scenarios, joint_probs, results, strict=False
+    ):
+        # Rates
+        singleton_rate = n_singletons / n_class
+        doublet_rate = n_doublets / n_class
+        abstention_rate = n_abstentions / n_class
+        singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else 0.0
+        
+        # Clopper-Pearson bounds
+        s_lower = clopper_pearson_lower(n_singletons, n_class, ci_level)
+        s_upper = clopper_pearson_upper(n_singletons, n_class, ci_level)
+        d_lower = clopper_pearson_lower(n_doublets, n_class, ci_level)
+        d_upper = clopper_pearson_upper(n_doublets, n_class, ci_level)
+        a_lower = clopper_pearson_lower(n_abstentions, n_class, ci_level)
+        a_upper = clopper_pearson_upper(n_abstentions, n_class, ci_level)
+        
+        n_singletons_incorrect = n_singletons - n_singletons_correct
+        if n_singletons > 0:
+            se_lower = clopper_pearson_lower(n_singletons_incorrect, n_singletons, ci_level)
+            se_upper = clopper_pearson_upper(n_singletons_incorrect, n_singletons, ci_level)
+        else:
+            se_lower = 0.0
+            se_upper = 1.0
+        
+        # Store
+        singleton_rates.append(singleton_rate)
+        doublet_rates.append(doublet_rate)
+        abstention_rates.append(abstention_rate)
+        singleton_ci_lower_list.append(s_lower)
+        singleton_ci_upper_list.append(s_upper)
+        doublet_ci_lower_list.append(d_lower)
+        doublet_ci_upper_list.append(d_upper)
+        abstention_ci_lower_list.append(a_lower)
+        abstention_ci_upper_list.append(a_upper)
+        singleton_error_rates.append(singleton_error_rate)
+        singleton_error_ci_lower.append(se_lower)
+        singleton_error_ci_upper.append(se_upper)
+        joint_weights.append(joint_prob)
 
     # Convert and normalize
     joint_weights = np.array(joint_weights)

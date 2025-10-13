@@ -24,6 +24,7 @@ def generate_rigorous_pac_report(
     test_size: int | None = None,
     ci_level: float = 0.95,
     use_union_bound: bool = True,
+    n_jobs: int = -1,
     verbose: bool = True,
 ) -> dict[str, Any]:
     """Generate complete rigorous PAC report with coverage volatility.
@@ -53,6 +54,9 @@ def generate_rigorous_pac_report(
         Confidence level for Clopper-Pearson intervals
     use_union_bound : bool, default=True
         Apply Bonferroni for simultaneous guarantees (recommended)
+    n_jobs : int, default=-1
+        Number of parallel jobs for LOO-CV computation.
+        -1 = use all cores (default), 1 = single-threaded, N = use N cores.
     verbose : bool, default=True
         Print comprehensive report
 
@@ -149,6 +153,7 @@ def generate_rigorous_pac_report(
         ci_level=ci_level,
         pac_level=pac_level_marginal,
         use_union_bound=use_union_bound,
+        n_jobs=n_jobs,
     )
 
     # Step 4: Compute PAC operational bounds - PER-CLASS
@@ -163,6 +168,7 @@ def generate_rigorous_pac_report(
         ci_level=ci_level,
         pac_level=pac_level_0,
         use_union_bound=use_union_bound,
+        n_jobs=n_jobs,
     )
 
     pac_bounds_class_1 = compute_pac_operational_bounds_perclass(
@@ -175,6 +181,7 @@ def generate_rigorous_pac_report(
         ci_level=ci_level,
         pac_level=pac_level_1,
         use_union_bound=use_union_bound,
+        n_jobs=n_jobs,
     )
 
     # Build comprehensive report dict
