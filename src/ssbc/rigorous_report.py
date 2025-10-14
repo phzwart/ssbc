@@ -10,7 +10,7 @@ import numpy as np
 
 from .conformal import mondrian_conformal_calibrate, split_by_class
 from .core import ssbc_correct
-from .coverage_distribution import (
+from .operational_bounds_simple import (
     compute_pac_operational_bounds_marginal,
     compute_pac_operational_bounds_perclass,
 )
@@ -296,7 +296,7 @@ def _print_rigorous_report(report: dict) -> None:
             )
 
         print("\n  ✅ RIGOROUS PAC-Controlled Operational Bounds")
-        print("     (Accounts for coverage volatility)")
+        print("     (LOO-CV for unbiased estimates, CP for binomial sampling)")
         pac_level_class = params[f"pac_level_{class_label}"]
         print(f"     PAC level: {pac_level_class:.0%} (= 1 - δ), CP level: {params['ci_level']:.0%}")
         print(f"     Grid points evaluated: {pac['n_grid_points']}")
@@ -374,7 +374,7 @@ def _print_rigorous_report(report: dict) -> None:
     )
 
     print("\n  ✅ RIGOROUS PAC-Controlled Marginal Bounds")
-    print("     (Accounts for coverage volatility from BOTH classes)")
+    print("     (LOO-CV for unbiased estimates, CP for binomial sampling)")
     print(
         f"     PAC level: {params['pac_level_marginal']:.0%} (= (1-δ₀)×(1-δ₁), independence), CP level: {params['ci_level']:.0%}"
     )
@@ -407,9 +407,10 @@ def _print_rigorous_report(report: dict) -> None:
     print("\n" + "=" * 80)
     print("NOTES")
     print("=" * 80)
-    print("\n✓ All bounds account for coverage volatility (BetaBinomial distribution)")
-    print("✓ Joint marginalization over both classes' realized alphas")
+    print("\n✓ Bounds computed via LOO-CV for unbiased rate estimates")
+    print("✓ Models test set sampling volatility for FIXED calibration")
     if params["use_union_bound"]:
         print("✓ Union bound ensures ALL metrics hold simultaneously")
-    print("✓ No risk accepted by fiat - full nested uncertainty quantified")
+    print("✓ Clopper-Pearson exact confidence intervals")
+    print("✓ No data leakage - each sample evaluated on threshold from other samples")
     print("\n" + "=" * 80)
