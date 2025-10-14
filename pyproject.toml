@@ -72,6 +72,10 @@ ssbc = "ssbc.cli:app"
 
 [tool.ruff]
 line-length = 120
+# Include all directories (src, tests, examples)
+extend-include = ["*.py"]
+# Exclude notebooks from linting (they have special formatting)
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = [
