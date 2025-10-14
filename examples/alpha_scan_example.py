@@ -166,7 +166,7 @@ def main():
     max_singleton_row = df.loc[max_singleton_idx]
 
     max_sing_count = max_singleton_row["n_singletons"]
-    print(f"\n   Maximum singleton count: {max_sing_count} ({max_sing_count/n_total:.1%})")
+    print(f"\n   Maximum singleton count: {max_sing_count} ({max_sing_count / n_total:.1%})")
     print(f"   At alpha: {max_singleton_row['alpha']:.4f}")
     print(f"   Thresholds: qhat_0={max_singleton_row['qhat_0']:.4f}, qhat_1={max_singleton_row['qhat_1']:.4f}")
     print(f"   Coverage: {max_singleton_row['singleton_coverage']:.4f}")
@@ -178,7 +178,7 @@ def main():
     print(f"\n   Best singleton coverage: {max_coverage_row['singleton_coverage']:.4f}")
     print(f"   At alpha: {max_coverage_row['alpha']:.4f}")
     n_sing = max_coverage_row["n_singletons"]
-    print(f"   Singletons: {n_sing} ({n_sing/n_total:.1%})")
+    print(f"   Singletons: {n_sing} ({n_sing / n_total:.1%})")
     cov_0 = max_coverage_row["singleton_coverage_0"]
     cov_1 = max_coverage_row["singleton_coverage_1"]
     print(f"   Coverage by class: Class 0={cov_0:.4f}, Class 1={cov_1:.4f}")
@@ -188,15 +188,15 @@ def main():
     min_abstention_row = df.loc[min_abstention_idx]
 
     min_abst_count = min_abstention_row["n_abstentions"]
-    print(f"\n   Minimum abstention count: {min_abst_count} ({min_abst_count/n_total:.1%})")
+    print(f"\n   Minimum abstention count: {min_abst_count} ({min_abst_count / n_total:.1%})")
     print(f"   At alpha: {min_abstention_row['alpha']:.4f}")
 
     # Statistics for fixed threshold
     print("\n   Fixed threshold (qhat=0.5) statistics:")
     print(f"   - Effective alpha: {fixed_result['alpha']:.4f}")
-    print(f"   - Abstentions: {fixed_result['n_abstentions']} ({fixed_result['n_abstentions']/n_total:.1%})")
-    print(f"   - Singletons: {fixed_result['n_singletons']} ({fixed_result['n_singletons']/n_total:.1%})")
-    print(f"   - Doublets: {fixed_result['n_doublets']} ({fixed_result['n_doublets']/n_total:.1%})")
+    print(f"   - Abstentions: {fixed_result['n_abstentions']} ({fixed_result['n_abstentions'] / n_total:.1%})")
+    print(f"   - Singletons: {fixed_result['n_singletons']} ({fixed_result['n_singletons'] / n_total:.1%})")
+    print(f"   - Doublets: {fixed_result['n_doublets']} ({fixed_result['n_doublets'] / n_total:.1%})")
     print(f"   - Singleton coverage: {fixed_result['singleton_coverage']:.4f}")
     fix_cov_0 = fixed_result["singleton_coverage_0"]
     fix_cov_1 = fixed_result["singleton_coverage_1"]

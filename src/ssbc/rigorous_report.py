@@ -478,7 +478,7 @@ def _print_rigorous_report(report: dict) -> None:
 
     print("\n  📈 Deployment Expectations:")
     print(f"     Automation (singletons): {s_lower:.1%} - {s_upper:.1%}")
-    print(f"     Escalation (doublets+abstentions): {a_lower+d_lower:.1%} - {a_upper+d_upper:.1%}")
+    print(f"     Escalation (doublets+abstentions): {a_lower + d_lower:.1%} - {a_upper + d_upper:.1%}")
 
     # Bootstrap results if available
     if report["bootstrap_results"] is not None:

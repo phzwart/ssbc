@@ -339,8 +339,8 @@ def plot_bootstrap_distributions(bootstrap_results, figsize=(16, 12)):
     """Plot bootstrap distributions."""
     fig, axes = plt.subplots(3, 4, figsize=figsize)
     fig.suptitle(
-        f'Bootstrap Calibration Uncertainty ({bootstrap_results["n_bootstrap"]} trials)\n'
-        f'Calibration n={bootstrap_results["n_calibration"]}, Test size={bootstrap_results["test_size"]}',
+        f"Bootstrap Calibration Uncertainty ({bootstrap_results['n_bootstrap']} trials)\n"
+        f"Calibration n={bootstrap_results['n_calibration']}, Test size={bootstrap_results['test_size']}",
         fontsize=14,
         fontweight="bold",
     )
@@ -369,10 +369,10 @@ def plot_bootstrap_distributions(bootstrap_results, figsize=(16, 12)):
 
             # Quantiles
             q = m["quantiles"]
-            ax.axvline(q["q50"], color="green", linestyle="-", linewidth=2, label=f'Median: {q["q50"]:.3f}')
-            ax.axvline(q["q05"], color="red", linestyle="--", linewidth=2, label=f'5%: {q["q05"]:.3f}')
-            ax.axvline(q["q95"], color="red", linestyle="--", linewidth=2, label=f'95%: {q["q95"]:.3f}')
-            ax.axvline(m["mean"], color="orange", linestyle=":", linewidth=2, label=f'Mean: {m["mean"]:.3f}')
+            ax.axvline(q["q50"], color="green", linestyle="-", linewidth=2, label=f"Median: {q['q50']:.3f}")
+            ax.axvline(q["q05"], color="red", linestyle="--", linewidth=2, label=f"5%: {q['q05']:.3f}")
+            ax.axvline(q["q95"], color="red", linestyle="--", linewidth=2, label=f"95%: {q['q95']:.3f}")
+            ax.axvline(m["mean"], color="orange", linestyle=":", linewidth=2, label=f"Mean: {m['mean']:.3f}")
 
             ax.set_title(f"{row_name}: {name}", fontweight="bold")
             ax.set_xlabel("Rate")

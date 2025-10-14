@@ -39,7 +39,7 @@ TEST_SIZE = 1000  # Expected deployment test set size
 
 print("\nSLA Requirements:")
 print(f"  Maximum miscoverage: {ALPHA_TARGET:.1%}")
-print(f"  PAC confidence: {1-DELTA:.0%} (δ = {DELTA})")
+print(f"  PAC confidence: {1 - DELTA:.0%} (δ = {DELTA})")
 print(f"  Expected test set size: {TEST_SIZE}")
 
 # Generate rigorous PAC report with operational bounds
@@ -114,7 +114,7 @@ print("SLA CONTRACT SUMMARY")
 print("=" * 80)
 
 print("\n✅ COVERAGE GUARANTEE:")
-print(f"   With {1-DELTA:.0%} confidence, coverage ≥ {1-ALPHA_TARGET:.0%} for both classes")
+print(f"   With {1 - DELTA:.0%} confidence, coverage ≥ {1 - ALPHA_TARGET:.0%} for both classes")
 
 print(f"\n✅ OPERATIONAL GUARANTEES (Marginal, {report['parameters']['pac_level_marginal']:.0%} confidence):")
 print(f"   • Automation rate: {singleton_lower:.1%} - {singleton_upper:.1%}")
