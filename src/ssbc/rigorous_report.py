@@ -296,7 +296,7 @@ def _print_rigorous_report(report: dict) -> None:
             )
 
         print("\n  ✅ RIGOROUS PAC-Controlled Operational Bounds")
-        print("     (LOO-CV for unbiased estimates, CP for binomial sampling)")
+        print("     (LOO-CV + Beta-Binomial for estimation & sampling uncertainty)")
         pac_level_class = params[f"pac_level_{class_label}"]
         print(f"     PAC level: {pac_level_class:.0%} (= 1 - δ), CP level: {params['ci_level']:.0%}")
         print(f"     Grid points evaluated: {pac['n_grid_points']}")
@@ -374,7 +374,7 @@ def _print_rigorous_report(report: dict) -> None:
     )
 
     print("\n  ✅ RIGOROUS PAC-Controlled Marginal Bounds")
-    print("     (LOO-CV for unbiased estimates, CP for binomial sampling)")
+    print("     (LOO-CV + Beta-Binomial for estimation & sampling uncertainty)")
     print(
         f"     PAC level: {params['pac_level_marginal']:.0%} (= (1-δ₀)×(1-δ₁), independence), CP level: {params['ci_level']:.0%}"
     )
@@ -408,9 +408,11 @@ def _print_rigorous_report(report: dict) -> None:
     print("NOTES")
     print("=" * 80)
     print("\n✓ Bounds computed via LOO-CV for unbiased rate estimates")
+    print("✓ Beta-Binomial distribution accounts for TWO uncertainties:")
+    print("  1. Estimation uncertainty: p̂ from calibration is uncertain")
+    print("  2. Test set sampling: future test sets vary binomially")
     print("✓ Models test set sampling volatility for FIXED calibration")
     if params["use_union_bound"]:
         print("✓ Union bound ensures ALL metrics hold simultaneously")
-    print("✓ Clopper-Pearson exact confidence intervals")
     print("✓ No data leakage - each sample evaluated on threshold from other samples")
     print("\n" + "=" * 80)

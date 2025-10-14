@@ -1,7 +1,8 @@
-"""Simplified operational bounds for fixed calibration (LOO-CV + CP only)."""
+"""Simplified operational bounds for fixed calibration (LOO-CV + Beta-Binomial)."""
 
 import numpy as np
 from joblib import Parallel, delayed
+from scipy.stats import betabinom
 
 from .core import SSBCResult
 from .statistics import clopper_pearson_lower, clopper_pearson_upper
@@ -153,36 +154,52 @@ def compute_pac_operational_bounds_marginal(
     n_errors = n_singletons - n_singletons_correct
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
     
-    # Apply CP bounds with optional union bound correction
-    # CRITICAL: Use test_size for intervals (not calibration n)
-    # This gives wider intervals for smaller test sets
+    # Apply Beta-Binomial bounds accounting for BOTH uncertainties:
+    # 1. Estimation uncertainty: p̂ from calibration is uncertain
+    # 2. Test set sampling: future test sets vary binomially
+    #
+    # Beta-Binomial marginalizes over both!
+    # From LOO-CV: k successes, n trials → p ~ Beta(k+1, n-k+1)
+    # On test set: count ~ BetaBinomial(test_size, a=k+1, b=n-k+1)
+    
     n_metrics = 4
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
         adjusted_ci_level = ci_level
     
-    # Scale point estimates to test_size
-    k_singleton_test = int(np.round(singleton_rate * test_size))
-    k_doublet_test = int(np.round(doublet_rate * test_size))
-    k_abstention_test = int(np.round(abstention_rate * test_size))
+    # Quantile levels for two-sided interval
+    alpha = 1 - adjusted_ci_level
+    lower_quantile = alpha / 2
+    upper_quantile = 1 - alpha / 2
     
-    singleton_lower = clopper_pearson_lower(k_singleton_test, test_size, adjusted_ci_level)
-    singleton_upper = clopper_pearson_upper(k_singleton_test, test_size, adjusted_ci_level)
+    # Singleton: Beta-Binomial with (k+1, n-k+1)
+    alpha_singleton = n_singletons + 1
+    beta_singleton = (n - n_singletons) + 1
+    singleton_lower = betabinom.ppf(lower_quantile, test_size, alpha_singleton, beta_singleton) / test_size
+    singleton_upper = betabinom.ppf(upper_quantile, test_size, alpha_singleton, beta_singleton) / test_size
     
-    doublet_lower = clopper_pearson_lower(k_doublet_test, test_size, adjusted_ci_level)
-    doublet_upper = clopper_pearson_upper(k_doublet_test, test_size, adjusted_ci_level)
+    # Doublet
+    alpha_doublet = n_doublets + 1
+    beta_doublet = (n - n_doublets) + 1
+    doublet_lower = betabinom.ppf(lower_quantile, test_size, alpha_doublet, beta_doublet) / test_size
+    doublet_upper = betabinom.ppf(upper_quantile, test_size, alpha_doublet, beta_doublet) / test_size
     
-    abstention_lower = clopper_pearson_lower(k_abstention_test, test_size, adjusted_ci_level)
-    abstention_upper = clopper_pearson_upper(k_abstention_test, test_size, adjusted_ci_level)
+    # Abstention
+    alpha_abstention = n_abstentions + 1
+    beta_abstention = (n - n_abstentions) + 1
+    abstention_lower = betabinom.ppf(lower_quantile, test_size, alpha_abstention, beta_abstention) / test_size
+    abstention_upper = betabinom.ppf(upper_quantile, test_size, alpha_abstention, beta_abstention) / test_size
     
-    # Singleton error rate (conditioned on singletons, so use singleton count as base)
-    k_singletons_test = k_singleton_test
-    k_errors_test = int(np.round(singleton_error_rate * k_singletons_test))
-    
-    if k_singletons_test > 0:
-        error_lower = clopper_pearson_lower(k_errors_test, k_singletons_test, adjusted_ci_level)
-        error_upper = clopper_pearson_upper(k_errors_test, k_singletons_test, adjusted_ci_level)
+    # Singleton error (conditioned on singletons)
+    if n_singletons > 0:
+        # Expected singletons on test set (Beta-Binomial mean)
+        expected_singletons_test = test_size * singleton_rate
+        alpha_error = n_errors + 1
+        beta_error = (n_singletons - n_errors) + 1
+        # Use expected singleton count as base
+        error_lower = betabinom.ppf(lower_quantile, int(expected_singletons_test), alpha_error, beta_error) / expected_singletons_test if expected_singletons_test > 0 else 0.0
+        error_upper = betabinom.ppf(upper_quantile, int(expected_singletons_test), alpha_error, beta_error) / expected_singletons_test if expected_singletons_test > 0 else 1.0
     else:
         error_lower = 0.0
         error_upper = 1.0
@@ -331,9 +348,8 @@ def compute_pac_operational_bounds_perclass(
     n_errors = n_singletons - n_singletons_correct
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
     
-    # Apply CP bounds with optional union bound correction
-    # CRITICAL: Scale to expected class size in test set
-    # Expected class_label samples in test set = test_size * (n_class_cal / n_total)
+    # Apply Beta-Binomial bounds accounting for BOTH uncertainties
+    # Expected class_label samples in test set
     class_proportion = n_class_cal / n_total
     test_size_class = int(np.round(test_size * class_proportion))
     
@@ -343,27 +359,40 @@ def compute_pac_operational_bounds_perclass(
     else:
         adjusted_ci_level = ci_level
     
-    # Scale point estimates to test_size_class
-    k_singleton_test = int(np.round(singleton_rate * test_size_class))
-    k_doublet_test = int(np.round(doublet_rate * test_size_class))
-    k_abstention_test = int(np.round(abstention_rate * test_size_class))
+    # Quantile levels for two-sided interval
+    alpha = 1 - adjusted_ci_level
+    lower_quantile = alpha / 2
+    upper_quantile = 1 - alpha / 2
     
-    singleton_lower = clopper_pearson_lower(k_singleton_test, test_size_class, adjusted_ci_level)
-    singleton_upper = clopper_pearson_upper(k_singleton_test, test_size_class, adjusted_ci_level)
+    # Singleton: Beta-Binomial with (k+1, n-k+1)
+    alpha_singleton = n_singletons + 1
+    beta_singleton = (n_class_cal - n_singletons) + 1
+    singleton_lower = betabinom.ppf(lower_quantile, test_size_class, alpha_singleton, beta_singleton) / test_size_class
+    singleton_upper = betabinom.ppf(upper_quantile, test_size_class, alpha_singleton, beta_singleton) / test_size_class
     
-    doublet_lower = clopper_pearson_lower(k_doublet_test, test_size_class, adjusted_ci_level)
-    doublet_upper = clopper_pearson_upper(k_doublet_test, test_size_class, adjusted_ci_level)
+    # Doublet
+    alpha_doublet = n_doublets + 1
+    beta_doublet = (n_class_cal - n_doublets) + 1
+    doublet_lower = betabinom.ppf(lower_quantile, test_size_class, alpha_doublet, beta_doublet) / test_size_class
+    doublet_upper = betabinom.ppf(upper_quantile, test_size_class, alpha_doublet, beta_doublet) / test_size_class
     
-    abstention_lower = clopper_pearson_lower(k_abstention_test, test_size_class, adjusted_ci_level)
-    abstention_upper = clopper_pearson_upper(k_abstention_test, test_size_class, adjusted_ci_level)
+    # Abstention
+    alpha_abstention = n_abstentions + 1
+    beta_abstention = (n_class_cal - n_abstentions) + 1
+    abstention_lower = betabinom.ppf(lower_quantile, test_size_class, alpha_abstention, beta_abstention) / test_size_class
+    abstention_upper = betabinom.ppf(upper_quantile, test_size_class, alpha_abstention, beta_abstention) / test_size_class
     
-    # Singleton error rate (conditioned on singletons)
-    k_singletons_test = k_singleton_test
-    k_errors_test = int(np.round(singleton_error_rate * k_singletons_test))
-    
-    if k_singletons_test > 0:
-        error_lower = clopper_pearson_lower(k_errors_test, k_singletons_test, adjusted_ci_level)
-        error_upper = clopper_pearson_upper(k_errors_test, k_singletons_test, adjusted_ci_level)
+    # Singleton error (conditioned on singletons)
+    if n_singletons > 0:
+        expected_singletons_test = int(np.round(test_size_class * singleton_rate))
+        alpha_error = n_errors + 1
+        beta_error = (n_singletons - n_errors) + 1
+        if expected_singletons_test > 0:
+            error_lower = betabinom.ppf(lower_quantile, expected_singletons_test, alpha_error, beta_error) / expected_singletons_test
+            error_upper = betabinom.ppf(upper_quantile, expected_singletons_test, alpha_error, beta_error) / expected_singletons_test
+        else:
+            error_lower = 0.0
+            error_upper = 1.0
     else:
         error_lower = 0.0
         error_upper = 1.0
