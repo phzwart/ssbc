@@ -25,6 +25,11 @@ from .hyperparameter import (
     sweep_hyperparams_and_collect,
 )
 
+# Bootstrap uncertainty analysis
+from .bootstrap import (
+    bootstrap_calibration_uncertainty,
+)
+
 # Visualization and reporting
 from .rigorous_report import (
     generate_rigorous_pac_report,
@@ -86,6 +91,8 @@ __all__ = [
     # Visualization
     "report_prediction_stats",
     "plot_parallel_coordinates_plotly",
+    # Bootstrap uncertainty
+    "bootstrap_calibration_uncertainty",
     # Rigorous reporting
     "generate_rigorous_pac_report",
     # Hyperparameter

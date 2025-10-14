@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from .bootstrap import bootstrap_calibration_uncertainty
 from .conformal import mondrian_conformal_calibrate, split_by_class
 from .core import ssbc_correct
 from .operational_bounds_simple import (
@@ -26,6 +27,9 @@ def generate_rigorous_pac_report(
     use_union_bound: bool = True,
     n_jobs: int = -1,
     verbose: bool = True,
+    run_bootstrap: bool = False,
+    n_bootstrap: int = 1000,
+    simulator: Any = None,
 ) -> dict[str, Any]:
     """Generate complete rigorous PAC report with coverage volatility.
 
@@ -59,6 +63,12 @@ def generate_rigorous_pac_report(
         -1 = use all cores (default), 1 = single-threaded, N = use N cores.
     verbose : bool, default=True
         Print comprehensive report
+    run_bootstrap : bool, default=False
+        Run bootstrap calibration uncertainty analysis
+    n_bootstrap : int, default=1000
+        Number of bootstrap trials (only if run_bootstrap=True)
+    simulator : DataGenerator, optional
+        Simulator for generating fresh test sets (required if run_bootstrap=True)
 
     Returns
     -------
@@ -184,6 +194,32 @@ def generate_rigorous_pac_report(
         n_jobs=n_jobs,
     )
 
+    # Bootstrap calibration uncertainty analysis (optional)
+    bootstrap_results = None
+    if run_bootstrap:
+        if simulator is None:
+            raise ValueError("simulator is required when run_bootstrap=True")
+
+        if verbose:
+            print("\n" + "=" * 80)
+            print("BOOTSTRAP CALIBRATION UNCERTAINTY ANALYSIS")
+            print("=" * 80)
+            print(f"\nRunning {n_bootstrap} bootstrap trials...")
+            print(f"  Calibration size: n={len(labels)}")
+            print(f"  Test size per trial: {test_size if test_size else len(labels)}")
+
+        bootstrap_results = bootstrap_calibration_uncertainty(
+            labels=labels,
+            probs=probs,
+            simulator=simulator,
+            alpha_target=alpha_dict[0],  # Use class 0 alpha
+            delta=delta_dict[0],  # Use class 0 delta
+            test_size=test_size if test_size else len(labels),
+            n_bootstrap=n_bootstrap,
+            n_jobs=n_jobs,
+            seed=None,
+        )
+
     # Build comprehensive report dict
     report = {
         "ssbc_class_0": ssbc_result_0,
@@ -193,6 +229,7 @@ def generate_rigorous_pac_report(
         "pac_bounds_class_1": pac_bounds_class_1,
         "calibration_result": cal_result,
         "prediction_stats": pred_stats,
+        "bootstrap_results": bootstrap_results,
         "parameters": {
             "alpha_target": alpha_dict,
             "delta": delta_dict,
@@ -202,6 +239,8 @@ def generate_rigorous_pac_report(
             "pac_level_0": pac_level_0,
             "pac_level_1": pac_level_1,
             "use_union_bound": use_union_bound,
+            "run_bootstrap": run_bootstrap,
+            "n_bootstrap": n_bootstrap if run_bootstrap else None,
         },
     }
 
@@ -404,14 +443,66 @@ def _print_rigorous_report(report: dict) -> None:
     print(f"     Automation (singletons): {s_lower:.1%} - {s_upper:.1%}")
     print(f"     Escalation (doublets+abstentions): {a_lower+d_lower:.1%} - {a_upper+d_upper:.1%}")
 
+    # Bootstrap results if available
+    if report["bootstrap_results"] is not None:
+        bootstrap = report["bootstrap_results"]
+        print("\n" + "=" * 80)
+        print("BOOTSTRAP CALIBRATION UNCERTAINTY")
+        print(f"({bootstrap['n_bootstrap']} bootstrap samples)")
+        print("=" * 80)
+        print("\nModels: 'If I recalibrate on similar datasets, how do rates vary?'")
+        print("Method: Bootstrap resample → recalibrate → test on fresh data\n")
+
+        # Marginal
+        print("-" * 80)
+        print("MARGINAL")
+        print("-" * 80)
+        for metric, name in [
+            ("singleton", "SINGLETON"),
+            ("doublet", "DOUBLET"),
+            ("abstention", "ABSTENTION"),
+            ("singleton_error", "SINGLETON ERROR"),
+        ]:
+            m = bootstrap["marginal"][metric]
+            q = m["quantiles"]
+            print(f"\n{name}:")
+            print(f"  Mean:      {m['mean']:.4f} ± {m['std']:.4f}")
+            print(f"  Median:    {q['q50']:.4f}")
+            print(f"  [5%, 95%]: [{q['q05']:.4f}, {q['q95']:.4f}]")
+
+        # Per-class
+        for class_label in [0, 1]:
+            print(f"\n{'-' * 80}")
+            print(f"CLASS {class_label}")
+            print("-" * 80)
+            for metric, name in [
+                ("singleton", "SINGLETON"),
+                ("doublet", "DOUBLET"),
+                ("abstention", "ABSTENTION"),
+                ("singleton_error", "SINGLETON ERROR"),
+            ]:
+                m = bootstrap[f"class_{class_label}"][metric]
+                q = m["quantiles"]
+                print(f"\n{name}:")
+                print(f"  Mean:      {m['mean']:.4f} ± {m['std']:.4f}")
+                print(f"  Median:    {q['q50']:.4f}")
+                print(f"  [5%, 95%]: [{q['q05']:.4f}, {q['q95']:.4f}]")
+
     print("\n" + "=" * 80)
     print("NOTES")
     print("=" * 80)
-    print("\n✓ Bounds computed via LOO-CV for unbiased rate estimates")
-    print("✓ Clopper-Pearson intervals bound the TRUE rate (valid for any test set size)")
-    print("✓ Accounts for estimation uncertainty from finite calibration")
-    print("✓ Models expected rates for FIXED calibration")
+    print("\n✓ PAC BOUNDS (LOO-CV + CP):")
+    print("  • Bound the TRUE rate for THIS fixed calibration")
+    print("  • Valid for any future test set size")
+    print("  • Models: 'Given this calibration, what rates on future test sets?'")
+    if report["bootstrap_results"] is not None:
+        print("\n✓ BOOTSTRAP INTERVALS:")
+        print("  • Show recalibration uncertainty (wider than PAC bounds)")
+        print("  • Models: 'If I recalibrate on similar data, how do rates vary?'")
+        print("  • Complementary to PAC bounds - different question!")
+    print("\n✓ TECHNICAL DETAILS:")
+    print("  • LOO-CV for unbiased rate estimates (no data leakage)")
+    print("  • Clopper-Pearson intervals account for estimation uncertainty")
     if params["use_union_bound"]:
-        print("✓ Union bound ensures ALL metrics hold simultaneously")
-    print("✓ No data leakage - each sample evaluated on threshold from other samples")
+        print("  • Union bound ensures ALL metrics hold simultaneously")
     print("\n" + "=" * 80)
