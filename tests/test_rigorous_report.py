@@ -320,7 +320,9 @@ class TestEdgeCases:
 
     def test_imbalanced_classes(self):
         """Test with highly imbalanced classes."""
-        sim = BinaryClassifierSimulator(p_class1=0.05, seed=42)  # 5% class 1
+        sim = BinaryClassifierSimulator(
+            p_class1=0.05, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42
+        )  # 5% class 1
         labels, probs = sim.generate(100)
 
         report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
