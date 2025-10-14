@@ -250,7 +250,7 @@ class TestEdgeCases:
 
     def test_small_calibration_size(self):
         """Test with very small calibration size."""
-        sim = BinaryClassifierSimulator(p_class1=0.5, seed=42)
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
         labels, probs = sim.generate(15)  # Very small
 
         results = bootstrap_calibration_uncertainty(

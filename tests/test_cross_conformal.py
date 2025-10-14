@@ -265,7 +265,7 @@ class TestEdgeCases:
 
     def test_small_sample_size(self):
         """Test with very small sample size."""
-        sim = BinaryClassifierSimulator(p_class1=0.5, seed=42)
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
         labels, probs = sim.generate(15)
 
         # Use fewer folds for small sample
@@ -284,7 +284,9 @@ class TestEdgeCases:
 
     def test_imbalanced_classes(self):
         """Test with imbalanced classes."""
-        sim = BinaryClassifierSimulator(p_class1=0.1, seed=42)  # 10% class 1
+        sim = BinaryClassifierSimulator(
+            p_class1=0.1, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42
+        )  # 10% class 1
         labels, probs = sim.generate(50)
 
         results = cross_conformal_validation(

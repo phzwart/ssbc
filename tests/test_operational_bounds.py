@@ -62,8 +62,8 @@ class TestPACOperationalBoundsPerClass:
         assert "expected_abstention_rate" in result
         assert "expected_singleton_error_rate" in result
 
-        # Check bounds are tuples
-        assert isinstance(result["singleton_rate_bounds"], tuple)
+        # Check bounds are lists (returned as lists from function)
+        assert isinstance(result["singleton_rate_bounds"], list | tuple)
         assert len(result["singleton_rate_bounds"]) == 2
 
         # Check bounds are valid (lower <= upper)
@@ -265,7 +265,7 @@ class TestEdgeCases:
 
     def test_small_sample_size(self):
         """Test with very small sample size."""
-        sim = BinaryClassifierSimulator(p_class1=0.5, seed=42)
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
         labels, probs = sim.generate(20)  # Small sample
 
         n_0 = np.sum(labels == 0)
@@ -288,7 +288,7 @@ class TestEdgeCases:
 
     def test_extreme_alpha(self):
         """Test with extreme alpha values."""
-        sim = BinaryClassifierSimulator(p_class1=0.5, seed=42)
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
         labels, probs = sim.generate(50)
 
         n_0 = np.sum(labels == 0)

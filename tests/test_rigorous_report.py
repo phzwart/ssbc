@@ -308,7 +308,7 @@ class TestEdgeCases:
 
     def test_small_sample_size(self):
         """Test with very small sample size."""
-        sim = BinaryClassifierSimulator(p_class1=0.5, seed=42)
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
         labels, probs = sim.generate(20)
 
         # Should not crash
