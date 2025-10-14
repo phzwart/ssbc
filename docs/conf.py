@@ -16,11 +16,16 @@ release = "1.0.0"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "myst_parser",
 ]
+
+# Autosummary settings
+autosummary_generate = True
+autosummary_imported_members = False
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

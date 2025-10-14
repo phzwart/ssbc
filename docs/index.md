@@ -1,12 +1,11 @@
-# Welcome to ssbc's documentation!
+# Welcome to SSBC's documentation!
 
 ## Contents
 
-- [Readme](readme.md)
 - [Installation](installation.md)
 - [Usage](usage.md)
-- [Theory and Deployment Guide](theory.md) ⭐ **New!**
-- [Modules](modules.md)
+- [Theory and Deployment Guide](theory.md)
+- [API Reference](index.rst)
 - [Contributing](contributing.md)
 - [History](history.md)
 

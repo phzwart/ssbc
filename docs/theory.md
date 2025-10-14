@@ -211,50 +211,35 @@ limited calibration data.
 ## Complete Deployment Workflow
 
 ```python
-from ssbc import (
-    BinaryClassifierSimulator,
-    split_by_class,
-    mondrian_conformal_calibrate,
-    compute_mondrian_operational_bounds,
-    compute_marginal_operational_bounds,
-    report_prediction_stats,
-)
+from ssbc import BinaryClassifierSimulator, generate_rigorous_pac_report
 
 # 1. Generate or load your calibration data
-labels, probs = ...  # shape: (n,), (n, 2)
-class_data = split_by_class(labels, probs)
-
-# 2. Get PAC coverage guarantees with SSBC
-cal_result, pred_stats = mondrian_conformal_calibrate(
-    class_data=class_data,
-    alpha_target=0.10,  # Target 90% coverage
-    delta=0.05,         # 95% PAC confidence
+sim = BinaryClassifierSimulator(
+    p_class1=0.2,
+    beta_params_class0=(1, 7),
+    beta_params_class1=(5, 2),
+    seed=42
 )
+labels, probs = sim.generate(n_samples=100)
 
-# 3. Estimate operational rates with LOO-CV
-per_class_bounds = compute_mondrian_operational_bounds(
-    calibration_result=cal_result,
+# 2. Generate comprehensive PAC report with operational bounds
+report = generate_rigorous_pac_report(
     labels=labels,
     probs=probs,
-    ci_width=0.95,  # 95% confidence intervals
-)
-
-marginal_bounds = compute_marginal_operational_bounds(
-    labels=labels,
-    probs=probs,
-    alpha_target=0.10,
-    delta_coverage=0.05,
-    ci_width=0.95,
-)
-
-# 4. Generate comprehensive deployment report
-report_prediction_stats(
-    prediction_stats=pred_stats,
-    calibration_result=cal_result,
-    operational_bounds_per_class=per_class_bounds,
-    marginal_operational_bounds=marginal_bounds,
+    alpha_target=0.10,     # Target 90% coverage
+    delta=0.10,            # 90% PAC confidence
+    test_size=1000,        # Expected deployment size
+    use_union_bound=True,  # Simultaneous guarantees
     verbose=True,
 )
+
+# 3. Access PAC bounds
+marginal_bounds = report['pac_bounds_marginal']
+class_0_bounds = report['pac_bounds_class_0']
+class_1_bounds = report['pac_bounds_class_1']
+
+print(f"Singleton rate bounds: {marginal_bounds['singleton_rate_bounds']}")
+print(f"Expected singleton rate: {marginal_bounds['expected_singleton_rate']:.3f}")
 ```
 
 ## The Transformation: Theory to Deployment
