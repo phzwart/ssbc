@@ -560,94 +560,81 @@ def compute_mondrian_response_curve(
     }
 
 
-def _evaluate_loo_scenario_marginal(
-    alpha_0: float,
-    alpha_1: float,
+def _evaluate_loo_single_sample_marginal(
+    idx: int,
     labels: np.ndarray,
     probs: np.ndarray,
+    u_star_0: int,
+    u_star_1: int,
 ) -> tuple[int, int, int, int]:
-    """Evaluate LOO-CV for a single (alpha_0, alpha_1) scenario (helper for parallelization).
+    """Evaluate single LOO fold for marginal operational rates.
+    
+    Parameters
+    ----------
+    idx : int
+        Index of held-out sample
+    labels : np.ndarray
+        True labels
+    probs : np.ndarray
+        Predicted probabilities
+    u_star_0 : int
+        FIXED quantile position for class 0 (from SSBC)
+    u_star_1 : int
+        FIXED quantile position for class 1 (from SSBC)
     
     Returns
     -------
     tuple[int, int, int, int]
-        (n_singletons, n_doublets, n_abstentions, n_singletons_correct)
+        (is_singleton, is_doublet, is_abstention, is_singleton_correct)
     """
-    n = len(labels)
-    n_abstentions = 0
-    n_singletons = 0
-    n_doublets = 0
-    n_singletons_correct = 0
-    
-    # Get per-class masks
     mask_0 = labels == 0
     mask_1 = labels == 1
     
-    for idx in range(n):
-        # Compute thresholds leaving out sample idx
-        # Class 0 threshold (leave-one-out)
-        if mask_0[idx]:
-            scores_0_loo = 1.0 - probs[mask_0, 0]
-            mask_0_indices = np.where(mask_0)[0]
-            loo_idx_in_class0 = np.where(mask_0_indices == idx)[0][0]
-            scores_0_loo = np.delete(scores_0_loo, loo_idx_in_class0)
-            n_0_loo = len(scores_0_loo)
-        else:
-            scores_0_loo = 1.0 - probs[mask_0, 0]
-            n_0_loo = len(scores_0_loo)
-        
-        # Class 1 threshold (leave-one-out)
-        if mask_1[idx]:
-            scores_1_loo = 1.0 - probs[mask_1, 1]
-            mask_1_indices = np.where(mask_1)[0]
-            loo_idx_in_class1 = np.where(mask_1_indices == idx)[0][0]
-            scores_1_loo = np.delete(scores_1_loo, loo_idx_in_class1)
-            n_1_loo = len(scores_1_loo)
-        else:
-            scores_1_loo = 1.0 - probs[mask_1, 1]
-            n_1_loo = len(scores_1_loo)
-        
-        # Compute thresholds at (alpha_0, alpha_1) for this LOO fold
-        k_0_loo = int(np.ceil((n_0_loo + 1) * (1 - alpha_0)))
-        k_0_loo = min(k_0_loo, n_0_loo)
-        k_0_loo = max(k_0_loo, 1)
-        
-        k_1_loo = int(np.ceil((n_1_loo + 1) * (1 - alpha_1)))
-        k_1_loo = min(k_1_loo, n_1_loo)
-        k_1_loo = max(k_1_loo, 1)
-        
-        sorted_scores_0_loo = np.sort(scores_0_loo)
-        sorted_scores_1_loo = np.sort(scores_1_loo)
-        
-        threshold_0_loo = sorted_scores_0_loo[k_0_loo - 1]
-        threshold_1_loo = sorted_scores_1_loo[k_1_loo - 1]
-        
-        # Evaluate on held-out sample idx
-        score_0 = 1.0 - probs[idx, 0]
-        score_1 = 1.0 - probs[idx, 1]
-        true_label = labels[idx]
-        
-        in_0 = score_0 <= threshold_0_loo
-        in_1 = score_1 <= threshold_1_loo
-        
-        # Build prediction set
-        pred_set = []
-        if in_0:
-            pred_set.append(0)
-        if in_1:
-            pred_set.append(1)
-        
-        # Count by set size
-        if len(pred_set) == 0:
-            n_abstentions += 1
-        elif len(pred_set) == 1:
-            n_singletons += 1
-            if true_label in pred_set:
-                n_singletons_correct += 1
-        else:  # len == 2
-            n_doublets += 1
+    # Compute LOO thresholds (using FIXED u_star positions)
+    # Class 0
+    if mask_0[idx]:
+        scores_0_loo = 1.0 - probs[mask_0, 0]
+        mask_0_idx = np.where(mask_0)[0]
+        loo_position = np.where(mask_0_idx == idx)[0][0]
+        scores_0_loo = np.delete(scores_0_loo, loo_position)
+    else:
+        scores_0_loo = 1.0 - probs[mask_0, 0]
     
-    return n_singletons, n_doublets, n_abstentions, n_singletons_correct
+    sorted_0_loo = np.sort(scores_0_loo)
+    threshold_0_loo = sorted_0_loo[min(u_star_0 - 1, len(sorted_0_loo) - 1)]
+    
+    # Class 1
+    if mask_1[idx]:
+        scores_1_loo = 1.0 - probs[mask_1, 1]
+        mask_1_idx = np.where(mask_1)[0]
+        loo_position = np.where(mask_1_idx == idx)[0][0]
+        scores_1_loo = np.delete(scores_1_loo, loo_position)
+    else:
+        scores_1_loo = 1.0 - probs[mask_1, 1]
+    
+    sorted_1_loo = np.sort(scores_1_loo)
+    threshold_1_loo = sorted_1_loo[min(u_star_1 - 1, len(sorted_1_loo) - 1)]
+    
+    # Evaluate on held-out sample
+    score_0 = 1.0 - probs[idx, 0]
+    score_1 = 1.0 - probs[idx, 1]
+    true_label = labels[idx]
+    
+    in_0 = score_0 <= threshold_0_loo
+    in_1 = score_1 <= threshold_1_loo
+    
+    # Determine prediction set type
+    if in_0 and in_1:
+        is_singleton, is_doublet, is_abstention = 0, 1, 0
+        is_singleton_correct = 0
+    elif in_0 or in_1:
+        is_singleton, is_doublet, is_abstention = 1, 0, 0
+        is_singleton_correct = 1 if (in_0 and true_label == 0) or (in_1 and true_label == 1) else 0
+    else:
+        is_singleton, is_doublet, is_abstention = 0, 0, 1
+        is_singleton_correct = 0
+    
+    return is_singleton, is_doublet, is_abstention, is_singleton_correct
 
 
 def compute_pac_operational_bounds_marginal(
@@ -661,18 +648,19 @@ def compute_pac_operational_bounds_marginal(
     use_union_bound: bool = True,
     n_jobs: int = 1,
 ) -> dict[str, float | list]:
-    """Compute marginal PAC-controlled operational bounds with coverage volatility.
+    """Compute marginal operational bounds for FIXED calibration via LOO-CV.
 
     Framework:
-    1. User chooses α₀, δ₀, α₁, δ₁
-    2. SSBC finds α_adj_0, α_adj_1
-    3. BetaBinomial induces P(α_realized_0), P(α_realized_1)
-    4. For each (α_realized_0, α_realized_1):
-       - Compute operational metrics on calibration data
-       - Get CP bounds for abstentions, singletons, doublets
-       - Compute singleton error rate with CP bounds
-    5. Marginalize over joint coverage distribution
-    6. Use union bound for simultaneous PAC guarantees
+    1. Calibration → Fixed thresholds (q̂₀, q̂₁) from SSBC
+    2. LOO-CV to get unbiased rate estimates on calibration data
+    3. Apply Clopper-Pearson for test set sampling volatility
+    4. Optional union bound for simultaneous guarantees
+
+    This models: "Given fixed calibration, what are rate distributions on future test sets?"
+    NOT: "What if we recalibrate?" (that's a different question)
+    
+    NOTE: The test_size and pac_level parameters are kept for API compatibility but are
+    not used in the simplified approach. The pac_level is implicitly ci_level.
 
     Parameters
     ----------
@@ -724,9 +712,14 @@ def compute_pac_operational_bounds_marginal(
     - All 4 metrics' bounds hold SIMULTANEOUSLY with probability ≥ pac_level
     - Uses Bonferroni: adjusted_pac_level = 1 - (1-pac_level)/4 per metric
     """
-    # Get coverage distributions for both classes
-    cov_dist_0 = compute_coverage_distribution(ssbc_result_0, test_size)
-    cov_dist_1 = compute_coverage_distribution(ssbc_result_1, test_size)
+    # Simplified approach: LOO-CV with FIXED u_star positions from SSBC
+    # Models test set sampling volatility for fixed calibration
+    
+    from joblib import Parallel, delayed
+    
+    n = len(labels)
+    u_star_0 = ssbc_result_0.u_star
+    u_star_1 = ssbc_result_1.u_star
 
     # Convert to alpha values
     alpha_from_cov_0 = 1.0 - cov_dist_0["coverage_values"]

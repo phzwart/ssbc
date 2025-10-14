@@ -154,24 +154,35 @@ def compute_pac_operational_bounds_marginal(
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
     
     # Apply CP bounds with optional union bound correction
+    # CRITICAL: Use test_size for intervals (not calibration n)
+    # This gives wider intervals for smaller test sets
     n_metrics = 4
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
         adjusted_ci_level = ci_level
     
-    singleton_lower = clopper_pearson_lower(n_singletons, n, adjusted_ci_level)
-    singleton_upper = clopper_pearson_upper(n_singletons, n, adjusted_ci_level)
+    # Scale point estimates to test_size
+    k_singleton_test = int(np.round(singleton_rate * test_size))
+    k_doublet_test = int(np.round(doublet_rate * test_size))
+    k_abstention_test = int(np.round(abstention_rate * test_size))
     
-    doublet_lower = clopper_pearson_lower(n_doublets, n, adjusted_ci_level)
-    doublet_upper = clopper_pearson_upper(n_doublets, n, adjusted_ci_level)
+    singleton_lower = clopper_pearson_lower(k_singleton_test, test_size, adjusted_ci_level)
+    singleton_upper = clopper_pearson_upper(k_singleton_test, test_size, adjusted_ci_level)
     
-    abstention_lower = clopper_pearson_lower(n_abstentions, n, adjusted_ci_level)
-    abstention_upper = clopper_pearson_upper(n_abstentions, n, adjusted_ci_level)
+    doublet_lower = clopper_pearson_lower(k_doublet_test, test_size, adjusted_ci_level)
+    doublet_upper = clopper_pearson_upper(k_doublet_test, test_size, adjusted_ci_level)
     
-    if n_singletons > 0:
-        error_lower = clopper_pearson_lower(n_errors, n_singletons, adjusted_ci_level)
-        error_upper = clopper_pearson_upper(n_errors, n_singletons, adjusted_ci_level)
+    abstention_lower = clopper_pearson_lower(k_abstention_test, test_size, adjusted_ci_level)
+    abstention_upper = clopper_pearson_upper(k_abstention_test, test_size, adjusted_ci_level)
+    
+    # Singleton error rate (conditioned on singletons, so use singleton count as base)
+    k_singletons_test = k_singleton_test
+    k_errors_test = int(np.round(singleton_error_rate * k_singletons_test))
+    
+    if k_singletons_test > 0:
+        error_lower = clopper_pearson_lower(k_errors_test, k_singletons_test, adjusted_ci_level)
+        error_upper = clopper_pearson_upper(k_errors_test, k_singletons_test, adjusted_ci_level)
     else:
         error_lower = 0.0
         error_upper = 1.0
@@ -309,35 +320,50 @@ def compute_pac_operational_bounds_perclass(
     n_abstentions = int(np.sum(results_array[:, 2]))
     n_singletons_correct = int(np.sum(results_array[:, 3]))
     
-    # Number of class_label samples
-    n_class = np.sum(labels == class_label)
+    # Number of class_label samples in calibration
+    n_class_cal = np.sum(labels == class_label)
+    n_total = len(labels)
     
     # Point estimates
-    singleton_rate = n_singletons / n_class
-    doublet_rate = n_doublets / n_class
-    abstention_rate = n_abstentions / n_class
+    singleton_rate = n_singletons / n_class_cal
+    doublet_rate = n_doublets / n_class_cal
+    abstention_rate = n_abstentions / n_class_cal
     n_errors = n_singletons - n_singletons_correct
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
     
     # Apply CP bounds with optional union bound correction
+    # CRITICAL: Scale to expected class size in test set
+    # Expected class_label samples in test set = test_size * (n_class_cal / n_total)
+    class_proportion = n_class_cal / n_total
+    test_size_class = int(np.round(test_size * class_proportion))
+    
     n_metrics = 4
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
         adjusted_ci_level = ci_level
     
-    singleton_lower = clopper_pearson_lower(n_singletons, n_class, adjusted_ci_level)
-    singleton_upper = clopper_pearson_upper(n_singletons, n_class, adjusted_ci_level)
+    # Scale point estimates to test_size_class
+    k_singleton_test = int(np.round(singleton_rate * test_size_class))
+    k_doublet_test = int(np.round(doublet_rate * test_size_class))
+    k_abstention_test = int(np.round(abstention_rate * test_size_class))
     
-    doublet_lower = clopper_pearson_lower(n_doublets, n_class, adjusted_ci_level)
-    doublet_upper = clopper_pearson_upper(n_doublets, n_class, adjusted_ci_level)
+    singleton_lower = clopper_pearson_lower(k_singleton_test, test_size_class, adjusted_ci_level)
+    singleton_upper = clopper_pearson_upper(k_singleton_test, test_size_class, adjusted_ci_level)
     
-    abstention_lower = clopper_pearson_lower(n_abstentions, n_class, adjusted_ci_level)
-    abstention_upper = clopper_pearson_upper(n_abstentions, n_class, adjusted_ci_level)
+    doublet_lower = clopper_pearson_lower(k_doublet_test, test_size_class, adjusted_ci_level)
+    doublet_upper = clopper_pearson_upper(k_doublet_test, test_size_class, adjusted_ci_level)
     
-    if n_singletons > 0:
-        error_lower = clopper_pearson_lower(n_errors, n_singletons, adjusted_ci_level)
-        error_upper = clopper_pearson_upper(n_errors, n_singletons, adjusted_ci_level)
+    abstention_lower = clopper_pearson_lower(k_abstention_test, test_size_class, adjusted_ci_level)
+    abstention_upper = clopper_pearson_upper(k_abstention_test, test_size_class, adjusted_ci_level)
+    
+    # Singleton error rate (conditioned on singletons)
+    k_singletons_test = k_singleton_test
+    k_errors_test = int(np.round(singleton_error_rate * k_singletons_test))
+    
+    if k_singletons_test > 0:
+        error_lower = clopper_pearson_lower(k_errors_test, k_singletons_test, adjusted_ci_level)
+        error_upper = clopper_pearson_upper(k_errors_test, k_singletons_test, adjusted_ci_level)
     else:
         error_lower = 0.0
         error_upper = 1.0
@@ -354,7 +380,7 @@ def compute_pac_operational_bounds_perclass(
         "n_grid_points": 1,
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
-        "test_size": n_class,
+        "test_size": test_size_class,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
     }
