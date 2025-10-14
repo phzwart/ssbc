@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-license = "MIT"
+license = "BSD"
 dependencies = [
   "joblib",
   "matplotlib",
