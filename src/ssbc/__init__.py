@@ -31,6 +31,12 @@ from .bootstrap import (
     plot_bootstrap_distributions,
 )
 
+# Cross-conformal validation
+from .cross_conformal import (
+    cross_conformal_validation,
+    print_cross_conformal_results,
+)
+
 # Visualization and reporting
 from .rigorous_report import (
     generate_rigorous_pac_report,
@@ -95,6 +101,9 @@ __all__ = [
     # Bootstrap uncertainty
     "bootstrap_calibration_uncertainty",
     "plot_bootstrap_distributions",
+    # Cross-conformal validation
+    "cross_conformal_validation",
+    "print_cross_conformal_results",
     # Rigorous reporting
     "generate_rigorous_pac_report",
     # Hyperparameter
