@@ -1,0 +1,29 @@
+# Ignore generated output files
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
+
+# Ignore data files
+*.csv
+*.npz
+*.npy
+*.pkl
+*.pickle
+
+# Ignore Jupyter notebook outputs and checkpoints
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# Ignore temporary files
+Untitled*.ipynb
+temp*.py
+test*.py
+scratch*.py
+
+# Ignore any build or cache directories
+__pycache__/
+*.pyc
+.pytest_cache/
+
