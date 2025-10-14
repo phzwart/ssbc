@@ -11,6 +11,7 @@ import numpy as np
 from .bootstrap import bootstrap_calibration_uncertainty
 from .conformal import mondrian_conformal_calibrate, split_by_class
 from .core import ssbc_correct
+from .cross_conformal import cross_conformal_validation
 from .operational_bounds_simple import (
     compute_pac_operational_bounds_marginal,
     compute_pac_operational_bounds_perclass,
@@ -30,6 +31,8 @@ def generate_rigorous_pac_report(
     run_bootstrap: bool = False,
     n_bootstrap: int = 1000,
     simulator: Any = None,
+    run_cross_conformal: bool = False,
+    n_folds: int = 10,
 ) -> dict[str, Any]:
     """Generate complete rigorous PAC report with coverage volatility.
 
@@ -69,6 +72,10 @@ def generate_rigorous_pac_report(
         Number of bootstrap trials (only if run_bootstrap=True)
     simulator : DataGenerator, optional
         Simulator for generating fresh test sets (required if run_bootstrap=True)
+    run_cross_conformal : bool, default=False
+        Run cross-conformal validation for finite-sample diagnostics
+    n_folds : int, default=10
+        Number of folds for cross-conformal validation (only if run_cross_conformal=True)
 
     Returns
     -------
@@ -220,6 +227,26 @@ def generate_rigorous_pac_report(
             seed=None,
         )
 
+    # Cross-conformal validation for finite-sample diagnostics (optional)
+    cross_conformal_results = None
+    if run_cross_conformal:
+        if verbose:
+            print("\n" + "=" * 80)
+            print("CROSS-CONFORMAL VALIDATION")
+            print("=" * 80)
+            print(f"\nRunning {n_folds}-fold cross-conformal validation...")
+            print(f"  Calibration size: n={len(labels)}")
+
+        cross_conformal_results = cross_conformal_validation(
+            labels=labels,
+            probs=probs,
+            alpha_target=alpha_dict[0],  # Use class 0 alpha
+            delta=delta_dict[0],  # Use class 0 delta
+            n_folds=n_folds,
+            stratify=True,
+            seed=None,
+        )
+
     # Build comprehensive report dict
     report = {
         "ssbc_class_0": ssbc_result_0,
@@ -230,6 +257,7 @@ def generate_rigorous_pac_report(
         "calibration_result": cal_result,
         "prediction_stats": pred_stats,
         "bootstrap_results": bootstrap_results,
+        "cross_conformal_results": cross_conformal_results,
         "parameters": {
             "alpha_target": alpha_dict,
             "delta": delta_dict,
@@ -241,6 +269,8 @@ def generate_rigorous_pac_report(
             "use_union_bound": use_union_bound,
             "run_bootstrap": run_bootstrap,
             "n_bootstrap": n_bootstrap if run_bootstrap else None,
+            "run_cross_conformal": run_cross_conformal,
+            "n_folds": n_folds if run_cross_conformal else None,
         },
     }
 
@@ -488,6 +518,51 @@ def _print_rigorous_report(report: dict) -> None:
                 print(f"  Median:    {q['q50']:.4f}")
                 print(f"  [5%, 95%]: [{q['q05']:.4f}, {q['q95']:.4f}]")
 
+    # Cross-conformal results if available
+    if report["cross_conformal_results"] is not None:
+        cross_conf = report["cross_conformal_results"]
+        print("\n" + "=" * 80)
+        print("CROSS-CONFORMAL VALIDATION")
+        print(f"({cross_conf['n_folds']}-fold, n={cross_conf['n_samples']})")
+        print("=" * 80)
+        print("\nModels: 'How stable are rates across different calibration subsets?'")
+        print("Method: K-fold split → train on K-1 → test on 1 fold\n")
+
+        # Marginal
+        print("-" * 80)
+        print("MARGINAL")
+        print("-" * 80)
+        for metric, name in [
+            ("singleton", "SINGLETON"),
+            ("doublet", "DOUBLET"),
+            ("abstention", "ABSTENTION"),
+            ("singleton_error", "SINGLETON ERROR"),
+        ]:
+            m = cross_conf["marginal"][metric]
+            q = m["quantiles"]
+            print(f"\n{name}:")
+            print(f"  Mean across folds: {m['mean']:.4f} ± {m['std']:.4f}")
+            print(f"  Median:            {q['q50']:.4f}")
+            print(f"  [5%, 95%] range:   [{q['q05']:.4f}, {q['q95']:.4f}]")
+
+        # Per-class
+        for class_label in [0, 1]:
+            print(f"\n{'-' * 80}")
+            print(f"CLASS {class_label}")
+            print("-" * 80)
+            for metric, name in [
+                ("singleton", "SINGLETON"),
+                ("doublet", "DOUBLET"),
+                ("abstention", "ABSTENTION"),
+                ("singleton_error", "SINGLETON ERROR"),
+            ]:
+                m = cross_conf[f"class_{class_label}"][metric]
+                q = m["quantiles"]
+                print(f"\n{name}:")
+                print(f"  Mean across folds: {m['mean']:.4f} ± {m['std']:.4f}")
+                print(f"  Median:            {q['q50']:.4f}")
+                print(f"  [5%, 95%] range:   [{q['q05']:.4f}, {q['q95']:.4f}]")
+
     print("\n" + "=" * 80)
     print("NOTES")
     print("=" * 80)
@@ -500,9 +575,22 @@ def _print_rigorous_report(report: dict) -> None:
         print("  • Show recalibration uncertainty (wider than PAC bounds)")
         print("  • Models: 'If I recalibrate on similar data, how do rates vary?'")
         print("  • Complementary to PAC bounds - different question!")
+    if report["cross_conformal_results"] is not None:
+        print("\n✓ CROSS-CONFORMAL VALIDATION:")
+        print("  • Shows rate stability across K-fold calibration splits")
+        print("  • Models: 'How stable are rates across calibration subsets?'")
+        print("  • Use for: Finite-sample diagnostics, sample size planning")
+        print("  • Large std → need more calibration data")
     print("\n✓ TECHNICAL DETAILS:")
     print("  • LOO-CV for unbiased rate estimates (no data leakage)")
     print("  • Clopper-Pearson intervals account for estimation uncertainty")
     if params["use_union_bound"]:
         print("  • Union bound ensures ALL metrics hold simultaneously")
+    if report["bootstrap_results"] is not None or report["cross_conformal_results"] is not None:
+        print("\n✓ ALL METHODS ARE COMPLEMENTARY:")
+        print("  • Use PAC bounds for deployment (rigorous guarantees)")
+        if report["bootstrap_results"] is not None:
+            print("  • Use Bootstrap to understand recalibration impact")
+        if report["cross_conformal_results"] is not None:
+            print("  • Use Cross-Conformal to diagnose calibration quality")
     print("\n" + "=" * 80)
