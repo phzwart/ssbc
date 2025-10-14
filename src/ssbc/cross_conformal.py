@@ -284,7 +284,7 @@ def cross_conformal_validation(
     # Aggregate statistics
     metrics = ["abstention", "singleton", "doublet", "singleton_error"]
 
-    def compute_stats(values: list[float], metric_name: str) -> dict:
+    def compute_stats(values: list[float], metric_name: str) -> dict[str, Any]:
         """Compute statistics for a metric across folds."""
         arr = np.array(values)
         valid = arr[~np.isnan(arr)]
@@ -298,25 +298,27 @@ def cross_conformal_validation(
                 "ci_95": {"lower": np.nan, "upper": np.nan},
             }
 
+        quantiles = {
+            "q05": float(np.percentile(valid, 5)),
+            "q25": float(np.percentile(valid, 25)),
+            "q50": float(np.percentile(valid, 50)),
+            "q75": float(np.percentile(valid, 75)),
+            "q95": float(np.percentile(valid, 95)),
+        }
+
         stats = {
             "samples": arr,
-            "mean": np.mean(valid),
-            "std": np.std(valid, ddof=1) if len(valid) > 1 else 0.0,
-            "quantiles": {
-                "q05": np.percentile(valid, 5),
-                "q25": np.percentile(valid, 25),
-                "q50": np.percentile(valid, 50),
-                "q75": np.percentile(valid, 75),
-                "q95": np.percentile(valid, 95),
-            },
+            "mean": float(np.mean(valid)),
+            "std": float(np.std(valid, ddof=1)) if len(valid) > 1 else 0.0,
+            "quantiles": quantiles,
         }
 
         # Add empirical CI based on fold distribution (binomial-like but for fold means)
         # This is approximate - treats fold means as if they were Bernoulli trials
         # Better: just use quantiles, but keeping for compatibility
         stats["ci_95"] = {
-            "lower": stats["quantiles"]["q05"],
-            "upper": stats["quantiles"]["q95"],
+            "lower": quantiles["q05"],
+            "upper": quantiles["q95"],
         }
 
         return stats

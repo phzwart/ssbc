@@ -5,7 +5,6 @@ import pytest
 
 from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
 from ssbc.simulation import BinaryClassifierSimulator
-from ssbc.sla import compute_marginal_operational_bounds, compute_mondrian_operational_bounds
 from ssbc.visualization import plot_parallel_coordinates_plotly, report_prediction_stats
 
 
@@ -60,35 +59,9 @@ class TestReportPredictionStats:
         assert 0 in summary
         assert 1 in summary
 
-    def test_with_operational_bounds(self, sample_data):
-        """Test report with operational bounds."""
-        cal_result, pred_stats, labels, probs = sample_data
-
-        # Compute operational bounds
-        op_bounds = compute_mondrian_operational_bounds(cal_result, labels, probs)
-
-        summary = report_prediction_stats(pred_stats, cal_result, op_bounds, verbose=False)
-
-        # Check operational bounds are in summary
-        assert 0 in summary
-        assert 1 in summary
-        if "operational_bounds" in summary[0]:
-            assert summary[0]["operational_bounds"] is not None
-
-    def test_with_marginal_bounds(self, sample_data, capsys):
-        """Test report with marginal operational bounds."""
-        cal_result, pred_stats, labels, probs = sample_data
-
-        # Compute marginal bounds
-        marginal_bounds = compute_marginal_operational_bounds(labels, probs, alpha_target=0.1, delta_coverage=0.1)
-
-        summary = report_prediction_stats(
-            pred_stats, cal_result, marginal_operational_bounds=marginal_bounds, verbose=True
-        )
-
-        captured = capsys.readouterr()
-        assert "MARGINAL STATISTICS" in captured.out
-        assert "marginal_bounds" in summary
+    # Note: Tests for operational bounds moved to test_rigorous_report.py
+    # The old compute_mondrian_operational_bounds and compute_marginal_operational_bounds
+    # have been removed in favor of the unified generate_rigorous_pac_report() workflow
 
     def test_handles_missing_data_gracefully(self):
         """Test that function handles missing/incomplete data."""
