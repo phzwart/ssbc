@@ -15,12 +15,12 @@ def _evaluate_loo_single_sample_marginal(
     k_1: int,
 ) -> tuple[int, int, int, int]:
     """Evaluate single LOO fold for marginal operational rates.
-    
+
     Parameters
     ----------
     k_0, k_1 : int
         Quantile positions (1-indexed) from SSBC calibration
-    
+
     Returns
     -------
     tuple[int, int, int, int]
@@ -28,7 +28,7 @@ def _evaluate_loo_single_sample_marginal(
     """
     mask_0 = labels == 0
     mask_1 = labels == 1
-    
+
     # Compute LOO thresholds (using FIXED k positions)
     # Class 0
     if mask_0[idx]:
@@ -38,10 +38,10 @@ def _evaluate_loo_single_sample_marginal(
         scores_0_loo = np.delete(scores_0_loo, loo_position)
     else:
         scores_0_loo = 1.0 - probs[mask_0, 0]
-    
+
     sorted_0_loo = np.sort(scores_0_loo)
     threshold_0_loo = sorted_0_loo[min(k_0 - 1, len(sorted_0_loo) - 1)]
-    
+
     # Class 1
     if mask_1[idx]:
         scores_1_loo = 1.0 - probs[mask_1, 1]
@@ -50,18 +50,18 @@ def _evaluate_loo_single_sample_marginal(
         scores_1_loo = np.delete(scores_1_loo, loo_position)
     else:
         scores_1_loo = 1.0 - probs[mask_1, 1]
-    
+
     sorted_1_loo = np.sort(scores_1_loo)
     threshold_1_loo = sorted_1_loo[min(k_1 - 1, len(sorted_1_loo) - 1)]
-    
+
     # Evaluate on held-out sample
     score_0 = 1.0 - probs[idx, 0]
     score_1 = 1.0 - probs[idx, 1]
     true_label = labels[idx]
-    
+
     in_0 = score_0 <= threshold_0_loo
     in_1 = score_1 <= threshold_1_loo
-    
+
     # Determine prediction set type
     if in_0 and in_1:
         is_singleton, is_doublet, is_abstention = 0, 1, 0
@@ -72,7 +72,7 @@ def _evaluate_loo_single_sample_marginal(
     else:
         is_singleton, is_doublet, is_abstention = 0, 0, 1
         is_singleton_correct = 0
-    
+
     return is_singleton, is_doublet, is_abstention, is_singleton_correct
 
 
@@ -125,54 +125,53 @@ def compute_pac_operational_bounds_marginal(
         - 'expected_*_rate': point estimates
     """
     n = len(labels)
-    
+
     # Compute k (quantile position) from SSBC-corrected alpha
     # k = ceil((n_class + 1) * (1 - alpha_corrected))
     n_0 = ssbc_result_0.n
     n_1 = ssbc_result_1.n
     k_0 = int(np.ceil((n_0 + 1) * (1 - ssbc_result_0.alpha_corrected)))
     k_1 = int(np.ceil((n_1 + 1) * (1 - ssbc_result_1.alpha_corrected)))
-    
+
     # Parallel LOO-CV: evaluate each sample
     results = Parallel(n_jobs=n_jobs)(
-        delayed(_evaluate_loo_single_sample_marginal)(idx, labels, probs, k_0, k_1)
-        for idx in range(n)
+        delayed(_evaluate_loo_single_sample_marginal)(idx, labels, probs, k_0, k_1) for idx in range(n)
     )
-    
+
     # Aggregate results
     results_array = np.array(results)
     n_singletons = int(np.sum(results_array[:, 0]))
     n_doublets = int(np.sum(results_array[:, 1]))
     n_abstentions = int(np.sum(results_array[:, 2]))
     n_singletons_correct = int(np.sum(results_array[:, 3]))
-    
+
     # Point estimates
     singleton_rate = n_singletons / n
     doublet_rate = n_doublets / n
     abstention_rate = n_abstentions / n
     n_errors = n_singletons - n_singletons_correct
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
-    
+
     # Apply CP bounds from calibration counts
     # These bound the TRUE rate p (valid for any future test set size)
     # No need to scale - CP interval already accounts for estimation uncertainty
-    
+
     n_metrics = 4
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
         adjusted_ci_level = ci_level
-    
+
     # Use calibration counts directly
     singleton_lower = clopper_pearson_lower(n_singletons, n, adjusted_ci_level)
     singleton_upper = clopper_pearson_upper(n_singletons, n, adjusted_ci_level)
-    
+
     doublet_lower = clopper_pearson_lower(n_doublets, n, adjusted_ci_level)
     doublet_upper = clopper_pearson_upper(n_doublets, n, adjusted_ci_level)
-    
+
     abstention_lower = clopper_pearson_lower(n_abstentions, n, adjusted_ci_level)
     abstention_upper = clopper_pearson_upper(n_abstentions, n, adjusted_ci_level)
-    
+
     # Singleton error (conditioned on singletons)
     if n_singletons > 0:
         error_lower = clopper_pearson_lower(n_errors, n_singletons, adjusted_ci_level)
@@ -180,7 +179,7 @@ def compute_pac_operational_bounds_marginal(
     else:
         error_lower = 0.0
         error_upper = 1.0
-    
+
     return {
         "singleton_rate_bounds": [singleton_lower, singleton_upper],
         "doublet_rate_bounds": [doublet_lower, doublet_upper],
@@ -208,7 +207,7 @@ def _evaluate_loo_single_sample_perclass(
     class_label: int,
 ) -> tuple[int, int, int, int]:
     """Evaluate single LOO fold for per-class operational rates.
-    
+
     Returns
     -------
     tuple[int, int, int, int]
@@ -217,10 +216,10 @@ def _evaluate_loo_single_sample_perclass(
     # Only evaluate if sample is from class_label
     if labels[idx] != class_label:
         return 0, 0, 0, 0
-    
+
     mask_0 = labels == 0
     mask_1 = labels == 1
-    
+
     # Compute LOO thresholds
     # Class 0
     if mask_0[idx]:
@@ -230,10 +229,10 @@ def _evaluate_loo_single_sample_perclass(
         scores_0_loo = np.delete(scores_0_loo, loo_position)
     else:
         scores_0_loo = 1.0 - probs[mask_0, 0]
-    
+
     sorted_0_loo = np.sort(scores_0_loo)
     threshold_0_loo = sorted_0_loo[min(k_0 - 1, len(sorted_0_loo) - 1)]
-    
+
     # Class 1
     if mask_1[idx]:
         scores_1_loo = 1.0 - probs[mask_1, 1]
@@ -242,18 +241,18 @@ def _evaluate_loo_single_sample_perclass(
         scores_1_loo = np.delete(scores_1_loo, loo_position)
     else:
         scores_1_loo = 1.0 - probs[mask_1, 1]
-    
+
     sorted_1_loo = np.sort(scores_1_loo)
     threshold_1_loo = sorted_1_loo[min(k_1 - 1, len(sorted_1_loo) - 1)]
-    
+
     # Evaluate on held-out sample
     score_0 = 1.0 - probs[idx, 0]
     score_1 = 1.0 - probs[idx, 1]
     true_label = labels[idx]
-    
+
     in_0 = score_0 <= threshold_0_loo
     in_1 = score_1 <= threshold_1_loo
-    
+
     # Determine prediction set type
     if in_0 and in_1:
         is_singleton, is_doublet, is_abstention = 0, 1, 0
@@ -264,7 +263,7 @@ def _evaluate_loo_single_sample_perclass(
     else:
         is_singleton, is_doublet, is_abstention = 0, 0, 1
         is_singleton_correct = 0
-    
+
     return is_singleton, is_doublet, is_abstention, is_singleton_correct
 
 
@@ -286,7 +285,7 @@ def compute_pac_operational_bounds_perclass(
     ----------
     class_label : int
         Which class to analyze (0 or 1)
-    
+
     Other parameters same as marginal version.
 
     Returns
@@ -299,51 +298,49 @@ def compute_pac_operational_bounds_perclass(
     n_1 = ssbc_result_1.n
     k_0 = int(np.ceil((n_0 + 1) * (1 - ssbc_result_0.alpha_corrected)))
     k_1 = int(np.ceil((n_1 + 1) * (1 - ssbc_result_1.alpha_corrected)))
-    
+
     # Parallel LOO-CV: evaluate each sample
     n = len(labels)
     results = Parallel(n_jobs=n_jobs)(
-        delayed(_evaluate_loo_single_sample_perclass)(idx, labels, probs, k_0, k_1, class_label)
-        for idx in range(n)
+        delayed(_evaluate_loo_single_sample_perclass)(idx, labels, probs, k_0, k_1, class_label) for idx in range(n)
     )
-    
+
     # Aggregate results (only from class_label samples)
     results_array = np.array(results)
     n_singletons = int(np.sum(results_array[:, 0]))
     n_doublets = int(np.sum(results_array[:, 1]))
     n_abstentions = int(np.sum(results_array[:, 2]))
     n_singletons_correct = int(np.sum(results_array[:, 3]))
-    
+
     # Number of class_label samples in calibration
     n_class_cal = np.sum(labels == class_label)
-    n_total = len(labels)
-    
+
     # Point estimates
     singleton_rate = n_singletons / n_class_cal
     doublet_rate = n_doublets / n_class_cal
     abstention_rate = n_abstentions / n_class_cal
     n_errors = n_singletons - n_singletons_correct
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
-    
+
     # Apply CP bounds from calibration counts
     # These bound the TRUE rate p (valid for any future test set size)
-    
+
     n_metrics = 4
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
         adjusted_ci_level = ci_level
-    
+
     # Use calibration counts directly
     singleton_lower = clopper_pearson_lower(n_singletons, n_class_cal, adjusted_ci_level)
     singleton_upper = clopper_pearson_upper(n_singletons, n_class_cal, adjusted_ci_level)
-    
+
     doublet_lower = clopper_pearson_lower(n_doublets, n_class_cal, adjusted_ci_level)
     doublet_upper = clopper_pearson_upper(n_doublets, n_class_cal, adjusted_ci_level)
-    
+
     abstention_lower = clopper_pearson_lower(n_abstentions, n_class_cal, adjusted_ci_level)
     abstention_upper = clopper_pearson_upper(n_abstentions, n_class_cal, adjusted_ci_level)
-    
+
     # Singleton error (conditioned on singletons)
     if n_singletons > 0:
         error_lower = clopper_pearson_lower(n_errors, n_singletons, adjusted_ci_level)
@@ -351,7 +348,7 @@ def compute_pac_operational_bounds_perclass(
     else:
         error_lower = 0.0
         error_upper = 1.0
-    
+
     return {
         "singleton_rate_bounds": [singleton_lower, singleton_upper],
         "doublet_rate_bounds": [doublet_lower, doublet_upper],
@@ -368,5 +365,3 @@ def compute_pac_operational_bounds_perclass(
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
     }
-
-

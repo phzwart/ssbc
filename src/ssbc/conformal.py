@@ -391,8 +391,6 @@ def alpha_scan(
     >>> df = alpha_scan(labels, probs)
     >>> print(df.head())
     """
-    n = len(labels)
-
     # Split data by class
     class_data = split_by_class(labels, probs)
 
@@ -410,10 +408,6 @@ def alpha_scan(
     # Generate all unique alpha values from possible threshold combinations
     # For each class, we can choose any position in the sorted scores
     results = []
-
-    # Combine all unique scores from both classes to create a comprehensive scan
-    all_unique_scores_0 = np.unique(scores_by_class[0]) if len(scores_by_class[0]) > 0 else np.array([0.0, 1.0])
-    all_unique_scores_1 = np.unique(scores_by_class[1]) if len(scores_by_class[1]) > 0 else np.array([0.0, 1.0])
 
     # For each class, scan through all possible k values (quantile positions)
     n_0 = class_data[0]["n"]
@@ -791,7 +785,6 @@ def compute_pac_operational_metrics(
 
         # LOO-CV: for each point i, compute threshold without it
         n_singletons_loo = 0
-        n_doublets_loo = 0
         n_abstentions_loo = 0
 
         for i in range(n):

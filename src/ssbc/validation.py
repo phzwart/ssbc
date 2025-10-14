@@ -397,12 +397,13 @@ def print_validation_results(validation: dict[str, Any]) -> None:
             print(f"\n{metric.upper().replace('_', ' ')}:")
             print(f"  Empirical mean: {m['mean']:.4f}")
             print(f"  Expected (LOO): {m['expected']:.4f}")
-            print(f"  Quantiles:      [5%: {q['q05']:.3f}, 25%: {q['q25']:.3f}, 50%: {q['q50']:.3f}, 75%: {q['q75']:.3f}, 95%: {q['q95']:.3f}]")
+            q_str = f"[5%: {q['q05']:.3f}, 25%: {q['q25']:.3f}, 50%: {q['q50']:.3f}, "
+            q_str += f"75%: {q['q75']:.3f}, 95%: {q['q95']:.3f}]"
+            print(f"  Quantiles:      {q_str}")
             print(f"  PAC bounds:     [{m['bounds'][0]:.4f}, {m['bounds'][1]:.4f}]")
             if not np.isnan(coverage):
                 print(f"  Coverage:       {coverage:.1%} {coverage_check}")
             else:
-                print(f"  Coverage:       N/A (no valid samples)")
+                print("  Coverage:       N/A (no valid samples)")
 
     print("\n" + "=" * 80)
-

@@ -9,6 +9,7 @@ Updated for v0.2.0: Uses unified generate_rigorous_pac_report() workflow.
 """
 
 import numpy as np
+
 from ssbc import BinaryClassifierSimulator, generate_rigorous_pac_report
 
 # Simulate a classifier for deployment
@@ -36,7 +37,7 @@ ALPHA_TARGET = 0.10  # Maximum 10% miscoverage
 DELTA = 0.05  # 95% PAC confidence (1 - δ)
 TEST_SIZE = 1000  # Expected deployment test set size
 
-print(f"\nSLA Requirements:")
+print("\nSLA Requirements:")
 print(f"  Maximum miscoverage: {ALPHA_TARGET:.1%}")
 print(f"  PAC confidence: {1-DELTA:.0%} (δ = {DELTA})")
 print(f"  Expected test set size: {TEST_SIZE}")
@@ -74,17 +75,17 @@ doublet_lower, doublet_upper = marginal_bounds["doublet_rate_bounds"]
 abstention_lower, abstention_upper = marginal_bounds["abstention_rate_bounds"]
 error_lower, error_upper = marginal_bounds["singleton_error_rate_bounds"]
 
-print(f"\n   AUTOMATION RATE (Singletons):")
+print("\n   AUTOMATION RATE (Singletons):")
 print(f"     Guaranteed range: [{singleton_lower:.1%}, {singleton_upper:.1%}]")
 print(f"     Expected: {marginal_bounds['expected_singleton_rate']:.1%}")
 
-print(f"\n   ESCALATION RATE (Doublets + Abstentions):")
+print("\n   ESCALATION RATE (Doublets + Abstentions):")
 total_escalation_lower = doublet_lower + abstention_lower
 total_escalation_upper = doublet_upper + abstention_upper
 print(f"     Guaranteed range: [{total_escalation_lower:.1%}, {total_escalation_upper:.1%}]")
 print(f"     Expected: {marginal_bounds['expected_doublet_rate'] + marginal_bounds['expected_abstention_rate']:.1%}")
 
-print(f"\n   ERROR RATE (Among Automated Decisions):")
+print("\n   ERROR RATE (Among Automated Decisions):")
 print(f"     Guaranteed range: [{error_lower:.1%}, {error_upper:.1%}]")
 print(f"     Expected: {marginal_bounds['expected_singleton_error_rate']:.1%}")
 
@@ -112,7 +113,7 @@ print("\n" + "=" * 80)
 print("SLA CONTRACT SUMMARY")
 print("=" * 80)
 
-print(f"\n✅ COVERAGE GUARANTEE:")
+print("\n✅ COVERAGE GUARANTEE:")
 print(f"   With {1-DELTA:.0%} confidence, coverage ≥ {1-ALPHA_TARGET:.0%} for both classes")
 
 print(f"\n✅ OPERATIONAL GUARANTEES (Marginal, {report['parameters']['pac_level_marginal']:.0%} confidence):")
@@ -120,11 +121,11 @@ print(f"   • Automation rate: {singleton_lower:.1%} - {singleton_upper:.1%}")
 print(f"   • Escalation rate: {total_escalation_lower:.1%} - {total_escalation_upper:.1%}")
 print(f"   • Error rate (automated): ≤ {error_upper:.1%}")
 
-print(f"\n✅ MONITORING THRESHOLDS:")
+print("\n✅ MONITORING THRESHOLDS:")
 print(f"   Alert if observed automation rate < {singleton_lower:.1%}")
 print(f"   Alert if observed error rate > {error_upper:.1%}")
 
-print(f"\n✅ DEPLOYMENT RECOMMENDATION:")
+print("\n✅ DEPLOYMENT RECOMMENDATION:")
 if singleton_lower >= 0.70 and error_upper <= 0.10:
     print("   ✓ APPROVED: Meets automation (≥70%) and error (≤10%) requirements")
 elif singleton_lower >= 0.70:

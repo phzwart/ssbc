@@ -123,12 +123,12 @@ def generate_rigorous_pac_report(
     ```
     """
     # Handle scalar inputs
-    if isinstance(alpha_target, (int, float)):
+    if isinstance(alpha_target, int | float):
         alpha_dict = {0: float(alpha_target), 1: float(alpha_target)}
     else:
         alpha_dict = alpha_target
 
-    if isinstance(delta, (int, float)):
+    if isinstance(delta, int | float):
         delta_dict = {0: float(delta), 1: float(delta)}
     else:
         delta_dict = delta
@@ -293,10 +293,12 @@ def _print_rigorous_report(report: dict) -> None:
     print("\nParameters:")
     print(f"  Test size: {params['test_size']}")
     print(f"  CI level: {params['ci_level']:.0%} (Clopper-Pearson)")
-    print(
-        f"  PAC confidence: Class 0: {params['pac_level_0']:.0%}, Class 1: {params['pac_level_1']:.0%}, Marginal: {params['pac_level_marginal']:.0%}"
-    )
-    print(f"  Union bound: {'YES (all metrics hold simultaneously)' if params['use_union_bound'] else 'NO'}")
+    pac_0 = params["pac_level_0"]
+    pac_1 = params["pac_level_1"]
+    pac_m = params["pac_level_marginal"]
+    print(f"  PAC confidence: Class 0: {pac_0:.0%}, Class 1: {pac_1:.0%}, Marginal: {pac_m:.0%}")
+    union_msg = "YES (all metrics hold simultaneously)" if params["use_union_bound"] else "NO"
+    print(f"  Union bound: {union_msg}")
 
     # Per-class reports
     for class_label in [0, 1]:
@@ -430,9 +432,12 @@ def _print_rigorous_report(report: dict) -> None:
         from .statistics import cp_interval
 
         error_cond_marg = cp_interval(sing["errors"], sing["count"])
+        err_prop = error_cond_marg["proportion"]
+        err_lower = error_cond_marg["lower"]
+        err_upper = error_cond_marg["upper"]
         print(
             f"      Errors:          {sing['errors']:4d} / {sing['count']:4d} = "
-            f"{error_cond_marg['proportion']:6.2%}  95% CI: [{error_cond_marg['lower']:.3f}, {error_cond_marg['upper']:.3f}]"
+            f"{err_prop:6.2%}  95% CI: [{err_lower:.3f}, {err_upper:.3f}]"
         )
 
     # Doublets
@@ -444,9 +449,9 @@ def _print_rigorous_report(report: dict) -> None:
 
     print("\n  ✅ RIGOROUS PAC-Controlled Marginal Bounds")
     print("     (LOO-CV + Clopper-Pearson for estimation uncertainty)")
-    print(
-        f"     PAC level: {params['pac_level_marginal']:.0%} (= (1-δ₀)×(1-δ₁), independence), CP level: {params['ci_level']:.0%}"
-    )
+    pac_marginal = params["pac_level_marginal"]
+    ci_lvl = params["ci_level"]
+    print(f"     PAC level: {pac_marginal:.0%} (= (1-δ₀)×(1-δ₁), independence), CP level: {ci_lvl:.0%}")
     print(f"     Grid points evaluated: {pac_marg['n_grid_points']}")
 
     s_lower, s_upper = pac_marg["singleton_rate_bounds"]

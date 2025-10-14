@@ -50,7 +50,7 @@ class_1_coverage = validation["class_1"]["singleton"]["empirical_coverage"]
 pac_level = report["parameters"]["pac_level_marginal"]
 
 print(f"\nTarget PAC level: {pac_level:.0%}")
-print(f"\nEmpirical coverage:")
+print("\nEmpirical coverage:")
 print(f"  Marginal: {marginal_coverage:.1%} {'✅' if marginal_coverage >= pac_level else '❌'}")
 print(f"  Class 0:  {class_0_coverage:.1%} {'✅' if class_0_coverage >= 0.95 else '❌'}")
 print(f"  Class 1:  {class_1_coverage:.1%} {'✅' if class_1_coverage >= 0.95 else '❌'}")
@@ -73,4 +73,3 @@ print("  • Understanding bound tightness")
 print("  • Generating validation plots for publications")
 
 print("\n" + "=" * 80)
-

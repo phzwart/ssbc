@@ -4,9 +4,10 @@ This models: "If I recalibrate many times on similar datasets, how do rates vary
 Different from LOO-CV which models: "Given ONE fixed calibration, how do test sets vary?"
 """
 
+from typing import Protocol
+
 import numpy as np
 from joblib import Parallel, delayed
-from typing import Protocol
 
 from ssbc.conformal import split_by_class
 from ssbc.core import ssbc_correct
@@ -14,6 +15,7 @@ from ssbc.core import ssbc_correct
 # Optional plotting dependencies
 try:
     import matplotlib.pyplot as plt
+
     HAS_MATPLOTLIB = True
 except ImportError:
     HAS_MATPLOTLIB = False
@@ -355,57 +357,55 @@ def plot_bootstrap_distributions(
     >>> plot_bootstrap_distributions(results, save_path='bootstrap_results.png')
     """
     if not HAS_MATPLOTLIB:
-        raise ImportError(
-            "matplotlib is required for plotting. Install with: pip install matplotlib"
-        )
+        raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
 
     fig, axes = plt.subplots(3, 4, figsize=figsize)
     fig.suptitle(
         f'Bootstrap Calibration Uncertainty ({bootstrap_results["n_bootstrap"]} trials)\n'
         f'Calibration n={bootstrap_results["n_calibration"]}, Test size={bootstrap_results["test_size"]}',
-        fontsize=14, fontweight='bold'
+        fontsize=14,
+        fontweight="bold",
     )
 
-    metrics = ['singleton', 'doublet', 'abstention', 'singleton_error']
-    metric_names = ['Singleton Rate', 'Doublet Rate', 'Abstention Rate', 'Singleton Error Rate']
-    colors = ['steelblue', 'coral', 'mediumpurple']
-    row_names = ['MARGINAL', 'CLASS 0', 'CLASS 1']
-    data_keys = ['marginal', 'class_0', 'class_1']
+    metrics = ["singleton", "doublet", "abstention", "singleton_error"]
+    metric_names = ["Singleton Rate", "Doublet Rate", "Abstention Rate", "Singleton Error Rate"]
+    colors = ["steelblue", "coral", "mediumpurple"]
+    row_names = ["MARGINAL", "CLASS 0", "CLASS 1"]
+    data_keys = ["marginal", "class_0", "class_1"]
 
-    for row, (row_name, data_key, color) in enumerate(zip(row_names, data_keys, colors)):
-        for col, (metric, name) in enumerate(zip(metrics, metric_names)):
+    for row, (row_name, data_key, color) in enumerate(zip(row_names, data_keys, colors, strict=False)):
+        for col, (metric, name) in enumerate(zip(metrics, metric_names, strict=False)):
             ax = axes[row, col]
             m = bootstrap_results[data_key][metric]
 
             # Filter NaNs
-            samples = m['samples']
+            samples = m["samples"]
             samples = samples[~np.isnan(samples)]
 
             if len(samples) == 0:
-                ax.text(0.5, 0.5, 'No data', ha='center', va='center')
+                ax.text(0.5, 0.5, "No data", ha="center", va="center")
                 continue
 
             # Histogram
-            ax.hist(samples, bins=50, alpha=0.7, color=color, edgecolor='black')
+            ax.hist(samples, bins=50, alpha=0.7, color=color, edgecolor="black")
 
             # Quantiles
-            q = m['quantiles']
-            ax.axvline(q['q50'], color='green', linestyle='-', linewidth=2, label=f'Median: {q["q50"]:.3f}')
-            ax.axvline(q['q05'], color='red', linestyle='--', linewidth=2, label=f'5%: {q["q05"]:.3f}')
-            ax.axvline(q['q95'], color='red', linestyle='--', linewidth=2, label=f'95%: {q["q95"]:.3f}')
-            ax.axvline(m['mean'], color='orange', linestyle=':', linewidth=2, label=f'Mean: {m["mean"]:.3f}')
+            q = m["quantiles"]
+            ax.axvline(q["q50"], color="green", linestyle="-", linewidth=2, label=f'Median: {q["q50"]:.3f}')
+            ax.axvline(q["q05"], color="red", linestyle="--", linewidth=2, label=f'5%: {q["q05"]:.3f}')
+            ax.axvline(q["q95"], color="red", linestyle="--", linewidth=2, label=f'95%: {q["q95"]:.3f}')
+            ax.axvline(m["mean"], color="orange", linestyle=":", linewidth=2, label=f'Mean: {m["mean"]:.3f}')
 
-            ax.set_title(f'{row_name}: {name}', fontweight='bold')
-            ax.set_xlabel('Rate')
-            ax.set_ylabel('Count')
-            ax.legend(loc='best', fontsize=8)
+            ax.set_title(f"{row_name}: {name}", fontweight="bold")
+            ax.set_xlabel("Rate")
+            ax.set_ylabel("Count")
+            ax.legend(loc="best", fontsize=8)
             ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"✅ Saved bootstrap visualization to: {save_path}")
     else:
         plt.show()
-

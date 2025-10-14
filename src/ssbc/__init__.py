@@ -8,6 +8,11 @@ __version__ = version("ssbc")  # Read from package metadata (pyproject.toml)
 
 # Core SSBC algorithm
 # Conformal prediction
+# Bootstrap uncertainty analysis
+from .bootstrap import (
+    bootstrap_calibration_uncertainty,
+    plot_bootstrap_distributions,
+)
 from .conformal import (
     alpha_scan,
     compute_pac_operational_metrics,
@@ -19,28 +24,16 @@ from .core import (
     ssbc_correct,
 )
 
-# Hyperparameter tuning
-from .hyperparameter import (
-    sweep_and_plot_parallel_plotly,
-    sweep_hyperparams_and_collect,
-)
-
-# Bootstrap uncertainty analysis
-from .bootstrap import (
-    bootstrap_calibration_uncertainty,
-    plot_bootstrap_distributions,
-)
-
 # Cross-conformal validation
 from .cross_conformal import (
     cross_conformal_validation,
     print_cross_conformal_results,
 )
 
-# Validation utilities
-from .validation import (
-    print_validation_results,
-    validate_pac_bounds,
+# Hyperparameter tuning
+from .hyperparameter import (
+    sweep_and_plot_parallel_plotly,
+    sweep_hyperparams_and_collect,
 )
 
 # Visualization and reporting
@@ -64,6 +57,12 @@ from .statistics import (
 # Utility functions
 from .utils import (
     compute_operational_rate,
+)
+
+# Validation utilities
+from .validation import (
+    print_validation_results,
+    validate_pac_bounds,
 )
 from .visualization import (
     plot_parallel_coordinates_plotly,

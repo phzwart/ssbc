@@ -71,8 +71,8 @@ class TestBootstrapCalibrationUncertainty:
             # Check types
             assert isinstance(m["samples"], np.ndarray)
             assert len(m["samples"]) == 10
-            assert isinstance(m["mean"], (float, np.floating))
-            assert isinstance(m["std"], (float, np.floating))
+            assert isinstance(m["mean"], float | np.floating)
+            assert isinstance(m["std"], float | np.floating)
 
             # Check quantiles
             q = m["quantiles"]
@@ -214,10 +214,10 @@ class TestPlotBootstrapDistributions:
 
         # Import here to check if matplotlib is available
         try:
-            from ssbc.bootstrap import plot_bootstrap_distributions
-
             # Should not crash (just don't show the plot)
             import matplotlib
+
+            from ssbc.bootstrap import plot_bootstrap_distributions
 
             matplotlib.use("Agg")  # Non-interactive backend
             import matplotlib.pyplot as plt
@@ -286,9 +286,8 @@ class TestEdgeCases:
         singleton_error = results["marginal"]["singleton_error"]
 
         # Should be a valid number or NaN
-        assert isinstance(singleton_error["mean"], (float, np.floating))
+        assert isinstance(singleton_error["mean"], float | np.floating)
 
         # Quantiles should all be numbers or NaN
         for q_val in singleton_error["quantiles"].values():
-            assert isinstance(q_val, (float, np.floating))
-
+            assert isinstance(q_val, float | np.floating)

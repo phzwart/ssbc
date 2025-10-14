@@ -280,4 +280,3 @@ Based on file analysis:
 - Manual validation via examples provides some confidence
 - `validate_pac_bounds()` provides empirical verification
 - Automated tests still needed for regression prevention
-

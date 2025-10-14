@@ -1,7 +1,6 @@
 """Tests for utils module."""
 
 import numpy as np
-import pytest
 
 from ssbc.utils import compute_operational_rate
 
@@ -151,7 +150,7 @@ class TestComputeOperationalRate:
         rates = compute_operational_rate(prediction_set_sizes)
 
         assert isinstance(rates, dict)
-        assert all(isinstance(v, (float, np.floating)) for v in rates.values())
+        assert all(isinstance(v, float | np.floating) for v in rates.values())
 
     def test_numerical_precision(self):
         """Test numerical precision."""
@@ -164,4 +163,3 @@ class TestComputeOperationalRate:
         np.testing.assert_allclose(rates["singleton_rate"], 1 / 3, rtol=1e-10)
         np.testing.assert_allclose(rates["doublet_rate"], 1 / 3, rtol=1e-10)
         np.testing.assert_allclose(rates["abstention_rate"], 1 / 3, rtol=1e-10)
-

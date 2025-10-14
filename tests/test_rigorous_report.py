@@ -22,9 +22,7 @@ class TestGenerateRigorousPACReport:
         """Test basic report generation."""
         labels, probs, _ = test_data
 
-        report = generate_rigorous_pac_report(
-            labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False
-        )
+        report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 
         # Check main keys exist
         assert "ssbc_class_0" in report
@@ -228,9 +226,7 @@ class TestGenerateRigorousPACReport:
         """Test PAC bounds have correct structure."""
         labels, probs, _ = test_data
 
-        report = generate_rigorous_pac_report(
-            labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False
-        )
+        report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 
         # Check marginal bounds
         marginal = report["pac_bounds_marginal"]
@@ -258,9 +254,7 @@ class TestGenerateRigorousPACReport:
         """Test calibration result structure."""
         labels, probs, _ = test_data
 
-        report = generate_rigorous_pac_report(
-            labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False
-        )
+        report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 
         cal_result = report["calibration_result"]
 
@@ -318,9 +312,7 @@ class TestEdgeCases:
         labels, probs = sim.generate(20)
 
         # Should not crash
-        report = generate_rigorous_pac_report(
-            labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False
-        )
+        report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 
         # Should have valid structure
         assert "pac_bounds_marginal" in report
@@ -331,9 +323,7 @@ class TestEdgeCases:
         sim = BinaryClassifierSimulator(p_class1=0.05, seed=42)  # 5% class 1
         labels, probs = sim.generate(100)
 
-        report = generate_rigorous_pac_report(
-            labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False
-        )
+        report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 
         # Both classes should have results
         assert report["ssbc_class_0"].n > report["ssbc_class_1"].n
@@ -351,4 +341,3 @@ class TestEdgeCases:
                 simulator=None,  # Missing simulator
                 verbose=False,
             )
-

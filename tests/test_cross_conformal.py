@@ -98,8 +98,8 @@ class TestCrossConformalValidation:
             # Check types
             assert isinstance(m["samples"], np.ndarray)
             assert len(m["samples"]) == 5  # One per fold
-            assert isinstance(m["mean"], (float, np.floating))
-            assert isinstance(m["std"], (float, np.floating))
+            assert isinstance(m["mean"], float | np.floating)
+            assert isinstance(m["std"], float | np.floating)
 
     def test_quantiles_ordering(self, test_data):
         """Test quantiles are properly ordered."""
@@ -334,5 +334,4 @@ class TestEdgeCases:
         singleton_error = results["marginal"]["singleton_error"]
 
         # Mean should be a valid number or NaN
-        assert isinstance(singleton_error["mean"], (float, np.floating))
-
+        assert isinstance(singleton_error["mean"], float | np.floating)

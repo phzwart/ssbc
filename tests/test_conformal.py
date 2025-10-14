@@ -667,7 +667,7 @@ class TestComputePACOperationalMetrics:
         assert isinstance(result["expected_singleton_rate"], float)
         assert isinstance(result["alpha_grid"], list)
         assert isinstance(result["beta_weights"], list)
-        assert isinstance(result["n_calibration"], (int, np.integer))
+        assert isinstance(result["n_calibration"], int | np.integer)
 
     def test_bounds_validity(self, calibration_data):
         """Test that bounds are valid (lower <= upper)."""

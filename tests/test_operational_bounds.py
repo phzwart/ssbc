@@ -135,12 +135,8 @@ class TestPACOperationalBoundsPerClass:
         )
 
         # Union bound should give wider (or equal) intervals
-        width_no_union = (
-            result_no_union["singleton_rate_bounds"][1] - result_no_union["singleton_rate_bounds"][0]
-        )
-        width_with_union = (
-            result_with_union["singleton_rate_bounds"][1] - result_with_union["singleton_rate_bounds"][0]
-        )
+        width_no_union = result_no_union["singleton_rate_bounds"][1] - result_no_union["singleton_rate_bounds"][0]
+        width_with_union = result_with_union["singleton_rate_bounds"][1] - result_with_union["singleton_rate_bounds"][0]
 
         assert width_with_union >= width_no_union - 1e-10  # Allow small numerical errors
 
@@ -225,9 +221,7 @@ class TestPACOperationalBoundsMarginal:
 
         # Expected rates should sum to ~1
         expected_sum = (
-            result["expected_singleton_rate"]
-            + result["expected_doublet_rate"]
-            + result["expected_abstention_rate"]
+            result["expected_singleton_rate"] + result["expected_doublet_rate"] + result["expected_abstention_rate"]
         )
 
         np.testing.assert_allclose(expected_sum, 1.0, rtol=1e-2)
@@ -314,4 +308,3 @@ class TestEdgeCases:
 
         # Should have valid bounds
         assert 0 <= result["singleton_rate_bounds"][0] <= result["singleton_rate_bounds"][1] <= 1
-

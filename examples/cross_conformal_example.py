@@ -5,6 +5,7 @@ Mondrian conformal prediction due to finite calibration samples.
 """
 
 import numpy as np
+
 from ssbc import BinaryClassifierSimulator, cross_conformal_validation, print_cross_conformal_results
 
 # Create simulator
@@ -59,4 +60,3 @@ print("  2. Estimate variability without needing a data simulator")
 print("  3. Diagnose if more calibration data is needed (large std → need more data)")
 
 print("\n" + "=" * 80)
-

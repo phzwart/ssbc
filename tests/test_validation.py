@@ -67,10 +67,10 @@ class TestValidatePACBounds:
             # Check values
             assert isinstance(m["rates"], np.ndarray)
             assert len(m["rates"]) == 10
-            assert isinstance(m["mean"], (float, np.floating))
+            assert isinstance(m["mean"], float | np.floating)
             assert isinstance(m["quantiles"], dict)
             assert isinstance(m["bounds"], tuple)
-            assert isinstance(m["expected"], (float, np.floating))
+            assert isinstance(m["expected"], float | np.floating)
 
     def test_per_class_structure(self, test_report):
         """Test per-class validation structure."""
@@ -125,9 +125,7 @@ class TestValidatePACBounds:
         # Check each trial
         for i in range(20):
             rate_sum = (
-                marginal["singleton"]["rates"][i]
-                + marginal["doublet"]["rates"][i]
-                + marginal["abstention"]["rates"][i]
+                marginal["singleton"]["rates"][i] + marginal["doublet"]["rates"][i] + marginal["abstention"]["rates"][i]
             )
 
             np.testing.assert_allclose(rate_sum, 1.0, rtol=1e-10)
@@ -136,9 +134,13 @@ class TestValidatePACBounds:
         """Test that seed produces reproducible results."""
         report, sim = test_report
 
-        validation1 = validate_pac_bounds(report=report, simulator=sim, test_size=100, n_trials=10, seed=42, verbose=False)
+        validation1 = validate_pac_bounds(
+            report=report, simulator=sim, test_size=100, n_trials=10, seed=42, verbose=False
+        )
 
-        validation2 = validate_pac_bounds(report=report, simulator=sim, test_size=100, n_trials=10, seed=42, verbose=False)
+        validation2 = validate_pac_bounds(
+            report=report, simulator=sim, test_size=100, n_trials=10, seed=42, verbose=False
+        )
 
         # Results should be identical
         np.testing.assert_array_equal(
@@ -224,5 +226,4 @@ class TestEdgeCases:
         coverage = validation["marginal"]["singleton_error"]["empirical_coverage"]
 
         # Should be a number or NaN, not crash
-        assert isinstance(coverage, (float, np.floating))
-
+        assert isinstance(coverage, float | np.floating)

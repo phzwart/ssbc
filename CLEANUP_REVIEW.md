@@ -30,14 +30,14 @@
 ### 3. **`src/ssbc/sla.py`** (541 lines)
 - **Status**: Exported in `__init__.py`, used in `examples/sla_example.py`
 - **Reason**: OLD operational bounds WITHOUT coverage volatility
-- **Exports**: 
+- **Exports**:
   - `compute_mondrian_operational_bounds()` ← OLD
   - `compute_marginal_operational_bounds()` ← OLD
 - **Replaced by**:
   - `compute_pac_operational_bounds_perclass()` (in `operational_bounds_simple.py`)
   - `compute_pac_operational_bounds_marginal()` (in `operational_bounds_simple.py`)
   - Integrated into `generate_rigorous_pac_report()`
-- **Action**: 
+- **Action**:
   - **Option A**: DELETE and update `sla_example.py` to use new workflow
   - **Option B**: Add deprecation warning, keep for backward compatibility
   - **Recommendation**: DELETE (clean break for v0.2.0)
@@ -59,7 +59,7 @@
    - **Action**: Update comment to reference new workflow
 
 ### Potentially redundant examples:
-3. **`examples/integrated_pac_bootstrap_example.py`** 
+3. **`examples/integrated_pac_bootstrap_example.py`**
 4. **`examples/complete_uncertainty_analysis.py`**
 5. **`examples/complete_workflow_example.py`**
 
@@ -76,7 +76,7 @@ Multiple test approaches for similar things:
 - `tests/test_sla.py` - Tests OLD sla.py functions
 - No test file for `operational_bounds_simple.py`
 
-**Action**: 
+**Action**:
 - Create `tests/test_operational_bounds.py` for new functions
 - Remove/update `tests/test_sla.py` if sla.py is deleted
 
@@ -89,7 +89,7 @@ Current exports that may not be needed in public API:
 ```python
 # From sla.py (if we delete it)
 "OperationalRateBounds",
-"OperationalRateBoundsResult", 
+"OperationalRateBoundsResult",
 "compute_marginal_operational_bounds",
 "compute_mondrian_operational_bounds",
 
@@ -152,7 +152,7 @@ Remove exports:
 
 **Clean break approach:**
 1. Delete all dead code (coverage_distribution, blakers)
-2. Delete deprecated sla.py 
+2. Delete deprecated sla.py
 3. Update all examples to new workflow
 4. Update __init__.py exports
 5. Add tests for new operational bounds
@@ -171,4 +171,3 @@ from ssbc import generate_rigorous_pac_report
 report = generate_rigorous_pac_report(...)
 pac_bounds = report['pac_bounds_class_0']
 ```
-

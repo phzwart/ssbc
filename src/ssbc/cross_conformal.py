@@ -11,12 +11,12 @@ Different from:
 - Cross-conformal: K-fold split, estimates rate distribution from finite calibration
 """
 
-import numpy as np
 from typing import Any
+
+import numpy as np
 
 from ssbc.conformal import split_by_class
 from ssbc.core import ssbc_correct
-from ssbc.statistics import clopper_pearson_intervals
 
 
 def _compute_fold_rates_mondrian(
@@ -220,9 +220,9 @@ def cross_conformal_validation(
     --------
     >>> from ssbc import cross_conformal_validation
     >>> results = cross_conformal_validation(labels, probs, n_folds=10)
-    >>> print(f"Singleton rate: {results['marginal']['singleton']['mean']:.3f} ± {results['marginal']['singleton']['std']:.3f}")
-    >>> print(f"95% range: [{results['marginal']['singleton']['quantiles']['q05']:.3f}, "
-    ...       f"{results['marginal']['singleton']['quantiles']['q95']:.3f}]")
+    >>> m = results['marginal']['singleton']
+    >>> print(f"Singleton rate: {m['mean']:.3f} ± {m['std']:.3f}")
+    >>> print(f"95% range: [{m['quantiles']['q05']:.3f}, {m['quantiles']['q95']:.3f}]")
 
     Notes
     -----
@@ -323,19 +323,16 @@ def cross_conformal_validation(
 
     # Aggregate marginal statistics
     marginal_stats = {
-        metric: compute_stats([fold["marginal"][metric] for fold in fold_rates], metric)
-        for metric in metrics
+        metric: compute_stats([fold["marginal"][metric] for fold in fold_rates], metric) for metric in metrics
     }
 
     # Aggregate class-specific statistics
     class_0_stats = {
-        metric: compute_stats([fold["class_0"][metric] for fold in fold_rates], metric)
-        for metric in metrics
+        metric: compute_stats([fold["class_0"][metric] for fold in fold_rates], metric) for metric in metrics
     }
 
     class_1_stats = {
-        metric: compute_stats([fold["class_1"][metric] for fold in fold_rates], metric)
-        for metric in metrics
+        metric: compute_stats([fold["class_1"][metric] for fold in fold_rates], metric) for metric in metrics
     }
 
     return {
@@ -366,7 +363,7 @@ def print_cross_conformal_results(results: dict) -> None:
     print("=" * 80)
     print("CROSS-CONFORMAL VALIDATION RESULTS")
     print("=" * 80)
-    print(f"\nParameters:")
+    print("\nParameters:")
     print(f"  K-folds: {results['n_folds']}")
     print(f"  Samples: {results['n_samples']}")
     print(f"  Stratified: {results['stratified']}")
@@ -424,4 +421,3 @@ def print_cross_conformal_results(results: dict) -> None:
     print("  • Bootstrap: Recalibration uncertainty with fresh test data")
     print("  • Cross-conformal: Rate variability from finite calibration splits")
     print("\n" + "=" * 80)
-
