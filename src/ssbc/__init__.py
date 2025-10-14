@@ -47,14 +47,6 @@ from .simulation import (
     BinaryClassifierSimulator,
 )
 
-# SLA (Service Level Agreement) - operational rate bounds
-from .sla import (
-    OperationalRateBounds,
-    OperationalRateBoundsResult,
-    compute_marginal_operational_bounds,
-    compute_mondrian_operational_bounds,
-)
-
 # Statistics utilities
 from .statistics import (
     clopper_pearson_intervals,
@@ -88,11 +80,6 @@ __all__ = [
     "cp_interval",
     # Utilities
     "compute_operational_rate",
-    # SLA - Operational rate bounds
-    "OperationalRateBounds",
-    "OperationalRateBoundsResult",
-    "compute_marginal_operational_bounds",
-    "compute_mondrian_operational_bounds",
     # Simulation
     "BinaryClassifierSimulator",
     # Visualization

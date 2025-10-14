@@ -127,7 +127,7 @@ def main():
                 if pac["alpha_singlet_observed"] <= pac["alpha_singlet_bound"]:
                     print("    ✓ PAC guarantee satisfied!")
 
-    print("\nNote: For rigorous marginal bounds, use compute_marginal_operational_bounds()")
+    print("\nNote: For rigorous operational bounds, use generate_rigorous_pac_report()")
 
     print("\n" + "=" * 80)
     print("Example completed successfully!")

@@ -1,135 +1,151 @@
-"""Example: Service Level Agreement (SLA) Bounds for Conformal Prediction.
+"""Service Level Agreement (SLA) example using rigorous PAC-controlled operational bounds.
 
-This example demonstrates the complete SLA workflow combining:
-1. Mondrian conformal calibration (PAC coverage via SSBC)
-2. Operational rate bounds (via LOO-CV + Clopper-Pearson)
+This example demonstrates how to use SSBC for deployment scenarios where you need:
+1. PAC-guaranteed coverage (via SSBC)
+2. Rigorous operational rate bounds (via LOO-CV + Clopper-Pearson)
+3. Contract-ready guarantees for production deployment
 
-The workflow is:
-1. Generate synthetic binary classification data with probabilities
-2. Use mondrian_conformal_calibrate() for PAC coverage guarantees
-3. Add rigorous operational rate bounds via compute_mondrian_operational_bounds()
-4. Display comprehensive report with report_prediction_stats()
-
-The result provides contract-ready guarantees on:
-- Coverage: P(Y ∈ C(X)) ≥ 1 - α with probability ≥ 1 - δ₁ (from Mondrian)
-- Operational rates: singleton, doublet, abstention rates with probability ≥ 1 - δ₂ (from LOO-CV)
+Updated for v0.2.0: Uses unified generate_rigorous_pac_report() workflow.
 """
 
 import numpy as np
+from ssbc import BinaryClassifierSimulator, generate_rigorous_pac_report
 
-from ssbc import (
-    BinaryClassifierSimulator,
-    compute_marginal_operational_bounds,
-    compute_mondrian_operational_bounds,
-    mondrian_conformal_calibrate,
-    report_prediction_stats,
-    split_by_class,
+# Simulate a classifier for deployment
+print("=" * 80)
+print("SERVICE LEVEL AGREEMENT (SLA) - RIGOROUS OPERATIONAL BOUNDS")
+print("=" * 80)
+
+# Create simulator
+sim = BinaryClassifierSimulator(
+    p_class1=0.3,
+    beta_params_class0=(2, 5),  # Moderate quality for class 0
+    beta_params_class1=(6, 2),  # Good quality for class 1
+    seed=42,
 )
 
+# Generate calibration data
+labels, probs = sim.generate(n_samples=200)
 
-def main():
-    """Run SLA example with binary classification."""
+print(f"\nCalibration data: {len(labels)} samples")
+print(f"  Class 0: {np.sum(labels == 0)} samples")
+print(f"  Class 1: {np.sum(labels == 1)} samples")
 
-    print("=" * 80)
-    print("CONFORMAL PREDICTION WITH SERVICE LEVEL AGREEMENT (SLA)")
-    print("=" * 80)
+# Define SLA requirements
+ALPHA_TARGET = 0.10  # Maximum 10% miscoverage
+DELTA = 0.05  # 95% PAC confidence (1 - δ)
+TEST_SIZE = 1000  # Expected deployment test set size
 
-    # ========== Step 1: Generate Synthetic Binary Classification Data ==========
-    print("\n1. Generating synthetic binary classification data...")
+print(f"\nSLA Requirements:")
+print(f"  Maximum miscoverage: {ALPHA_TARGET:.1%}")
+print(f"  PAC confidence: {1-DELTA:.0%} (δ = {DELTA})")
+print(f"  Expected test set size: {TEST_SIZE}")
 
-    np.random.seed(42)
-    n_cal = 200
+# Generate rigorous PAC report with operational bounds
+print("\n" + "=" * 80)
+print("GENERATING RIGOROUS PAC REPORT WITH OPERATIONAL BOUNDS")
+print("=" * 80)
 
-    # Simulate binary classifier with overlapping distributions
-    sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(3, 7), beta_params_class1=(7, 3), seed=42)
+report = generate_rigorous_pac_report(
+    labels=labels,
+    probs=probs,
+    alpha_target=ALPHA_TARGET,
+    delta=DELTA,
+    test_size=TEST_SIZE,
+    ci_level=0.95,
+    use_union_bound=True,
+    n_jobs=-1,
+    verbose=True,
+)
 
-    labels, probs = sim.generate(n_samples=n_cal)
+# Extract operational bounds for SLA contract
+print("\n" + "=" * 80)
+print("SLA CONTRACT - OPERATIONAL GUARANTEES")
+print("=" * 80)
 
-    print(f"   Calibration set size: n = {n_cal}")
-    print(f"   Class 0: {np.sum(labels == 0)} samples")
-    print(f"   Class 1: {np.sum(labels == 1)} samples")
+# Marginal operational bounds (deployment view)
+marginal_bounds = report["pac_bounds_marginal"]
 
-    # ========== Step 2: Mondrian Calibration (PAC Coverage) ==========
-    print("\n2. Mondrian conformal calibration (PAC coverage guarantees)...")
+print("\n📋 MARGINAL OPERATIONAL GUARANTEES (All Samples):")
+print(f"   PAC Confidence Level: {report['parameters']['pac_level_marginal']:.0%}")
 
-    alpha_target = 0.10  # Target 90% coverage per class
-    delta_1 = 0.05  # 95% confidence for coverage
+singleton_lower, singleton_upper = marginal_bounds["singleton_rate_bounds"]
+doublet_lower, doublet_upper = marginal_bounds["doublet_rate_bounds"]
+abstention_lower, abstention_upper = marginal_bounds["abstention_rate_bounds"]
+error_lower, error_upper = marginal_bounds["singleton_error_rate_bounds"]
 
-    print(f"   α_target = {alpha_target} (target 90% coverage per class)")
-    print(f"   δ₁ = {delta_1} (coverage confidence: {1 - delta_1:.1%})")
+print(f"\n   AUTOMATION RATE (Singletons):")
+print(f"     Guaranteed range: [{singleton_lower:.1%}, {singleton_upper:.1%}]")
+print(f"     Expected: {marginal_bounds['expected_singleton_rate']:.1%}")
 
-    class_data = split_by_class(labels, probs)
-    cal_result, pred_stats = mondrian_conformal_calibrate(
-        class_data=class_data, alpha_target=alpha_target, delta=delta_1, mode="beta"
-    )
+print(f"\n   ESCALATION RATE (Doublets + Abstentions):")
+total_escalation_lower = doublet_lower + abstention_lower
+total_escalation_upper = doublet_upper + abstention_upper
+print(f"     Guaranteed range: [{total_escalation_lower:.1%}, {total_escalation_upper:.1%}]")
+print(f"     Expected: {marginal_bounds['expected_doublet_rate'] + marginal_bounds['expected_abstention_rate']:.1%}")
 
-    print("\n   Calibration Results (with SSBC correction):")
-    for class_label in [0, 1]:
-        result = cal_result[class_label]
-        print(f"   Class {class_label}:")
-        print(f"      α_corrected = {result['alpha_corrected']:.4f}")
-        print(f"      Threshold   = {result['threshold']:.4f}")
-        print(f"      n           = {result['n']}")
-        print(f"      PAC mass    = {result['ssbc_result'].satisfied_mass:.4f}")
+print(f"\n   ERROR RATE (Among Automated Decisions):")
+print(f"     Guaranteed range: [{error_lower:.1%}, {error_upper:.1%}]")
+print(f"     Expected: {marginal_bounds['expected_singleton_error_rate']:.1%}")
 
-    # ========== Step 3: Operational Rate Bounds ==========
-    print("\n3. Computing operational rate bounds via LOO-CV...")
-    print("   (Leave-one-out cross-validation on calibration data)")
+# Per-class guarantees
+print("\n📋 PER-CLASS OPERATIONAL GUARANTEES:")
 
-    delta_2 = 0.05  # 95% confidence for rate bounds
+for class_label in [0, 1]:
+    class_bounds = report[f"pac_bounds_class_{class_label}"]
+    ssbc = report[f"ssbc_class_{class_label}"]
+    pac_level = report["parameters"][f"pac_level_{class_label}"]
 
-    print(f"   δ₂ = {delta_2} (rate bounds confidence: {1 - delta_2:.1%})")
-    print("   Using default rate types (singleton, doublet, abstention, conditional rates)")
+    s_lower, s_upper = class_bounds["singleton_rate_bounds"]
+    d_lower, d_upper = class_bounds["doublet_rate_bounds"]
+    a_lower, a_upper = class_bounds["abstention_rate_bounds"]
+    e_lower, e_upper = class_bounds["singleton_error_rate_bounds"]
 
-    # Compute per-class operational bounds using LOO-CV
-    operational_bounds = compute_mondrian_operational_bounds(
-        calibration_result=cal_result,
-        labels=labels,
-        probs=probs,
-    )
+    print(f"\n   CLASS {class_label} (PAC Confidence: {pac_level:.0%}):")
+    print(f"     Singleton:  [{s_lower:.1%}, {s_upper:.1%}]")
+    print(f"     Doublet:    [{d_lower:.1%}, {d_upper:.1%}]")
+    print(f"     Abstention: [{a_lower:.1%}, {a_upper:.1%}]")
+    print(f"     Error:      [{e_lower:.1%}, {e_upper:.1%}]")
 
-    # Also compute marginal bounds
-    marginal_bounds = compute_marginal_operational_bounds(
-        labels=labels, probs=probs, alpha_target=alpha_target, delta_coverage=delta_1
-    )
+# SLA contract summary
+print("\n" + "=" * 80)
+print("SLA CONTRACT SUMMARY")
+print("=" * 80)
 
-    print("   ✓ Operational bounds computation complete")
+print(f"\n✅ COVERAGE GUARANTEE:")
+print(f"   With {1-DELTA:.0%} confidence, coverage ≥ {1-ALPHA_TARGET:.0%} for both classes")
 
-    # ========== Step 4: Display Comprehensive Report ==========
-    print("\n4. Generating comprehensive SLA report...\n")
+print(f"\n✅ OPERATIONAL GUARANTEES (Marginal, {report['parameters']['pac_level_marginal']:.0%} confidence):")
+print(f"   • Automation rate: {singleton_lower:.1%} - {singleton_upper:.1%}")
+print(f"   • Escalation rate: {total_escalation_lower:.1%} - {total_escalation_upper:.1%}")
+print(f"   • Error rate (automated): ≤ {error_upper:.1%}")
 
-    report_prediction_stats(
-        prediction_stats=pred_stats,
-        calibration_result=cal_result,
-        operational_bounds_per_class=operational_bounds,
-        marginal_operational_bounds=marginal_bounds,
-        verbose=True,
-    )
+print(f"\n✅ MONITORING THRESHOLDS:")
+print(f"   Alert if observed automation rate < {singleton_lower:.1%}")
+print(f"   Alert if observed error rate > {error_upper:.1%}")
 
-    # ========== Summary ==========
-    print("\n" + "=" * 80)
-    print("KEY TAKEAWAYS")
-    print("=" * 80)
+print(f"\n✅ DEPLOYMENT RECOMMENDATION:")
+if singleton_lower >= 0.70 and error_upper <= 0.10:
+    print("   ✓ APPROVED: Meets automation (≥70%) and error (≤10%) requirements")
+elif singleton_lower >= 0.70:
+    print(f"   ⚠️  CONDITIONAL: Good automation but error rate up to {error_upper:.1%}")
+elif error_upper <= 0.10:
+    print(f"   ⚠️  CONDITIONAL: Low error but automation only {singleton_lower:.1%}")
+else:
+    print("   ❌ REJECTED: Does not meet minimum requirements")
 
-    print("\n✓ Complete SLA for Mondrian conformal prediction computed!")
-    print()
-    print("1. PAC Coverage Guarantees (from SSBC):")
-    print(f"   - Each class achieves ≥ {1 - alpha_target:.1%} coverage")
-    print(f"   - With probability ≥ {1 - delta_1:.1%}")
-    print()
-    print("2. Operational Rate Bounds (from LOO-CV):")
-    print(f"   - {n_cal} leave-one-out evaluations per class")
-    print("   - Rigorous Clopper-Pearson bounds")
-    print(f"   - Each rate gets confidence {1 - delta_2:.1%} independently")
-    print()
-    print(f"3. Joint Confidence (union bound): ≥ {1 - (delta_1 + delta_2):.1%}")
-    print()
-    print("See the report above for detailed bounds on:")
-    print("  • Singleton, doublet, abstention rates (per-class and marginal)")
-    print("  • Conditional rates: P(correct | singleton), P(error | singleton)")
-    print()
-    print("=" * 80)
+print("\n" + "=" * 80)
+print("TECHNICAL NOTES")
+print("=" * 80)
 
+print("\n✓ All bounds are rigorous:")
+print("  • Coverage: PAC guarantee via SSBC")
+print("  • Operational rates: LOO-CV + Clopper-Pearson")
+print("  • Union bound: All metrics hold simultaneously")
 
-if __name__ == "__main__":
-    main()
+print("\n✓ Deployment-ready:")
+print("  • Bounds valid for any future test set from same distribution")
+print("  • Can be used in legal/contractual SLA agreements")
+print("  • Monitoring thresholds provide early warning system")
+
+print("\n" + "=" * 80)
