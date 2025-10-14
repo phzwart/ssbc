@@ -37,6 +37,12 @@ from .cross_conformal import (
     print_cross_conformal_results,
 )
 
+# Validation utilities
+from .validation import (
+    print_validation_results,
+    validate_pac_bounds,
+)
+
 # Visualization and reporting
 from .rigorous_report import (
     generate_rigorous_pac_report,
@@ -91,6 +97,9 @@ __all__ = [
     # Cross-conformal validation
     "cross_conformal_validation",
     "print_cross_conformal_results",
+    # Validation utilities
+    "validate_pac_bounds",
+    "print_validation_results",
     # Rigorous reporting
     "generate_rigorous_pac_report",
     # Hyperparameter
