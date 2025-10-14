@@ -123,17 +123,15 @@ def generate_rigorous_pac_report(
     ```
     """
     # Handle scalar inputs - convert to dict format
-    alpha_dict: dict[int, float]
     if isinstance(alpha_target, int | float):
-        alpha_dict = {0: float(alpha_target), 1: float(alpha_target)}
+        alpha_dict: dict[int, float] = {0: float(alpha_target), 1: float(alpha_target)}
     else:
-        alpha_dict = alpha_target
+        alpha_dict = dict(alpha_target)  # Create new dict to satisfy type checker
 
-    delta_dict: dict[int, float]
     if isinstance(delta, int | float):
-        delta_dict = {0: float(delta), 1: float(delta)}
+        delta_dict: dict[int, float] = {0: float(delta), 1: float(delta)}
     else:
-        delta_dict = delta
+        delta_dict = dict(delta)  # Create new dict to satisfy type checker
 
     # Split by class
     class_data = split_by_class(labels, probs)

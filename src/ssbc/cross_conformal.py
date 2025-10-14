@@ -26,7 +26,7 @@ def _compute_fold_rates_mondrian(
     test_probs: np.ndarray,
     alpha_target: float,
     delta: float,
-) -> dict[str, float]:
+) -> dict[str, dict[str, float]]:
     """Compute operational rates for one fold in Mondrian conformal.
 
     Parameters
