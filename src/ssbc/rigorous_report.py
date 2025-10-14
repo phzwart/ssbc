@@ -122,12 +122,14 @@ def generate_rigorous_pac_report(
     # Done! All bounds account for coverage volatility.
     ```
     """
-    # Handle scalar inputs
+    # Handle scalar inputs - convert to dict format
+    alpha_dict: dict[int, float]
     if isinstance(alpha_target, int | float):
         alpha_dict = {0: float(alpha_target), 1: float(alpha_target)}
     else:
         alpha_dict = alpha_target
 
+    delta_dict: dict[int, float]
     if isinstance(delta, int | float):
         delta_dict = {0: float(delta), 1: float(delta)}
     else:

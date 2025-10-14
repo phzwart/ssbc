@@ -233,11 +233,11 @@ def validate_pac_bounds(
         if len(valid) == 0:
             return {"q05": np.nan, "q25": np.nan, "q50": np.nan, "q75": np.nan, "q95": np.nan}
         return {
-            "q05": np.percentile(valid, 5),
-            "q25": np.percentile(valid, 25),
-            "q50": np.percentile(valid, 50),
-            "q75": np.percentile(valid, 75),
-            "q95": np.percentile(valid, 95),
+            "q05": float(np.percentile(valid, 5)),
+            "q25": float(np.percentile(valid, 25)),
+            "q50": float(np.percentile(valid, 50)),
+            "q75": float(np.percentile(valid, 75)),
+            "q95": float(np.percentile(valid, 95)),
         }
 
     # Get bounds from report
