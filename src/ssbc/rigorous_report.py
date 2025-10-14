@@ -4,7 +4,7 @@ This module provides a single comprehensive report that properly accounts for
 coverage volatility across all operational metrics.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -126,12 +126,12 @@ def generate_rigorous_pac_report(
     if isinstance(alpha_target, int | float):
         alpha_dict: dict[int, float] = {0: float(alpha_target), 1: float(alpha_target)}
     else:
-        alpha_dict = dict(alpha_target)  # Create new dict to satisfy type checker
+        alpha_dict = cast(dict[int, float], alpha_target)
 
     if isinstance(delta, int | float):
         delta_dict: dict[int, float] = {0: float(delta), 1: float(delta)}
     else:
-        delta_dict = dict(delta)  # Create new dict to satisfy type checker
+        delta_dict = cast(dict[int, float], delta)
 
     # Split by class
     class_data = split_by_class(labels, probs)
