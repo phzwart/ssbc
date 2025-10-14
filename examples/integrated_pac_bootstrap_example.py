@@ -7,7 +7,7 @@ This demonstrates the COMPLETE workflow:
 Both analyses are complementary and answer different questions!
 """
 
-from ssbc import BinaryClassifierSimulator, generate_rigorous_pac_report
+from ssbc import BinaryClassifierSimulator, generate_rigorous_pac_report, plot_bootstrap_distributions
 
 # Create simulator
 sim = BinaryClassifierSimulator(p_class1=0.20, beta_params_class0=(1, 7), beta_params_class1=(5, 2), seed=42)
@@ -63,6 +63,27 @@ print("  → Valid for: Understanding recalibration uncertainty")
 print("\n✓ Both are RIGOROUS and COMPLEMENTARY!")
 print("  → Use PAC bounds for deployment guarantees")
 print("  → Use bootstrap to understand calibration sensitivity")
+
+# Optional: Plot bootstrap distributions
+print("\n" + "=" * 80)
+print("OPTIONAL: Bootstrap Visualization")
+print("=" * 80)
+
+try:
+    # Extract bootstrap results from report
+    bootstrap_results = report["bootstrap_results"]
+    if bootstrap_results is not None:
+        print("\nCreating bootstrap visualization...")
+        plot_bootstrap_distributions(
+            bootstrap_results,
+            save_path="integrated_bootstrap_results.png"
+        )
+        print("✅ Visualization saved!")
+    else:
+        print("❌ No bootstrap results found (run_bootstrap=False)")
+except ImportError as e:
+    print(f"⚠️  Could not create visualization: {e}")
+    print("   Install matplotlib to enable plotting: pip install matplotlib")
 
 print("\n" + "=" * 80)
 

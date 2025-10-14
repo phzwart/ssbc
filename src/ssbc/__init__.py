@@ -28,6 +28,7 @@ from .hyperparameter import (
 # Bootstrap uncertainty analysis
 from .bootstrap import (
     bootstrap_calibration_uncertainty,
+    plot_bootstrap_distributions,
 )
 
 # Visualization and reporting
@@ -93,6 +94,7 @@ __all__ = [
     "plot_parallel_coordinates_plotly",
     # Bootstrap uncertainty
     "bootstrap_calibration_uncertainty",
+    "plot_bootstrap_distributions",
     # Rigorous reporting
     "generate_rigorous_pac_report",
     # Hyperparameter
