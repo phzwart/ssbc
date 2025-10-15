@@ -1,5 +1,13 @@
 # History
 
+## 1.1.1 (2025-01-27)
+
+### Documentation Improvements
+- Fixed ReadTheDocs package index generation
+- Added proper Sphinx autodoc configuration
+- Organized API reference with logical module groupings
+- Enabled comprehensive documentation for all 14 modules
+
 ## 1.1.0 (2025-10-15)
 
 ### Major Features
