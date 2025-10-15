@@ -84,3 +84,9 @@ myst_enable_extensions = [
     "colon_fence",
     "deflist",
 ]
+
+# Source file extensions
+source_suffix = {
+    '.rst': None,
+    '.md': 'myst_parser',
+}

@@ -10,8 +10,6 @@ Small-Sample Beta Correction provides PAC guarantees for conformal prediction wi
    installation
    usage
    theory
-   contributing
-   history
 
 API Reference
 =============
@@ -62,6 +60,14 @@ Utilities & Visualization
 
 Complete Package
 ----------------
+
+.. automodule:: ssbc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module Index
+------------
 
 .. autosummary::
    :toctree: _autosummary
