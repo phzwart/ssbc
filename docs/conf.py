@@ -28,6 +28,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
+    "myst_parser",
 ]
 
 # Autosummary settings
@@ -40,7 +41,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "alabaster"
+html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
 # -- Extension configuration -------------------------------------------------
@@ -79,5 +80,14 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
 
+# MyST parser settings
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+]
+
 # Source file extensions
-source_suffix = '.rst'
+source_suffix = {
+    '.rst': None,
+    '.md': 'myst_parser',
+}
