@@ -3,6 +3,13 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+# -- Path setup --------------------------------------------------------------
+# Add the project root to sys.path so Sphinx can import the package
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(".."))
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -37,6 +44,17 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
 # -- Extension configuration -------------------------------------------------
+
+# Autodoc settings
+autodoc_default_options = {
+    "members": True,
+    "member-order": "bysource",
+    "special-members": "__init__",
+    "undoc-members": True,
+    "exclude-members": "__weakref__",
+}
+autodoc_typehints = "description"
+autodoc_mock_imports = []
 
 # Napoleon settings for NumPy/Google style docstrings
 napoleon_google_docstring = True
