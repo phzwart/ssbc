@@ -1,6 +1,6 @@
 # History
 
-## 0.2.0 (2025-10-14)
+## 1.1.0 (2025-10-15)
 
 ### Major Features
 
@@ -29,16 +29,20 @@
 ### Migration Guide
 
 ```python
-# OLD (v0.1.x)
+# OLD (v1.0.0 and earlier)
 from ssbc import compute_mondrian_operational_bounds, compute_marginal_operational_bounds
 bounds = compute_mondrian_operational_bounds(cal_result, labels, probs)
 
-# NEW (v0.2.0)
+# NEW (v1.1.0)
 from ssbc import generate_rigorous_pac_report
 report = generate_rigorous_pac_report(labels, probs, alpha_target=0.10, delta=0.10)
 pac_bounds = report['pac_bounds_class_0']
 ```
 
+## 1.0.0 (2025-10-10)
+
+* First stable release on PyPI.
+
 ## 0.1.0 (2025-10-10)
 
-* First release on PyPI.
+* Initial development release.
