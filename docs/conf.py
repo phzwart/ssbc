@@ -28,7 +28,6 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
-    "myst_parser",
 ]
 
 # Autosummary settings
@@ -80,14 +79,5 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/", None),
 }
 
-# MyST parser settings
-myst_enable_extensions = [
-    "colon_fence",
-    "deflist",
-]
-
 # Source file extensions
-source_suffix = {
-    '.rst': None,
-    '.md': 'myst_parser',
-}
+source_suffix = '.rst'
