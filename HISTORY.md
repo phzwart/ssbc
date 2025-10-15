@@ -1,5 +1,14 @@
 # History
 
+## 1.1.2 (2025-01-27)
+
+### Documentation Infrastructure
+- Fixed ReadTheDocs build configuration and output directory
+- Resolved MyST parser and theme dependency issues
+- Added comprehensive API documentation with organized module sections
+- Enabled full markdown support for installation, usage, and theory guides
+- Professional ReadTheDocs theme with complete navigation
+
 ## 1.1.1 (2025-01-27)
 
 ### Documentation Improvements
