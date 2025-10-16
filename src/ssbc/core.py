@@ -1,8 +1,7 @@
 """Core SSBC (Small-Sample Beta Correction) algorithm."""
-
 import math
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from scipy.stats import beta as beta_dist
 from scipy.stats import betabinom, norm
@@ -28,7 +27,7 @@ class SSBCResult:
     n: int
     satisfied_mass: float
     mode: Literal["beta", "beta-binomial"]
-    details: dict
+    details: dict[str, Any]
 
 
 def ssbc_correct(
@@ -96,6 +95,30 @@ def ssbc_correct(
 
     # Maximum u to search (α' must be ≤ α_target)
     u_max = min(n, math.floor(alpha_target * (n + 1)))
+
+    # Trivial regime: if α_target < 1/(n+1), no positive u is allowed.
+    # Return u=0, α_corrected=0, with satisfied mass = 1.0 by construction.
+    if u_max == 0:
+        return SSBCResult(
+            alpha_target=alpha_target,
+            alpha_corrected=0.0,
+            u_star=0,
+            n=n,
+            satisfied_mass=1.0,
+            mode=mode,
+            details=dict(
+                u_max=u_max,
+                u_star_guess=0,
+                search_range=(0, 0),
+                bracket_width=0,
+                delta=delta,
+                m=(m_eval if (mode == "beta-binomial") else None),
+                acceptance_rule="P(Coverage >= target) >= 1-delta",
+                search_log=[],
+                note="α_target < 1/(n+1) ⇒ α_corrected=0",
+            ),
+        )
+
     target_coverage = 1 - alpha_target
 
     # Initial guess for u using normal approximation to Beta distribution
@@ -104,7 +127,7 @@ def ssbc_correct(
     # where u_target = (n+1)*α_target and z_δ = Φ^(-1)(1-δ)
     u_target = (n + 1) * alpha_target
     z_delta = norm.ppf(1 - delta)  # quantile function (inverse CDF)
-    u_star_guess = max(1, math.floor(u_target - z_delta * math.sqrt(u_target)))
+    u_star_guess = max(1, math.floor(u_target - z_delta * math.sqrt(max(u_target, 1e-12))))
 
     # Clamp to valid range
     u_star_guess = min(u_max, u_star_guess)
@@ -144,12 +167,11 @@ def ssbc_correct(
         alpha_prime = u / (n + 1)
 
         if mode == "beta":
-            # P(Coverage ≥ target_coverage) where Coverage ~ Beta(a, b)
-            # Using: P(X >= x) = 1 - CDF(x) for continuous distributions
-            ptail = 1 - beta_dist.cdf(target_coverage, a, b)
+            # Use survival function for numerical stability near x≈1
+            ptail = float(beta_dist.sf(target_coverage, a, b))
         else:
             # P(X ≥ k_thresh) where X ~ BetaBinomial(m, a, b)
-            ptail = betabinom.sf(k_thresh - 1, m_eval, a, b)
+            ptail = float(betabinom.sf(k_thresh - 1, m_eval, a, b))
 
         passes = ptail >= 1 - delta
         search_log.append(
@@ -169,16 +191,38 @@ def ssbc_correct(
             u_star = u
             mass_star = ptail
 
-    # If nothing passes, fall back to u=1 (most conservative)
+    # If nothing passes in the initial bracket, expand outward adaptively.
     if u_star is None:
-        u_star = 1
-        a = n + 1 - u_star
-        b = u_star
-        mass_star = (
-            1 - beta_dist.cdf(target_coverage, a, b)
-            if mode == "beta"
-            else betabinom.sf(k_thresh - 1, (m if m else n), a, b)
-        )
+        # Downward expansion
+        for u in range(u_min - 1, 0, -1):
+            a = n + 1 - u
+            b = u
+            if mode == "beta":
+                ptail = float(beta_dist.sf(target_coverage, a, b))
+            else:
+                ptail = float(betabinom.sf(k_thresh - 1, m_eval, a, b))
+            if ptail >= 1 - delta:
+                u_star, mass_star = u, ptail
+                break
+    # Upward expansion
+    if (u_star is None) and (u_search_max < u_max):
+        for u in range(u_search_max + 1, u_max + 1):
+            a = n + 1 - u
+            b = u
+            if mode == "beta":
+                ptail = float(beta_dist.sf(target_coverage, a, b))
+            else:
+                ptail = float(betabinom.sf(k_thresh - 1, m_eval, a, b))
+            if ptail >= 1 - delta:
+                u_star, mass_star = u, ptail
+            else:
+                # stop at first failure above; tail typically decreases
+                break
+
+    # If still nothing passes, choose the most conservative admissible u (0).
+    if u_star is None:
+        u_star = 0
+        mass_star = 1.0
 
     alpha_corrected = u_star / (n + 1)
 
@@ -198,7 +242,7 @@ def ssbc_correct(
             search_range=(u_min, u_search_max),
             bracket_width=bracket_width,
             delta=delta,
-            m=(m if (mode == "beta-binomial") else None),
+            m=(m_eval if (mode == "beta-binomial") else None),
             acceptance_rule="P(Coverage >= target) >= 1-delta",
             search_log=search_log,
         ),
