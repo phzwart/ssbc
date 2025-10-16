@@ -6,6 +6,8 @@ from typing import Any, Literal
 from scipy.stats import beta as beta_dist
 from scipy.stats import betabinom, norm
 
+__all__ = ["SSBCResult", "ssbc_correct"]
+
 
 @dataclass
 class SSBCResult:
@@ -46,6 +48,8 @@ def ssbc_correct(
 
     where Coverage(α') ~ Beta(n+1-u, u) for infinite test window.
 
+    Trivial regime: if α_target < 1/(n+1), return α_corrected=0.
+
     Parameters
     ----------
     alpha_target : float
@@ -56,9 +60,9 @@ def ssbc_correct(
         Risk tolerance / PAC parameter (must be in (0,1))
     mode : {"beta", "beta-binomial"}, default="beta"
         "beta" for infinite test window
-        "beta-binomial" for finite test window
+        "beta-binomial" for finite test window (defaults to m=n)
     m : int, optional
-        Test window size (required for beta-binomial mode)
+        Test window size for beta-binomial mode (defaults to n)
     bracket_width : int, optional
         Search radius around initial guess (default: adaptive based on n)
 
@@ -80,8 +84,9 @@ def ssbc_correct(
     Notes
     -----
     The algorithm uses a bracketed search with an initial guess based on
-    normal approximation to the Beta distribution. For large n, the search
-    is adaptive to maintain efficiency.
+    normal approximation to the Beta distribution. If the initial bracket
+    fails to find a solution, it performs adaptive outward expansion
+    (downward then upward) with O(n) worst-case complexity.
     """
     # Input validation
     if not (0.0 < alpha_target < 1.0):
