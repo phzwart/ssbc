@@ -19,6 +19,7 @@
 - Improved test reliability with type-safe assertions
 - Better error handling and validation across all modules
 - Enhanced developer experience with better IDE support
+- Fixed CI import sorting issues for robust continuous integration
 
 ## 1.1.2 (2025-01-27)
 
