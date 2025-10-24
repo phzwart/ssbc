@@ -40,12 +40,22 @@ def _validate_single_trial(
     dict
         Trial results with marginal and per-class rates
     """
-    # Set unique seed for this trial
+    # Create a new simulator instance with unique seed for this trial
     if seed is not None:
+        # Set global random state first, then create simulator
         np.random.seed(seed + trial_idx)
+        # Create a new simulator with the unique seed for this trial
+        trial_simulator = type(simulator)(
+            p_class1=simulator.p_class1,
+            beta_params_class0=(simulator.a0, simulator.b0),
+            beta_params_class1=(simulator.a1, simulator.b1),
+            seed=seed + trial_idx,
+        )
+    else:
+        trial_simulator = simulator
 
     # Generate independent test set
-    labels_test, probs_test = simulator.generate(test_size)
+    labels_test, probs_test = trial_simulator.generate(test_size)
 
     # Apply FIXED Mondrian thresholds and evaluate
     n_total = len(labels_test)
@@ -220,9 +230,6 @@ def validate_pac_bounds(
 
     The empirical coverage should be ≥ PAC level (1 - δ) for rigorous bounds.
     """
-    if seed is not None:
-        np.random.seed(seed)
-
     # Extract FIXED thresholds from calibration
     threshold_0 = report["calibration_result"][0]["threshold"]
     threshold_1 = report["calibration_result"][1]["threshold"]
