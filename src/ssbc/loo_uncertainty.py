@@ -63,7 +63,7 @@ def estimate_loo_inflation_factor(loo_predictions: np.ndarray, verbose: bool = T
     # Lower bound: 1.0 (can't be less than IID)
     # Upper bound: 6.0 (extended range for high correlation scenarios)
     inflation = np.clip(inflation, 1.0, 6.0)
-    
+
     # Print the estimated inflation factor for visibility
     if verbose:
         print(f"LOO inflation factor estimated: {inflation:.3f} (clipped to [1.0, 6.0] range)")
@@ -264,7 +264,11 @@ def compute_loo_corrected_bounds_exact_binomial(
 
 
 def compute_loo_corrected_bounds_hoeffding(
-    loo_predictions: np.ndarray, n_test: int, alpha: float = 0.05, inflation_factor: float | None = None, verbose: bool = True
+    loo_predictions: np.ndarray,
+    n_test: int,
+    alpha: float = 0.05,
+    inflation_factor: float | None = None,
+    verbose: bool = True,
 ) -> tuple[float, float, dict[str, Any]]:
     """
     METHOD 3: Distribution-free Hoeffding bound (ULTRA-CONSERVATIVE).
@@ -437,7 +441,9 @@ def compute_robust_prediction_bounds(
         selected_method = "exact"
 
     elif method == "hoeffding":
-        L, U, diag = compute_loo_corrected_bounds_hoeffding(loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose)
+        L, U, diag = compute_loo_corrected_bounds_hoeffding(
+            loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose
+        )
         selected_method = "hoeffding"
 
     elif method == "all":
@@ -446,11 +452,15 @@ def compute_robust_prediction_bounds(
             if verbose:
                 print("Estimating LOO inflation factor from data for comparison...")
             inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=verbose)
-        
+
         # Compute all three methods
-        L1, U1, diag1 = compute_loo_corrected_bounds_analytical(loo_predictions, n_test, alpha, inflation_factor=inflation_factor)
+        L1, U1, diag1 = compute_loo_corrected_bounds_analytical(
+            loo_predictions, n_test, alpha, inflation_factor=inflation_factor
+        )
         L2, U2, diag2 = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha)
-        L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose)
+        L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(
+            loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose
+        )
 
         # Choose analytical as primary, but flag if too optimistic
         L, U = L1, U1

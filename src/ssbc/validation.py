@@ -19,7 +19,7 @@ def _validate_single_trial(
     seed: int | None = None,
 ) -> dict[str, Any]:
     """Run a single validation trial.
-    
+
     Parameters
     ----------
     trial_idx : int
@@ -34,7 +34,7 @@ def _validate_single_trial(
         Fixed threshold for class 1
     seed : int, optional
         Base random seed
-        
+
     Returns
     -------
     dict
@@ -43,10 +43,10 @@ def _validate_single_trial(
     # Set unique seed for this trial
     if seed is not None:
         np.random.seed(seed + trial_idx)
-    
+
     # Generate independent test set
     labels_test, probs_test = simulator.generate(test_size)
-    
+
     # Apply FIXED Mondrian thresholds and evaluate
     n_total = len(labels_test)
     n_singletons = 0
@@ -117,12 +117,16 @@ def _validate_single_trial(
     class_0_singleton_rate = n_singletons_0 / n_0 if n_0 > 0 else np.nan
     class_0_doublet_rate = n_doublets_0 / n_0 if n_0 > 0 else np.nan
     class_0_abstention_rate = n_abstentions_0 / n_0 if n_0 > 0 else np.nan
-    class_0_singleton_error_rate = (n_singletons_0 - n_singletons_correct_0) / n_singletons_0 if n_singletons_0 > 0 else np.nan
+    class_0_singleton_error_rate = (
+        (n_singletons_0 - n_singletons_correct_0) / n_singletons_0 if n_singletons_0 > 0 else np.nan
+    )
 
     class_1_singleton_rate = n_singletons_1 / n_1 if n_1 > 0 else np.nan
     class_1_doublet_rate = n_doublets_1 / n_1 if n_1 > 0 else np.nan
     class_1_abstention_rate = n_abstentions_1 / n_1 if n_1 > 0 else np.nan
-    class_1_singleton_error_rate = (n_singletons_1 - n_singletons_correct_1) / n_singletons_1 if n_singletons_1 > 0 else np.nan
+    class_1_singleton_error_rate = (
+        (n_singletons_1 - n_singletons_correct_1) / n_singletons_1 if n_singletons_1 > 0 else np.nan
+    )
 
     return {
         "marginal": {
@@ -235,9 +239,7 @@ def validate_pac_bounds(
 
     # Run trials in parallel
     trial_results = Parallel(n_jobs=n_jobs)(
-        delayed(_validate_single_trial)(
-            trial_idx, simulator, test_size, threshold_0, threshold_1, seed
-        )
+        delayed(_validate_single_trial)(trial_idx, simulator, test_size, threshold_0, threshold_1, seed)
         for trial_idx in range(n_trials)
     )
 
