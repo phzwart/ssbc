@@ -63,12 +63,12 @@ report = generate_rigorous_pac_report(
     alpha_target=0.10,
     delta=0.10,
     test_size=1000,
-    
+
     # Optional: Bootstrap calibration uncertainty
     run_bootstrap=True,
     n_bootstrap=1000,
     simulator=sim,
-    
+
     # Optional: Cross-conformal validation
     run_cross_conformal=True,
     n_folds=10,

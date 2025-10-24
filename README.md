@@ -39,11 +39,11 @@ Unlike asymptotic methods, SSBC provides:
 
 ### Core Statistical Properties
 
-🎯 **Distribution-Free**: No assumptions about data distribution  
-🎯 **Model-Agnostic**: Works with ANY probabilistic classifier  
-🎯 **Frequentist**: Valid frequentist guarantees, no prior needed  
-🎯 **Non-Bayesian**: No Bayesian assumptions or hyperpriors  
-🎯 **Finite-Sample**: Exact guarantees for small n, not asymptotic  
+🎯 **Distribution-Free**: No assumptions about data distribution
+🎯 **Model-Agnostic**: Works with ANY probabilistic classifier
+🎯 **Frequentist**: Valid frequentist guarantees, no prior needed
+🎯 **Non-Bayesian**: No Bayesian assumptions or hyperpriors
+🎯 **Finite-Sample**: Exact guarantees for small n, not asymptotic
 🎯 **Exchangeability Only**: Minimal assumption (test/calibration exchangeable)
 
 **📖 For detailed theory and deployment guide, see [docs/theory.md](docs/theory.md)**
@@ -88,12 +88,12 @@ report = generate_rigorous_pac_report(
     delta=0.10,            # 90% PAC confidence
     test_size=1000,        # Expected deployment size
     use_union_bound=True,  # Simultaneous guarantees
-    
+
     # Optional uncertainty analyses
     run_bootstrap=True,          # Recalibration uncertainty
     n_bootstrap=1000,
     simulator=sim,
-    
+
     run_cross_conformal=True,    # Finite-sample diagnostics
     n_folds=10,
 )
