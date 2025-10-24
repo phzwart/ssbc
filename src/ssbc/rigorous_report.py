@@ -82,6 +82,7 @@ def generate_rigorous_pac_report(
         - 2.0: Standard LOO inflation (theoretical value for n→∞)
         - 1.5-2.5: Empirical range for small samples
         - >2.5: High correlation scenarios
+        - Up to 6.0: Extended range for very high correlation scenarios
         If provided, this value is used instead of automatic estimation.
     use_union_bound : bool, default=True
         Apply Bonferroni for simultaneous guarantees (recommended)
@@ -198,6 +199,7 @@ def generate_rigorous_pac_report(
             n_jobs=n_jobs,
             prediction_method=prediction_method,
             loo_inflation_factor=loo_inflation_factor,
+            verbose=verbose,
         )
     else:
         pac_bounds_marginal = compute_pac_operational_bounds_marginal(

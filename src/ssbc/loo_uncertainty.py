@@ -19,7 +19,7 @@ from scipy.stats import binom, norm
 from scipy.stats import t as t_dist
 
 
-def estimate_loo_inflation_factor(loo_predictions: np.ndarray) -> float:
+def estimate_loo_inflation_factor(loo_predictions: np.ndarray, verbose: bool = True) -> float:
     """
     Estimate the actual variance inflation from LOO-CV for this specific problem.
 
@@ -34,7 +34,7 @@ def estimate_loo_inflation_factor(loo_predictions: np.ndarray) -> float:
     Returns:
     --------
     inflation_factor : float
-        Estimated variance inflation, clipped to [1.0, 3.0]
+        Estimated variance inflation, clipped to [1.0, 6.0]
         Typically ≈ 2.0 for LOO-CV
 
     Notes:
@@ -61,8 +61,12 @@ def estimate_loo_inflation_factor(loo_predictions: np.ndarray) -> float:
 
     # Clip to reasonable range
     # Lower bound: 1.0 (can't be less than IID)
-    # Upper bound: 3.0 (if higher, something is wrong with the data)
-    inflation = np.clip(inflation, 1.0, 3.0)
+    # Upper bound: 6.0 (extended range for high correlation scenarios)
+    inflation = np.clip(inflation, 1.0, 6.0)
+    
+    # Print the estimated inflation factor for visibility
+    if verbose:
+        print(f"LOO inflation factor estimated: {inflation:.3f} (clipped to [1.0, 6.0] range)")
 
     return inflation
 
@@ -118,9 +122,8 @@ def compute_loo_corrected_bounds_analytical(
             stacklevel=2,
         )
 
-    # Estimate or use provided inflation factor
-    if inflation_factor is None:
-        inflation_factor = estimate_loo_inflation_factor(loo_predictions)
+    # Inflation factor should already be estimated at the top level
+    # This is just for backward compatibility
 
     # Variance components
 
@@ -261,14 +264,14 @@ def compute_loo_corrected_bounds_exact_binomial(
 
 
 def compute_loo_corrected_bounds_hoeffding(
-    loo_predictions: np.ndarray, n_test: int, alpha: float = 0.05
+    loo_predictions: np.ndarray, n_test: int, alpha: float = 0.05, inflation_factor: float | None = None, verbose: bool = True
 ) -> tuple[float, float, dict[str, Any]]:
     """
     METHOD 3: Distribution-free Hoeffding bound (ULTRA-CONSERVATIVE).
 
     This method:
     - Uses Hoeffding concentration inequality (no distributional assumptions)
-    - Accounts for LOO correlation via n_effective = n_cal / 2
+    - Accounts for LOO correlation via adaptive effective sample size
     - Provides guaranteed coverage regardless of distribution
     - Widest bounds, suitable as worst-case / sanity check
 
@@ -282,6 +285,8 @@ def compute_loo_corrected_bounds_hoeffding(
         Test set size
     alpha : float
         Significance level
+    inflation_factor : float, optional
+        LOO correlation inflation factor. If None, uses conservative default of 2.0.
 
     Returns:
     --------
@@ -292,8 +297,17 @@ def compute_loo_corrected_bounds_hoeffding(
     n_cal = len(loo_predictions)
     p_hat = np.mean(loo_predictions)
 
-    # Effective sample size (conservative for LOO)
-    n_effective_cal = n_cal / 2
+    # Use inflation factor if provided, otherwise use conservative default of 2.0
+    if inflation_factor is None:
+        inflation_factor = 2.0
+        if verbose:
+            print(f"Using conservative default inflation factor: {inflation_factor:.3f}")
+    else:
+        if verbose:
+            print(f"Using provided inflation factor for Hoeffding: {inflation_factor:.3f}")
+
+    # Effective sample size (accounts for LOO correlation)
+    n_effective_cal = n_cal / inflation_factor
     n_effective_test = n_test
 
     # Hoeffding bound: P(|p̂ - p| > ε) ≤ 2 exp(-2nε²)
@@ -314,6 +328,7 @@ def compute_loo_corrected_bounds_hoeffding(
     diagnostics = {
         "p_hat": p_hat,
         "n_cal": n_cal,
+        "inflation_factor": inflation_factor,
         "n_effective_cal": n_effective_cal,
         "n_test": n_test,
         "epsilon_cal": epsilon_cal,
@@ -331,6 +346,7 @@ def compute_robust_prediction_bounds(
     alpha: float = 0.05,
     method: str = "auto",
     inflation_factor: float | None = None,
+    verbose: bool = True,
 ) -> tuple[float, float, dict]:
     """
     Main function: Compute robust prediction bounds for small-sample LOO-CV.
@@ -355,6 +371,8 @@ def compute_robust_prediction_bounds(
     inflation_factor : float, optional
         Manual override for LOO variance inflation factor. If None, automatically estimated.
         Typical values: 1.0 (no inflation), 2.0 (standard LOO), 1.5-2.5 (empirical range)
+    verbose : bool, default=True
+        If True, print diagnostic information about method selection and inflation factors.
 
     Returns:
     --------
@@ -392,6 +410,20 @@ def compute_robust_prediction_bounds(
             method = "exact"
         else:
             method = "hoeffding"
+        if verbose:
+            print(f"Auto-selected LOO method: {method} (n_cal={n_cal})")
+
+    # Estimate inflation factor if needed (for analytical and hoeffding methods)
+    if inflation_factor is None and method in ["analytical", "hoeffding"]:
+        if verbose:
+            print("Estimating LOO inflation factor from data...")
+        inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=verbose)
+    elif inflation_factor is not None:
+        if verbose:
+            print(f"Using provided LOO inflation factor: {inflation_factor:.3f}")
+    else:
+        if verbose:
+            print("LOO inflation factor not needed for this method")
 
     # Compute bounds with selected method
     if method == "analytical":
@@ -405,14 +437,20 @@ def compute_robust_prediction_bounds(
         selected_method = "exact"
 
     elif method == "hoeffding":
-        L, U, diag = compute_loo_corrected_bounds_hoeffding(loo_predictions, n_test, alpha)
+        L, U, diag = compute_loo_corrected_bounds_hoeffding(loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose)
         selected_method = "hoeffding"
 
     elif method == "all":
+        # Estimate inflation factor for methods that need it
+        if inflation_factor is None:
+            if verbose:
+                print("Estimating LOO inflation factor from data for comparison...")
+            inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=verbose)
+        
         # Compute all three methods
-        L1, U1, diag1 = compute_loo_corrected_bounds_analytical(loo_predictions, n_test, alpha)
+        L1, U1, diag1 = compute_loo_corrected_bounds_analytical(loo_predictions, n_test, alpha, inflation_factor=inflation_factor)
         L2, U2, diag2 = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha)
-        L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(loo_predictions, n_test, alpha)
+        L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose)
 
         # Choose analytical as primary, but flag if too optimistic
         L, U = L1, U1

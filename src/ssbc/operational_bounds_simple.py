@@ -215,6 +215,7 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
     n_jobs: int = -1,
     prediction_method: str = "auto",
     loo_inflation_factor: float | None = None,
+    verbose: bool = True,
 ) -> dict:
     """Compute marginal operational bounds with LOO-CV uncertainty correction.
 
@@ -317,6 +318,7 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
+        verbose=verbose,
     )
 
     doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
@@ -325,6 +327,7 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
+        verbose=verbose,
     )
 
     abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
@@ -333,6 +336,7 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
+        verbose=verbose,
     )
 
     # Singleton error (conditioned on singletons)
@@ -343,6 +347,7 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
             1 - adjusted_ci_level,
             method=prediction_method,
             inflation_factor=loo_inflation_factor,
+            verbose=verbose,
         )
     else:
         error_lower = 0.0
