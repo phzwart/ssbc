@@ -7,8 +7,8 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-from .conformal import mondrian_conformal_calibrate
-from .visualization import plot_parallel_coordinates_plotly, report_prediction_stats
+from ssbc.conformal import mondrian_conformal_calibrate
+from ssbc.visualization import plot_parallel_coordinates_plotly, report_prediction_stats
 
 
 def sweep_hyperparams_and_collect(

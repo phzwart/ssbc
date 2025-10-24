@@ -345,14 +345,17 @@ class TestAlphaScan:
     def test_returns_dataframe(self, simple_calibration_data):
         """Test that alpha_scan returns a DataFrame."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
-
-        assert isinstance(df, pd.DataFrame)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
 
     def test_dataframe_columns(self, simple_calibration_data):
         """Test that DataFrame has expected columns."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         expected_columns = [
             "alpha",
@@ -411,7 +414,10 @@ class TestAlphaScan:
     def test_counts_sum_to_total(self, simple_calibration_data):
         """Test that prediction set counts sum to total number of samples."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         n_total = len(labels)
 
@@ -422,7 +428,10 @@ class TestAlphaScan:
     def test_alpha_values_in_valid_range(self, simple_calibration_data):
         """Test that alpha values are in [0, 1]."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert (df["alpha"] >= 0).all()
         assert (df["alpha"] <= 1).all()
@@ -430,7 +439,10 @@ class TestAlphaScan:
     def test_threshold_values_in_valid_range(self, simple_calibration_data):
         """Test that threshold values are in [0, 1]."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert (df["qhat_0"] >= 0).all()
         assert (df["qhat_0"] <= 1).all()
@@ -440,7 +452,10 @@ class TestAlphaScan:
     def test_counts_are_non_negative(self, simple_calibration_data):
         """Test that all counts are non-negative."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert (df["n_abstentions"] >= 0).all()
         assert (df["n_singletons"] >= 0).all()
@@ -449,7 +464,10 @@ class TestAlphaScan:
     def test_multiple_alpha_values(self, simple_calibration_data):
         """Test that multiple alpha values are scanned."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         # Should have multiple rows (one for each possible alpha + fixed)
         assert len(df) > 2
@@ -481,7 +499,10 @@ class TestAlphaScan:
         labels = np.array([0, 1, 0, 1])
         probs = np.array([[0.8, 0.2], [0.3, 0.7], [0.9, 0.1], [0.2, 0.8]])
 
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert isinstance(df, pd.DataFrame)
         assert len(df) > 0
@@ -497,7 +518,10 @@ class TestAlphaScan:
         probs = np.random.rand(10, 2)
         probs = probs / probs.sum(axis=1, keepdims=True)
 
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert isinstance(df, pd.DataFrame)
         assert len(df) > 0
@@ -508,7 +532,10 @@ class TestAlphaScan:
         # Very confident predictions
         probs = np.array([[0.99, 0.01], [0.01, 0.99], [0.95, 0.05], [0.05, 0.95]])
 
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert isinstance(df, pd.DataFrame)
         # With confident predictions, we should see more singletons at some alpha values
@@ -526,7 +553,10 @@ class TestAlphaScan:
     def test_alpha_ordering(self, simple_calibration_data):
         """Test that DataFrame can be sorted by alpha."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         # Sort by alpha
         df_sorted = df.sort_values("alpha")
@@ -546,7 +576,10 @@ class TestAlphaScan:
     def test_singleton_coverage_values(self, simple_calibration_data):
         """Test that singleton coverage values are in valid range."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         # All coverage values should be between 0 and 1
         assert (df["singleton_coverage"] >= 0).all()
@@ -559,7 +592,10 @@ class TestAlphaScan:
     def test_singleton_coverage_consistency(self, simple_calibration_data):
         """Test that singleton coverage is consistent with counts."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         for _, row in df.iterrows():
             # Check marginal coverage calculation
@@ -586,7 +622,10 @@ class TestAlphaScan:
     def test_singleton_counts_consistency(self, simple_calibration_data):
         """Test that per-class singleton counts sum to total."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         for _, row in df.iterrows():
             # Per-class singletons should sum to total singletons
@@ -597,7 +636,10 @@ class TestAlphaScan:
     def test_correct_singletons_bounded(self, simple_calibration_data):
         """Test that correct singletons don't exceed total singletons."""
         labels, probs = simple_calibration_data
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         assert (df["n_singletons_correct"] <= df["n_singletons"]).all()
         assert (df["n_singletons_correct_0"] <= df["n_singletons_0"]).all()
@@ -609,7 +651,10 @@ class TestAlphaScan:
         # Very confident and correct predictions
         probs = np.array([[0.95, 0.05], [0.05, 0.95], [0.98, 0.02], [0.02, 0.98], [0.97, 0.03], [0.03, 0.97]] * 10)
 
-        df = alpha_scan(labels, probs)
+        result = alpha_scan(labels, probs)
+        # When no fixed_threshold is provided, result should be a DataFrame
+        assert isinstance(result, pd.DataFrame)
+        df = result
 
         # With very confident correct predictions, we should see high coverage
         # at some alpha values

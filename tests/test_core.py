@@ -50,7 +50,9 @@ class TestSSBCCorrect:
 
         # With small n, correction should be more conservative
         assert result.alpha_corrected <= result.alpha_target
-        assert result.u_star >= 1
+        # For small n, the algorithm may not find a u that satisfies the PAC constraint
+        # In this case, it falls back to u_star=0 (most conservative)
+        assert result.u_star >= 0
         # Note: With very small n, the algorithm may not find a u that
         # satisfies the PAC constraint, so satisfied_mass might be < 1-delta
         assert 0 <= result.satisfied_mass <= 1
@@ -164,15 +166,15 @@ class TestSSBCCorrect:
     def test_invalid_mode(self):
         """Test with invalid mode."""
         with pytest.raises(ValueError, match="mode must be"):
-            ssbc_correct(alpha_target=0.10, n=50, delta=0.10, mode="invalid")
+            ssbc_correct(alpha_target=0.10, n=50, delta=0.10, mode="invalid")  # type: ignore[arg-type]
 
     def test_beta_binomial_without_m(self):
         """Test beta-binomial mode when m is not provided."""
         result = ssbc_correct(alpha_target=0.10, n=50, delta=0.10, mode="beta-binomial")
 
         # When m is not provided, it defaults to n internally for calculations
-        # but details stores the original value (None)
-        assert result.details["m"] is None
+        # and details stores the actual value used (n)
+        assert result.details["m"] == 50  # Should be n when not provided
         # The algorithm should still work correctly
         assert result.alpha_corrected <= result.alpha_target
 
@@ -194,8 +196,10 @@ class TestSSBCCorrect:
         """Test with n=1."""
         result = ssbc_correct(alpha_target=0.10, n=1, delta=0.10)
 
-        assert result.u_star == 1
-        assert result.alpha_corrected == 0.5  # u_star/(n+1) = 1/2
+        # For n=1, alpha_target=0.1 < 1/(n+1)=0.5, so we're in the trivial regime
+        # where no positive u is allowed (u_max=0)
+        assert result.u_star == 0
+        assert result.alpha_corrected == 0.0  # u_star/(n+1) = 0/2 = 0
 
     def test_details_structure(self):
         """Test that details dict has expected keys."""

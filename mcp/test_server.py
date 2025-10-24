@@ -17,20 +17,20 @@ def test_ssbc_function():
     print("=" * 70)
 
     # Test parameters
-    test_cases = [
+    test_cases: list[dict[str, float | int | str]] = [
         {"alpha_target": 0.10, "n": 50, "delta": 0.05, "mode": "beta"},
         {"alpha_target": 0.10, "n": 100, "delta": 0.05, "mode": "beta"},
         {"alpha_target": 0.05, "n": 200, "delta": 0.10, "mode": "beta"},
     ]
 
     for i, params in enumerate(test_cases, 1):
-        result = ssbc_correct(**params)
+        result = ssbc_correct(**params)  # type: ignore[arg-type]
         print(f"\nTest {i}: n={params['n']}, α={params['alpha_target']}, δ={params['delta']}")
         print(f"  α_corrected: {result.alpha_corrected:.4f}")
         print(f"  u*: {result.u_star}")
         print(
-            f"  Guarantee: With {100 * (1 - params['delta']):.1f}% probability, "
-            f"coverage ≥ {100 * (1 - params['alpha_target']):.1f}%"
+            f"  Guarantee: With {100 * (1 - float(params['delta'])):.1f}% probability, "
+            f"coverage ≥ {100 * (1 - float(params['alpha_target'])):.1f}%"
         )
 
     print("\n✅ All tests passed!")

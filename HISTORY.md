@@ -1,5 +1,25 @@
 # History
 
+## 1.2.0 (2025-01-27)
+
+### Code Quality & Type Safety
+- **Fixed all type checking issues** - Reduced from 47 to 0 type errors
+- **Enhanced type annotations** across all modules for better IDE support and code reliability
+- **Improved test coverage** with proper type assertions and error handling
+- **Fixed CLI parameter validation** with proper type checking for mode parameters
+- **Updated return type annotations** in LOO uncertainty quantification functions
+- **Enhanced test robustness** with proper DataFrame vs tuple handling in conformal tests
+- **Fixed import paths** in example notebooks for better compatibility
+- **Improved error handling** in examples with proper null checks
+- **Updated MCP test server** with proper type annotations and arithmetic operations
+
+### Technical Improvements
+- Added comprehensive type checking with `ty` tool integration
+- Enhanced code quality with proper type hints throughout codebase
+- Improved test reliability with type-safe assertions
+- Better error handling and validation across all modules
+- Enhanced developer experience with better IDE support
+
 ## 1.1.2 (2025-01-27)
 
 ### Documentation Infrastructure

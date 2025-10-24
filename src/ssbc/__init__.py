@@ -9,62 +9,73 @@ __version__ = version("ssbc")  # Read from package metadata (pyproject.toml)
 # Core SSBC algorithm
 # Conformal prediction
 # Bootstrap uncertainty analysis
-from .bootstrap import (
+from ssbc.bootstrap import (
     bootstrap_calibration_uncertainty,
     plot_bootstrap_distributions,
 )
-from .conformal import (
+from ssbc.conformal import (
     alpha_scan,
     compute_pac_operational_metrics,
     mondrian_conformal_calibrate,
     split_by_class,
 )
-from .core import (
+from ssbc.core import (
     SSBCResult,
     ssbc_correct,
 )
 
 # Cross-conformal validation
-from .cross_conformal import (
+from ssbc.cross_conformal import (
     cross_conformal_validation,
     print_cross_conformal_results,
 )
 
 # Hyperparameter tuning
-from .hyperparameter import (
+from ssbc.hyperparameter import (
     sweep_and_plot_parallel_plotly,
     sweep_hyperparams_and_collect,
 )
 
+# LOO uncertainty quantification
+from ssbc.loo_uncertainty import (
+    compute_robust_prediction_bounds,
+    format_prediction_bounds_report,
+)
+
 # Visualization and reporting
-from .rigorous_report import (
+from ssbc.rigorous_report import (
     generate_rigorous_pac_report,
 )
 
 # Simulation (for testing and examples)
-from .simulation import (
+from ssbc.simulation import (
     BinaryClassifierSimulator,
 )
 
 # Statistics utilities
-from .statistics import (
+from ssbc.statistics import (
     clopper_pearson_intervals,
     clopper_pearson_lower,
     clopper_pearson_upper,
     cp_interval,
+    prediction_bounds,
+    prediction_bounds_beta_binomial,
+    prediction_bounds_lower,
+    prediction_bounds_upper,
 )
 
 # Utility functions
-from .utils import (
+from ssbc.utils import (
     compute_operational_rate,
+    evaluate_test_dataset,
 )
 
 # Validation utilities
-from .validation import (
+from ssbc.validation import (
     print_validation_results,
     validate_pac_bounds,
 )
-from .visualization import (
+from ssbc.visualization import (
     plot_parallel_coordinates_plotly,
     report_prediction_stats,
 )
@@ -82,9 +93,16 @@ __all__ = [
     "clopper_pearson_intervals",
     "clopper_pearson_lower",
     "clopper_pearson_upper",
+    "prediction_bounds",
+    "prediction_bounds_lower",
+    "prediction_bounds_upper",
+    "prediction_bounds_beta_binomial",
+    "compute_robust_prediction_bounds",
+    "format_prediction_bounds_report",
     "cp_interval",
     # Utilities
     "compute_operational_rate",
+    "evaluate_test_dataset",
     # Simulation
     "BinaryClassifierSimulator",
     # Visualization

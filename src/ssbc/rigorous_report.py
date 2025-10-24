@@ -8,12 +8,13 @@ from typing import Any, cast
 
 import numpy as np
 
-from .bootstrap import bootstrap_calibration_uncertainty
-from .conformal import mondrian_conformal_calibrate, split_by_class
-from .core import ssbc_correct
-from .cross_conformal import cross_conformal_validation
-from .operational_bounds_simple import (
+from ssbc.bootstrap import bootstrap_calibration_uncertainty
+from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
+from ssbc.core import ssbc_correct
+from ssbc.cross_conformal import cross_conformal_validation
+from ssbc.operational_bounds_simple import (
     compute_pac_operational_bounds_marginal,
+    compute_pac_operational_bounds_marginal_loo_corrected,
     compute_pac_operational_bounds_perclass,
 )
 
@@ -33,6 +34,9 @@ def generate_rigorous_pac_report(
     simulator: Any = None,
     run_cross_conformal: bool = False,
     n_folds: int = 10,
+    prediction_method: str = "simple",
+    use_loo_correction: bool = False,
+    loo_inflation_factor: float | None = None,
 ) -> dict[str, Any]:
     """Generate complete rigorous PAC report with coverage volatility.
 
@@ -58,7 +62,27 @@ def generate_rigorous_pac_report(
     test_size : int, optional
         Expected test set size. If None, uses calibration size
     ci_level : float, default=0.95
-        Confidence level for Clopper-Pearson intervals
+        Confidence level for prediction bounds
+    prediction_method : str, default="simple"
+        Method for computing prediction bounds:
+        - "simple": Uses standard error formula (faster, good for large samples)
+        - "beta_binomial": Uses Beta-Binomial distribution (more accurate for small samples)
+    use_loo_correction : bool, default=False
+        If True, uses LOO-CV uncertainty correction for small samples (n=20-40).
+        This accounts for all four sources of uncertainty:
+        1. LOO-CV correlation structure (variance inflation ≈2×)
+        2. Threshold calibration uncertainty
+        3. Parameter estimation uncertainty
+        4. Test sampling uncertainty
+        Recommended for small calibration sets where standard bounds may be too narrow.
+    loo_inflation_factor : float, optional
+        Manual override for LOO variance inflation factor. If None, automatically estimated.
+        Typical values:
+        - 1.0: No inflation (assumes independent samples - usually wrong for LOO)
+        - 2.0: Standard LOO inflation (theoretical value for n→∞)
+        - 1.5-2.5: Empirical range for small samples
+        - >2.5: High correlation scenarios
+        If provided, this value is used instead of automatic estimation.
     use_union_bound : bool, default=True
         Apply Bonferroni for simultaneous guarantees (recommended)
     n_jobs : int, default=-1
@@ -161,20 +185,42 @@ def generate_rigorous_pac_report(
 
     # Step 3: Compute PAC operational bounds - MARGINAL
     # Uses minimum confidence (max delta) for conservativeness
-    pac_bounds_marginal = compute_pac_operational_bounds_marginal(
-        ssbc_result_0=ssbc_result_0,
-        ssbc_result_1=ssbc_result_1,
-        labels=labels,
-        probs=probs,
-        test_size=test_size,
-        ci_level=ci_level,
-        pac_level=pac_level_marginal,
-        use_union_bound=use_union_bound,
-        n_jobs=n_jobs,
-    )
+    if use_loo_correction:
+        pac_bounds_marginal = compute_pac_operational_bounds_marginal_loo_corrected(
+            ssbc_result_0=ssbc_result_0,
+            ssbc_result_1=ssbc_result_1,
+            labels=labels,
+            probs=probs,
+            test_size=test_size,
+            ci_level=ci_level,
+            pac_level=pac_level_marginal,
+            use_union_bound=use_union_bound,
+            n_jobs=n_jobs,
+            prediction_method=prediction_method,
+            loo_inflation_factor=loo_inflation_factor,
+        )
+    else:
+        pac_bounds_marginal = compute_pac_operational_bounds_marginal(
+            ssbc_result_0=ssbc_result_0,
+            ssbc_result_1=ssbc_result_1,
+            labels=labels,
+            probs=probs,
+            test_size=test_size,
+            ci_level=ci_level,
+            pac_level=pac_level_marginal,
+            use_union_bound=use_union_bound,
+            n_jobs=n_jobs,
+            prediction_method=prediction_method,
+        )
 
     # Step 4: Compute PAC operational bounds - PER-CLASS
     # Each class uses its own delta
+    # Convert LOO method to standard method for per-class bounds
+    perclass_prediction_method = prediction_method
+    if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding"]:
+        # For per-class bounds, use beta_binomial as it's more conservative
+        perclass_prediction_method = "beta_binomial"
+
     pac_bounds_class_0 = compute_pac_operational_bounds_perclass(
         ssbc_result_0=ssbc_result_0,
         ssbc_result_1=ssbc_result_1,
@@ -186,6 +232,8 @@ def generate_rigorous_pac_report(
         pac_level=pac_level_0,
         use_union_bound=use_union_bound,
         n_jobs=n_jobs,
+        prediction_method=perclass_prediction_method,
+        loo_inflation_factor=loo_inflation_factor,
     )
 
     pac_bounds_class_1 = compute_pac_operational_bounds_perclass(
@@ -199,6 +247,8 @@ def generate_rigorous_pac_report(
         pac_level=pac_level_1,
         use_union_bound=use_union_bound,
         n_jobs=n_jobs,
+        prediction_method=perclass_prediction_method,
+        loo_inflation_factor=loo_inflation_factor,
     )
 
     # Bootstrap calibration uncertainty analysis (optional)

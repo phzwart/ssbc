@@ -231,13 +231,23 @@ def validate_pac_bounds(
         """Compute quantiles, handling NaN."""
         valid = rates[~np.isnan(rates)] if np.any(np.isnan(rates)) else rates
         if len(valid) == 0:
-            return {"q05": np.nan, "q25": np.nan, "q50": np.nan, "q75": np.nan, "q95": np.nan}
+            return {
+                "q025": np.nan,
+                "q05": np.nan,
+                "q25": np.nan,
+                "q50": np.nan,
+                "q75": np.nan,
+                "q95": np.nan,
+                "q975": np.nan,
+            }
         return {
+            "q025": float(np.percentile(valid, 2.5)),
             "q05": float(np.percentile(valid, 5)),
             "q25": float(np.percentile(valid, 25)),
             "q50": float(np.percentile(valid, 50)),
             "q75": float(np.percentile(valid, 75)),
             "q95": float(np.percentile(valid, 95)),
+            "q975": float(np.percentile(valid, 97.5)),
         }
 
     # Get bounds from report

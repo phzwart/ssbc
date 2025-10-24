@@ -87,4 +87,4 @@ myst_enable_extensions = [
 ]
 
 # Source file extensions
-source_suffix = ['.rst', '.md']
+source_suffix = [".rst", ".md"]

@@ -1,6 +1,7 @@
 """Tests for SSBC core algorithm improvements and edge cases."""
 
 import math
+
 import pytest
 
 from ssbc.core import ssbc_correct
@@ -19,7 +20,7 @@ def test_monotone_alpha(n, alpha_target, delta):
 def test_trivial_small_alpha():
     """Test edge case where alpha_target < 1/(n+1)."""
     n = 50
-    alpha_target = 1/(n+1) - 1e-9
+    alpha_target = 1 / (n + 1) - 1e-9
     r = ssbc_correct(alpha_target=alpha_target, n=n, delta=0.1)
     assert r.u_star == 0
     assert r.alpha_corrected == 0.0
@@ -46,12 +47,12 @@ def test_numerical_stability_edge_cases():
     r1 = ssbc_correct(alpha_target=1e-8, n=10, delta=0.1)
     assert r1.u_star >= 0
     assert r1.alpha_corrected <= 1e-8
-    
+
     # Very small n
     r2 = ssbc_correct(alpha_target=0.1, n=1, delta=0.1)
     assert r2.u_star >= 0
     assert r2.alpha_corrected <= 0.1
-    
+
     # Very small delta
     r3 = ssbc_correct(alpha_target=0.1, n=50, delta=1e-6)
     assert r3.u_star >= 0

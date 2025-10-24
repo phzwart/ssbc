@@ -1,6 +1,6 @@
 """Utility functions for conformal prediction."""
 
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -70,3 +70,179 @@ def compute_operational_rate(
             raise ValueError(f"Unknown rate_type: {rate_type}")
 
     return indicators
+
+
+def evaluate_test_dataset(
+    test_labels: np.ndarray,
+    test_probs: np.ndarray,
+    threshold_0: float,
+    threshold_1: float,
+) -> dict[str, Any]:
+    """Evaluate a test dataset and compute empirical operational rates.
+
+    This function takes a test dataset with true labels and probability predictions,
+    applies Mondrian conformal prediction thresholds, and returns comprehensive
+    empirical rates for both marginal and per-class statistics.
+
+    Parameters
+    ----------
+    test_labels : np.ndarray
+        True labels for test samples (0 or 1)
+    test_probs : np.ndarray
+        Probability predictions for test samples, shape (n_samples, 2)
+        test_probs[i, 0] = P(class=0), test_probs[i, 1] = P(class=1)
+    threshold_0 : float
+        Conformal prediction threshold for class 0
+    threshold_1 : float
+        Conformal prediction threshold for class 1
+
+    Returns
+    -------
+    dict
+        Dictionary containing empirical rates with structure:
+        - 'marginal': Marginal rates across all samples
+        - 'class_0': Rates for class 0 samples only
+        - 'class_1': Rates for class 1 samples only
+        Each containing:
+        - 'singleton_rate': Fraction of samples with singleton predictions
+        - 'doublet_rate': Fraction of samples with doublet predictions
+        - 'abstention_rate': Fraction of samples with abstention (empty set)
+        - 'singleton_error_rate': Fraction of singleton predictions that are incorrect
+        - 'n_samples': Number of samples in this group
+        - 'n_singletons': Number of singleton predictions
+        - 'n_doublets': Number of doublet predictions
+        - 'n_abstentions': Number of abstentions
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ssbc import evaluate_test_dataset
+    >>>
+    >>> # Generate test data
+    >>> test_labels = np.array([0, 0, 1, 1, 0])
+    >>> test_probs = np.array([
+    ...     [0.8, 0.2],  # High confidence class 0
+    ...     [0.6, 0.4],  # Medium confidence class 0
+    ...     [0.3, 0.7],  # High confidence class 1
+    ...     [0.4, 0.6],  # Medium confidence class 1
+    ...     [0.5, 0.5],  # Uncertain
+    ... ])
+    >>>
+    >>> # Evaluate with thresholds
+    >>> results = evaluate_test_dataset(test_labels, test_probs, 0.3, 0.3)
+    >>> print(f"Marginal singleton rate: {results['marginal']['singleton_rate']:.3f}")
+    >>> print(f"Class 0 singleton rate: {results['class_0']['singleton_rate']:.3f}")
+
+    Notes
+    -----
+    This function is useful for:
+    - Evaluating conformal prediction performance on test data
+    - Comparing empirical rates to theoretical bounds
+    - Computing operational statistics for reporting
+    - Validating that thresholds work as expected
+
+    The function builds prediction sets using the Mondrian approach:
+    - For each sample, include class 0 if score_0 <= threshold_0
+    - For each sample, include class 1 if score_1 <= threshold_1
+    - Where score_k = 1 - P(class=k)
+    """
+    n_test = len(test_labels)
+    if n_test == 0:
+        raise ValueError("Test dataset cannot be empty")
+
+    if test_probs.shape != (n_test, 2):
+        raise ValueError(f"test_probs must have shape ({n_test}, 2), got {test_probs.shape}")
+
+    # Build prediction sets using Mondrian thresholds
+    prediction_sets = []
+    for i in range(n_test):
+        score_0 = 1.0 - test_probs[i, 0]
+        score_1 = 1.0 - test_probs[i, 1]
+
+        pred_set = set()
+        if score_0 <= threshold_0:
+            pred_set.add(0)
+        if score_1 <= threshold_1:
+            pred_set.add(1)
+        prediction_sets.append(pred_set)
+
+    # Compute indicators for all rate types
+    singleton_indicators = compute_operational_rate(prediction_sets, test_labels, "singleton")
+    doublet_indicators = compute_operational_rate(prediction_sets, test_labels, "doublet")
+    abstention_indicators = compute_operational_rate(prediction_sets, test_labels, "abstention")
+    error_in_singleton_indicators = compute_operational_rate(prediction_sets, test_labels, "error_in_singleton")
+
+    # Split by class
+    class_0_mask = test_labels == 0
+    class_1_mask = test_labels == 1
+
+    def compute_rates(indicators: np.ndarray, mask: np.ndarray | None = None) -> dict[str, Any]:
+        """Compute rates for a subset of samples."""
+        if mask is not None:
+            subset_indicators = indicators[mask]
+            n_subset = np.sum(mask)
+        else:
+            subset_indicators = indicators
+            n_subset = len(indicators)
+
+        if n_subset == 0:
+            return {
+                "singleton_rate": np.nan,
+                "doublet_rate": np.nan,
+                "abstention_rate": np.nan,
+                "singleton_error_rate": np.nan,
+                "n_samples": 0,
+                "n_singletons": 0,
+                "n_doublets": 0,
+                "n_abstentions": 0,
+            }
+
+        # Compute rates
+        singleton_rate = np.mean(subset_indicators)
+        n_singletons = int(np.sum(subset_indicators))
+
+        # For other rates, use the appropriate indicators
+        if mask is not None:
+            doublet_indicators_subset = doublet_indicators[mask]
+            abstention_indicators_subset = abstention_indicators[mask]
+            error_indicators_subset = error_in_singleton_indicators[mask]
+        else:
+            doublet_indicators_subset = doublet_indicators
+            abstention_indicators_subset = abstention_indicators
+            error_indicators_subset = error_in_singleton_indicators
+
+        doublet_rate = np.mean(doublet_indicators_subset)
+        abstention_rate = np.mean(abstention_indicators_subset)
+
+        n_doublets = int(np.sum(doublet_indicators_subset))
+        n_abstentions = int(np.sum(abstention_indicators_subset))
+
+        # Singleton error rate: errors among singletons
+        if n_singletons > 0:
+            singleton_error_rate = np.mean(error_indicators_subset[subset_indicators == 1])
+        else:
+            singleton_error_rate = np.nan
+
+        return {
+            "singleton_rate": float(singleton_rate),
+            "doublet_rate": float(doublet_rate),
+            "abstention_rate": float(abstention_rate),
+            "singleton_error_rate": float(singleton_error_rate) if not np.isnan(singleton_error_rate) else np.nan,
+            "n_samples": int(n_subset),
+            "n_singletons": n_singletons,
+            "n_doublets": n_doublets,
+            "n_abstentions": n_abstentions,
+        }
+
+    # Compute rates for all groups
+    marginal_rates = compute_rates(singleton_indicators)
+    class_0_rates = compute_rates(singleton_indicators, class_0_mask)
+    class_1_rates = compute_rates(singleton_indicators, class_1_mask)
+
+    return {
+        "marginal": marginal_rates,
+        "class_0": class_0_rates,
+        "class_1": class_1_rates,
+        "thresholds": {"threshold_0": threshold_0, "threshold_1": threshold_1},
+        "n_test": n_test,
+    }

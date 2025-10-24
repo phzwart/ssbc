@@ -87,9 +87,11 @@ print(f"   → Monitor: Alert if observed rate < {pac_lower:.3f}")
 if cross_conf_class_0 and cross_conf_class_0["std"] > 0.1:
     print(f"\n⚠️  Cross-conformal std = {cross_conf_class_0['std']:.3f} is high")
     print("   → Consider collecting more calibration data")
-else:
+elif cross_conf_class_0:
     print(f"\n✓ Cross-conformal std = {cross_conf_class_0['std']:.3f} is acceptable")
     print("   → Current calibration size is adequate")
+else:
+    print("\n✓ Cross-conformal validation not performed")
 
 if bootstrap_class_0:
     bs_width = bootstrap_class_0["quantiles"]["q95"] - bootstrap_class_0["quantiles"]["q05"]

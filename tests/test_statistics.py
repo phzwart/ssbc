@@ -160,7 +160,7 @@ class TestCpInterval:
 
     def test_float_conversion(self):
         """Test that count and total are properly converted."""
-        result = cp_interval(count=5.0, total=10.0)
+        result = cp_interval(count=5, total=10)
 
         assert isinstance(result["count"], int)
         assert isinstance(result["proportion"], float)

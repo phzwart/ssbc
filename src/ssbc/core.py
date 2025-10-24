@@ -1,4 +1,5 @@
 """Core SSBC (Small-Sample Beta Correction) algorithm."""
+
 import math
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -101,6 +102,12 @@ def ssbc_correct(
     # Maximum u to search (α' must be ≤ α_target)
     u_max = min(n, math.floor(alpha_target * (n + 1)))
 
+    # Handle beta-binomial mode setup
+    if mode == "beta-binomial":
+        m_eval = m if m is not None else n
+        if m_eval < 1:
+            raise ValueError("m must be >= 1 for beta-binomial mode.")
+
     # Trivial regime: if α_target < 1/(n+1), no positive u is allowed.
     # Return u=0, α_corrected=0, with satisfied mass = 1.0 by construction.
     if u_max == 0:
@@ -154,9 +161,6 @@ def ssbc_correct(
         u_search_max = u_max
 
     if mode == "beta-binomial":
-        m_eval = m if m is not None else n
-        if m_eval < 1:
-            raise ValueError("m must be >= 1 for beta-binomial mode.")
         k_thresh = math.ceil(target_coverage * m_eval)
 
     u_star: int | None = None

@@ -6,8 +6,7 @@ Exposes SSBC functionality as MCP tools for AI assistants.
 from typing import Literal
 
 from mcp.server.fastmcp import FastMCP  # type: ignore[import-untyped]
-
-from .core import ssbc_correct
+from ssbc.core import ssbc_correct
 
 # Initialize FastMCP server
 mcp = FastMCP("SSBC Server")
