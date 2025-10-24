@@ -134,7 +134,11 @@ def compute_loo_corrected_bounds_analytical(
 
     # Method B: Theoretical with inflation factor
     # For small n, use (n-1) in denominator for bias correction
-    var_calibration_theoretical = inflation_factor * p_hat * (1 - p_hat) / (n_cal - 1)
+    if inflation_factor is not None:
+        var_calibration_theoretical = inflation_factor * p_hat * (1 - p_hat) / (n_cal - 1)
+    else:
+        # Fallback to empirical variance if no inflation factor provided
+        var_calibration_theoretical = var_calibration_empirical
 
     # Use the LARGER of the two (conservative)
     var_calibration = max(var_calibration_empirical, var_calibration_theoretical)

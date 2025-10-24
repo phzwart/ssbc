@@ -2861,7 +2861,7 @@ wheels = [
 
 [[package]]
 name = "ssbc"
-version = "1.2.0"
+version = "1.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "joblib" },
