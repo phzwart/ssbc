@@ -1,4 +1,5 @@
-"""MCP Server for SSBC - Small-Sample Beta Correction.
+"""
+MCP Server for SSBC - Statistical Prediction Sets with Small-Sample Beta Correction.
 
 Exposes SSBC functionality as MCP tools for AI assistants.
 """
