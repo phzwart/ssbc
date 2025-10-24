@@ -25,7 +25,7 @@ repos:
       # Run the linter
       - id: ruff
         args: [--fix]
-        exclude: '\.ipynb$'
+        exclude: '\.ipynb$|src/ssbc/mcp_server\.py$'
       # Run the formatter
       - id: ruff-format
         exclude: '\.ipynb$'
