@@ -7,6 +7,143 @@ by running simulations with fixed calibration thresholds on independent test set
 from typing import Any
 
 import numpy as np
+from joblib import Parallel, delayed
+
+
+def _validate_single_trial(
+    trial_idx: int,
+    simulator: Any,
+    test_size: int,
+    threshold_0: float,
+    threshold_1: float,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Run a single validation trial.
+    
+    Parameters
+    ----------
+    trial_idx : int
+        Trial index (for unique random seeds)
+    simulator : Any
+        Data generator
+    test_size : int
+        Size of test set
+    threshold_0 : float
+        Fixed threshold for class 0
+    threshold_1 : float
+        Fixed threshold for class 1
+    seed : int, optional
+        Base random seed
+        
+    Returns
+    -------
+    dict
+        Trial results with marginal and per-class rates
+    """
+    # Set unique seed for this trial
+    if seed is not None:
+        np.random.seed(seed + trial_idx)
+    
+    # Generate independent test set
+    labels_test, probs_test = simulator.generate(test_size)
+    
+    # Apply FIXED Mondrian thresholds and evaluate
+    n_total = len(labels_test)
+    n_singletons = 0
+    n_doublets = 0
+    n_abstentions = 0
+    n_singletons_correct = 0
+
+    # Per-class counters
+    n_0 = np.sum(labels_test == 0)
+    n_1 = np.sum(labels_test == 1)
+
+    n_singletons_0 = 0
+    n_doublets_0 = 0
+    n_abstentions_0 = 0
+    n_singletons_correct_0 = 0
+
+    n_singletons_1 = 0
+    n_doublets_1 = 0
+    n_abstentions_1 = 0
+    n_singletons_correct_1 = 0
+
+    for i in range(n_total):
+        true_label = labels_test[i]
+        score_0 = 1.0 - probs_test[i, 0]
+        score_1 = 1.0 - probs_test[i, 1]
+
+        # Build prediction set using FIXED thresholds
+        in_0 = score_0 <= threshold_0
+        in_1 = score_1 <= threshold_1
+
+        # Marginal counts
+        if in_0 and in_1:
+            n_doublets += 1
+        elif in_0 or in_1:
+            n_singletons += 1
+            if (in_0 and true_label == 0) or (in_1 and true_label == 1):
+                n_singletons_correct += 1
+        else:
+            n_abstentions += 1
+
+        # Per-class counts
+        if true_label == 0:
+            if in_0 and in_1:
+                n_doublets_0 += 1
+            elif in_0 or in_1:
+                n_singletons_0 += 1
+                if in_0:
+                    n_singletons_correct_0 += 1
+            else:
+                n_abstentions_0 += 1
+        else:  # true_label == 1
+            if in_0 and in_1:
+                n_doublets_1 += 1
+            elif in_0 or in_1:
+                n_singletons_1 += 1
+                if in_1:
+                    n_singletons_correct_1 += 1
+            else:
+                n_abstentions_1 += 1
+
+    # Compute marginal rates
+    marginal_singleton_rate = n_singletons / n_total
+    marginal_doublet_rate = n_doublets / n_total
+    marginal_abstention_rate = n_abstentions / n_total
+    marginal_singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else np.nan
+
+    # Compute per-class rates
+    class_0_singleton_rate = n_singletons_0 / n_0 if n_0 > 0 else np.nan
+    class_0_doublet_rate = n_doublets_0 / n_0 if n_0 > 0 else np.nan
+    class_0_abstention_rate = n_abstentions_0 / n_0 if n_0 > 0 else np.nan
+    class_0_singleton_error_rate = (n_singletons_0 - n_singletons_correct_0) / n_singletons_0 if n_singletons_0 > 0 else np.nan
+
+    class_1_singleton_rate = n_singletons_1 / n_1 if n_1 > 0 else np.nan
+    class_1_doublet_rate = n_doublets_1 / n_1 if n_1 > 0 else np.nan
+    class_1_abstention_rate = n_abstentions_1 / n_1 if n_1 > 0 else np.nan
+    class_1_singleton_error_rate = (n_singletons_1 - n_singletons_correct_1) / n_singletons_1 if n_singletons_1 > 0 else np.nan
+
+    return {
+        "marginal": {
+            "singleton": marginal_singleton_rate,
+            "doublet": marginal_doublet_rate,
+            "abstention": marginal_abstention_rate,
+            "singleton_error": marginal_singleton_error_rate,
+        },
+        "class_0": {
+            "singleton": class_0_singleton_rate,
+            "doublet": class_0_doublet_rate,
+            "abstention": class_0_abstention_rate,
+            "singleton_error": class_0_singleton_error_rate,
+        },
+        "class_1": {
+            "singleton": class_1_singleton_rate,
+            "doublet": class_1_doublet_rate,
+            "abstention": class_1_abstention_rate,
+            "singleton_error": class_1_singleton_error_rate,
+        },
+    }
 
 
 def validate_pac_bounds(
@@ -16,6 +153,7 @@ def validate_pac_bounds(
     n_trials: int = 1000,
     seed: int | None = None,
     verbose: bool = True,
+    n_jobs: int = -1,
 ) -> dict[str, Any]:
     """Empirically validate PAC operational bounds.
 
@@ -39,6 +177,9 @@ def validate_pac_bounds(
         Random seed for reproducibility
     verbose : bool, default=True
         Print validation progress
+    n_jobs : int, default=-1
+        Number of parallel jobs for trial execution.
+        -1 = use all cores (default), 1 = single-threaded, N = use N cores.
 
     Returns
     -------
@@ -85,114 +226,36 @@ def validate_pac_bounds(
     if verbose:
         print(f"Using fixed thresholds: q̂₀={threshold_0:.4f}, q̂₁={threshold_1:.4f}")
         print(f"Running {n_trials} trials with test_size={test_size}...")
+        if n_jobs == -1:
+            print("Using all available CPU cores for parallel execution")
+        elif n_jobs == 1:
+            print("Using single-threaded execution")
+        else:
+            print(f"Using {n_jobs} CPU cores for parallel execution")
 
-    # Storage for realized rates
-    marginal_singleton_rates = []
-    marginal_doublet_rates = []
-    marginal_abstention_rates = []
-    marginal_singleton_error_rates = []
+    # Run trials in parallel
+    trial_results = Parallel(n_jobs=n_jobs)(
+        delayed(_validate_single_trial)(
+            trial_idx, simulator, test_size, threshold_0, threshold_1, seed
+        )
+        for trial_idx in range(n_trials)
+    )
 
-    class_0_singleton_rates = []
-    class_0_doublet_rates = []
-    class_0_abstention_rates = []
-    class_0_singleton_error_rates = []
+    # Extract results from parallel execution
+    marginal_singleton_rates = [result["marginal"]["singleton"] for result in trial_results]
+    marginal_doublet_rates = [result["marginal"]["doublet"] for result in trial_results]
+    marginal_abstention_rates = [result["marginal"]["abstention"] for result in trial_results]
+    marginal_singleton_error_rates = [result["marginal"]["singleton_error"] for result in trial_results]
 
-    class_1_singleton_rates = []
-    class_1_doublet_rates = []
-    class_1_abstention_rates = []
-    class_1_singleton_error_rates = []
+    class_0_singleton_rates = [result["class_0"]["singleton"] for result in trial_results]
+    class_0_doublet_rates = [result["class_0"]["doublet"] for result in trial_results]
+    class_0_abstention_rates = [result["class_0"]["abstention"] for result in trial_results]
+    class_0_singleton_error_rates = [result["class_0"]["singleton_error"] for result in trial_results]
 
-    # Run trials
-    for _ in range(n_trials):
-        # Generate independent test set
-        labels_test, probs_test = simulator.generate(test_size)
-
-        # Apply FIXED Mondrian thresholds and evaluate
-        n_total = len(labels_test)
-        n_singletons = 0
-        n_doublets = 0
-        n_abstentions = 0
-        n_singletons_correct = 0
-
-        # Per-class counters
-        n_0 = np.sum(labels_test == 0)
-        n_1 = np.sum(labels_test == 1)
-
-        n_singletons_0 = 0
-        n_doublets_0 = 0
-        n_abstentions_0 = 0
-        n_singletons_correct_0 = 0
-
-        n_singletons_1 = 0
-        n_doublets_1 = 0
-        n_abstentions_1 = 0
-        n_singletons_correct_1 = 0
-
-        for i in range(n_total):
-            true_label = labels_test[i]
-            score_0 = 1.0 - probs_test[i, 0]
-            score_1 = 1.0 - probs_test[i, 1]
-
-            # Build prediction set using FIXED thresholds
-            in_0 = score_0 <= threshold_0
-            in_1 = score_1 <= threshold_1
-
-            # Marginal counts
-            if in_0 and in_1:
-                n_doublets += 1
-            elif in_0 or in_1:
-                n_singletons += 1
-                if (in_0 and true_label == 0) or (in_1 and true_label == 1):
-                    n_singletons_correct += 1
-            else:
-                n_abstentions += 1
-
-            # Per-class counts
-            if true_label == 0:
-                if in_0 and in_1:
-                    n_doublets_0 += 1
-                elif in_0 or in_1:
-                    n_singletons_0 += 1
-                    if in_0:
-                        n_singletons_correct_0 += 1
-                else:
-                    n_abstentions_0 += 1
-            else:  # true_label == 1
-                if in_0 and in_1:
-                    n_doublets_1 += 1
-                elif in_0 or in_1:
-                    n_singletons_1 += 1
-                    if in_1:
-                        n_singletons_correct_1 += 1
-                else:
-                    n_abstentions_1 += 1
-
-        # Compute marginal rates
-        marginal_singleton_rates.append(n_singletons / n_total)
-        marginal_doublet_rates.append(n_doublets / n_total)
-        marginal_abstention_rates.append(n_abstentions / n_total)
-
-        singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else np.nan
-        marginal_singleton_error_rates.append(singleton_error_rate)
-
-        # Compute per-class rates
-        if n_0 > 0:
-            class_0_singleton_rates.append(n_singletons_0 / n_0)
-            class_0_doublet_rates.append(n_doublets_0 / n_0)
-            class_0_abstention_rates.append(n_abstentions_0 / n_0)
-            singleton_error_0 = (
-                (n_singletons_0 - n_singletons_correct_0) / n_singletons_0 if n_singletons_0 > 0 else np.nan
-            )
-            class_0_singleton_error_rates.append(singleton_error_0)
-
-        if n_1 > 0:
-            class_1_singleton_rates.append(n_singletons_1 / n_1)
-            class_1_doublet_rates.append(n_doublets_1 / n_1)
-            class_1_abstention_rates.append(n_abstentions_1 / n_1)
-            singleton_error_1 = (
-                (n_singletons_1 - n_singletons_correct_1) / n_singletons_1 if n_singletons_1 > 0 else np.nan
-            )
-            class_1_singleton_error_rates.append(singleton_error_1)
+    class_1_singleton_rates = [result["class_1"]["singleton"] for result in trial_results]
+    class_1_doublet_rates = [result["class_1"]["doublet"] for result in trial_results]
+    class_1_abstention_rates = [result["class_1"]["abstention"] for result in trial_results]
+    class_1_singleton_error_rates = [result["class_1"]["singleton_error"] for result in trial_results]
 
     # Convert to arrays
     marginal_singleton_rates = np.array(marginal_singleton_rates)
