@@ -1,5 +1,15 @@
 # History
 
+## 1.2.4 (2025-01-29)
+
+### Bug Fixes
+- **Fixed KeyError in report printing** - Removed references to non-existent `bootstrap_results` and `cross_conformal_results` keys from `_print_rigorous_report()`
+- Bootstrap/cross-conformal functionality was already removed in 1.2.3, but the printing function still tried to access these keys, causing crashes
+
+### Technical Improvements
+- Simplified report printing to only show PAC-controlled bounds and technical details
+- All tests passing
+
 ## 1.2.3 (2025-01-28)
 
 ### Bug Fixes

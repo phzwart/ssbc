@@ -465,96 +465,6 @@ def _print_rigorous_report(report: dict) -> None:
     print(f"     Automation (singletons): {s_lower:.1%} - {s_upper:.1%}")
     print(f"     Escalation (doublets+abstentions): {a_lower + d_lower:.1%} - {a_upper + d_upper:.1%}")
 
-    # Bootstrap results if available
-    if report["bootstrap_results"] is not None:
-        bootstrap = report["bootstrap_results"]
-        print("\n" + "=" * 80)
-        print("BOOTSTRAP CALIBRATION UNCERTAINTY")
-        print(f"({bootstrap['n_bootstrap']} bootstrap samples)")
-        print("=" * 80)
-        print("\nModels: 'If I recalibrate on similar datasets, how do rates vary?'")
-        print("Method: Bootstrap resample → recalibrate → test on fresh data\n")
-
-        # Marginal
-        print("-" * 80)
-        print("MARGINAL")
-        print("-" * 80)
-        for metric, name in [
-            ("singleton", "SINGLETON"),
-            ("doublet", "DOUBLET"),
-            ("abstention", "ABSTENTION"),
-            ("singleton_error", "SINGLETON ERROR"),
-        ]:
-            m = bootstrap["marginal"][metric]
-            q = m["quantiles"]
-            print(f"\n{name}:")
-            print(f"  Mean:      {m['mean']:.4f} ± {m['std']:.4f}")
-            print(f"  Median:    {q['q50']:.4f}")
-            print(f"  [5%, 95%]: [{q['q05']:.4f}, {q['q95']:.4f}]")
-
-        # Per-class
-        for class_label in [0, 1]:
-            print(f"\n{'-' * 80}")
-            print(f"CLASS {class_label}")
-            print("-" * 80)
-            for metric, name in [
-                ("singleton", "SINGLETON"),
-                ("doublet", "DOUBLET"),
-                ("abstention", "ABSTENTION"),
-                ("singleton_error", "SINGLETON ERROR"),
-            ]:
-                m = bootstrap[f"class_{class_label}"][metric]
-                q = m["quantiles"]
-                print(f"\n{name}:")
-                print(f"  Mean:      {m['mean']:.4f} ± {m['std']:.4f}")
-                print(f"  Median:    {q['q50']:.4f}")
-                print(f"  [5%, 95%]: [{q['q05']:.4f}, {q['q95']:.4f}]")
-
-    # Cross-conformal results if available
-    if report["cross_conformal_results"] is not None:
-        cross_conf = report["cross_conformal_results"]
-        print("\n" + "=" * 80)
-        print("CROSS-CONFORMAL VALIDATION")
-        print(f"({cross_conf['n_folds']}-fold, n={cross_conf['n_samples']})")
-        print("=" * 80)
-        print("\nModels: 'How stable are rates across different calibration subsets?'")
-        print("Method: K-fold split → train on K-1 → test on 1 fold\n")
-
-        # Marginal
-        print("-" * 80)
-        print("MARGINAL")
-        print("-" * 80)
-        for metric, name in [
-            ("singleton", "SINGLETON"),
-            ("doublet", "DOUBLET"),
-            ("abstention", "ABSTENTION"),
-            ("singleton_error", "SINGLETON ERROR"),
-        ]:
-            m = cross_conf["marginal"][metric]
-            q = m["quantiles"]
-            print(f"\n{name}:")
-            print(f"  Mean across folds: {m['mean']:.4f} ± {m['std']:.4f}")
-            print(f"  Median:            {q['q50']:.4f}")
-            print(f"  [5%, 95%] range:   [{q['q05']:.4f}, {q['q95']:.4f}]")
-
-        # Per-class
-        for class_label in [0, 1]:
-            print(f"\n{'-' * 80}")
-            print(f"CLASS {class_label}")
-            print("-" * 80)
-            for metric, name in [
-                ("singleton", "SINGLETON"),
-                ("doublet", "DOUBLET"),
-                ("abstention", "ABSTENTION"),
-                ("singleton_error", "SINGLETON ERROR"),
-            ]:
-                m = cross_conf[f"class_{class_label}"][metric]
-                q = m["quantiles"]
-                print(f"\n{name}:")
-                print(f"  Mean across folds: {m['mean']:.4f} ± {m['std']:.4f}")
-                print(f"  Median:            {q['q50']:.4f}")
-                print(f"  [5%, 95%] range:   [{q['q05']:.4f}, {q['q95']:.4f}]")
-
     print("\n" + "=" * 80)
     print("NOTES")
     print("=" * 80)
@@ -562,27 +472,9 @@ def _print_rigorous_report(report: dict) -> None:
     print("  • Bound the TRUE rate for THIS fixed calibration")
     print("  • Valid for any future test set size")
     print("  • Models: 'Given this calibration, what rates on future test sets?'")
-    if report["bootstrap_results"] is not None:
-        print("\n✓ BOOTSTRAP INTERVALS:")
-        print("  • Show recalibration uncertainty (wider than PAC bounds)")
-        print("  • Models: 'If I recalibrate on similar data, how do rates vary?'")
-        print("  • Complementary to PAC bounds - different question!")
-    if report["cross_conformal_results"] is not None:
-        print("\n✓ CROSS-CONFORMAL VALIDATION:")
-        print("  • Shows rate stability across K-fold calibration splits")
-        print("  • Models: 'How stable are rates across calibration subsets?'")
-        print("  • Use for: Finite-sample diagnostics, sample size planning")
-        print("  • Large std → need more calibration data")
     print("\n✓ TECHNICAL DETAILS:")
     print("  • LOO-CV for unbiased rate estimates (no data leakage)")
     print("  • Clopper-Pearson intervals account for estimation uncertainty")
     if params["use_union_bound"]:
         print("  • Union bound ensures ALL metrics hold simultaneously")
-    if report["bootstrap_results"] is not None or report["cross_conformal_results"] is not None:
-        print("\n✓ ALL METHODS ARE COMPLEMENTARY:")
-        print("  • Use PAC bounds for deployment (rigorous guarantees)")
-        if report["bootstrap_results"] is not None:
-            print("  • Use Bootstrap to understand recalibration impact")
-        if report["cross_conformal_results"] is not None:
-            print("  • Use Cross-Conformal to diagnose calibration quality")
     print("\n" + "=" * 80)
