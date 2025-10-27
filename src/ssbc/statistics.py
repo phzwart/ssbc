@@ -6,6 +6,15 @@ import numpy as np
 from scipy import stats
 from scipy.stats import beta as beta_dist
 
+# Exported public API
+__all__ = [
+    "clopper_pearson_lower",
+    "clopper_pearson_upper",
+    "clopper_pearson_intervals",
+    "cp_interval",
+    "prediction_bounds",
+]
+
 
 def clopper_pearson_lower(k: int, n: int, confidence: float = 0.95) -> float:
     """Compute lower Clopper-Pearson (one-sided) confidence bound.

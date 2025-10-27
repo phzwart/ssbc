@@ -1,7 +1,7 @@
 # Cursor AI Rules for SSBC Project
 
 ## Python Environment
-- Use conda environment: `cctbx`
+- Use conda environment: `ssbc`
 - Python 3.10+ required
 - All code must have type hints
 

@@ -8,10 +8,8 @@ from typing import Any, cast
 
 import numpy as np
 
-from ssbc.bootstrap import bootstrap_calibration_uncertainty
 from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
 from ssbc.core import ssbc_correct
-from ssbc.cross_conformal import cross_conformal_validation
 from ssbc.operational_bounds_simple import (
     compute_pac_operational_bounds_marginal,
     compute_pac_operational_bounds_marginal_loo_corrected,
@@ -26,17 +24,12 @@ def generate_rigorous_pac_report(
     delta: float | dict[int, float] = 0.10,
     test_size: int | None = None,
     ci_level: float = 0.95,
-    use_union_bound: bool = True,
+    use_union_bound: bool = False,
     n_jobs: int = -1,
     verbose: bool = True,
-    run_bootstrap: bool = False,
-    n_bootstrap: int = 1000,
-    simulator: Any = None,
-    run_cross_conformal: bool = False,
-    n_folds: int = 10,
-    prediction_method: str = "simple",
-    use_loo_correction: bool = False,
-    loo_inflation_factor: float | None = None,
+    prediction_method: str = "hoeffding",
+    use_loo_correction: bool = True,
+    loo_inflation_factor: float = 2.0,
 ) -> dict[str, Any]:
     """Generate complete rigorous PAC report with coverage volatility.
 
@@ -63,10 +56,14 @@ def generate_rigorous_pac_report(
         Expected test set size. If None, uses calibration size
     ci_level : float, default=0.95
         Confidence level for prediction bounds
-    prediction_method : str, default="simple"
-        Method for computing prediction bounds:
-        - "simple": Uses standard error formula (faster, good for large samples)
-        - "beta_binomial": Uses Beta-Binomial distribution (more accurate for small samples)
+    prediction_method : str, default="hoeffding"
+        Method for LOO uncertainty quantification (when use_loo_correction=True):
+        - "auto": Automatically select best method
+        - "analytical": Method 1 (recommended for n>=40)
+        - "exact": Method 2 (recommended for n=20-40)
+        - "hoeffding": Method 3 (ultra-conservative, default)
+        - "all": Compare all methods
+        When use_loo_correction=False, this parameter is ignored.
     use_loo_correction : bool, default=False
         If True, uses LOO-CV uncertainty correction for small samples (n=20-40).
         This accounts for all four sources of uncertainty:
@@ -84,23 +81,13 @@ def generate_rigorous_pac_report(
         - >2.5: High correlation scenarios
         - Up to 6.0: Extended range for very high correlation scenarios
         If provided, this value is used instead of automatic estimation.
-    use_union_bound : bool, default=True
-        Apply Bonferroni for simultaneous guarantees (recommended)
+    use_union_bound : bool, default=False
+        Apply Bonferroni for simultaneous guarantees
     n_jobs : int, default=-1
         Number of parallel jobs for LOO-CV computation.
         -1 = use all cores (default), 1 = single-threaded, N = use N cores.
     verbose : bool, default=True
         Print comprehensive report
-    run_bootstrap : bool, default=False
-        Run bootstrap calibration uncertainty analysis
-    n_bootstrap : int, default=1000
-        Number of bootstrap trials (only if run_bootstrap=True)
-    simulator : DataGenerator, optional
-        Simulator for generating fresh test sets (required if run_bootstrap=True)
-    run_cross_conformal : bool, default=False
-        Run cross-conformal validation for finite-sample diagnostics
-    n_folds : int, default=10
-        Number of folds for cross-conformal validation (only if run_cross_conformal=True)
 
     Returns
     -------
@@ -253,52 +240,6 @@ def generate_rigorous_pac_report(
         loo_inflation_factor=loo_inflation_factor,
     )
 
-    # Bootstrap calibration uncertainty analysis (optional)
-    bootstrap_results = None
-    if run_bootstrap:
-        if simulator is None:
-            raise ValueError("simulator is required when run_bootstrap=True")
-
-        if verbose:
-            print("\n" + "=" * 80)
-            print("BOOTSTRAP CALIBRATION UNCERTAINTY ANALYSIS")
-            print("=" * 80)
-            print(f"\nRunning {n_bootstrap} bootstrap trials...")
-            print(f"  Calibration size: n={len(labels)}")
-            print(f"  Test size per trial: {test_size if test_size else len(labels)}")
-
-        bootstrap_results = bootstrap_calibration_uncertainty(
-            labels=labels,
-            probs=probs,
-            simulator=simulator,
-            alpha_target=alpha_dict[0],  # Use class 0 alpha
-            delta=delta_dict[0],  # Use class 0 delta
-            test_size=test_size if test_size else len(labels),
-            n_bootstrap=n_bootstrap,
-            n_jobs=n_jobs,
-            seed=None,
-        )
-
-    # Cross-conformal validation for finite-sample diagnostics (optional)
-    cross_conformal_results = None
-    if run_cross_conformal:
-        if verbose:
-            print("\n" + "=" * 80)
-            print("CROSS-CONFORMAL VALIDATION")
-            print("=" * 80)
-            print(f"\nRunning {n_folds}-fold cross-conformal validation...")
-            print(f"  Calibration size: n={len(labels)}")
-
-        cross_conformal_results = cross_conformal_validation(
-            labels=labels,
-            probs=probs,
-            alpha_target=alpha_dict[0],  # Use class 0 alpha
-            delta=delta_dict[0],  # Use class 0 delta
-            n_folds=n_folds,
-            stratify=True,
-            seed=None,
-        )
-
     # Build comprehensive report dict
     report = {
         "ssbc_class_0": ssbc_result_0,
@@ -308,8 +249,6 @@ def generate_rigorous_pac_report(
         "pac_bounds_class_1": pac_bounds_class_1,
         "calibration_result": cal_result,
         "prediction_stats": pred_stats,
-        "bootstrap_results": bootstrap_results,
-        "cross_conformal_results": cross_conformal_results,
         "parameters": {
             "alpha_target": alpha_dict,
             "delta": delta_dict,
@@ -319,10 +258,6 @@ def generate_rigorous_pac_report(
             "pac_level_0": pac_level_0,
             "pac_level_1": pac_level_1,
             "use_union_bound": use_union_bound,
-            "run_bootstrap": run_bootstrap,
-            "n_bootstrap": n_bootstrap if run_bootstrap else None,
-            "run_cross_conformal": run_cross_conformal,
-            "n_folds": n_folds if run_cross_conformal else None,
         },
     }
 

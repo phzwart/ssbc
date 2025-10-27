@@ -59,9 +59,6 @@ from ssbc.statistics import (
     clopper_pearson_upper,
     cp_interval,
     prediction_bounds,
-    prediction_bounds_beta_binomial,
-    prediction_bounds_lower,
-    prediction_bounds_upper,
 )
 
 # Utility functions
@@ -94,9 +91,6 @@ __all__ = [
     "clopper_pearson_lower",
     "clopper_pearson_upper",
     "prediction_bounds",
-    "prediction_bounds_lower",
-    "prediction_bounds_upper",
-    "prediction_bounds_beta_binomial",
     "compute_robust_prediction_bounds",
     "format_prediction_bounds_report",
     "cp_interval",
