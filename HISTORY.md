@@ -1,5 +1,18 @@
 # History
 
+## 1.2.3 (2025-01-28)
+
+### Bug Fixes
+- **Fixed prediction_method parameter bug** - Changed invalid default value from "simple" to "hoeffding" in `generate_rigorous_pac_report()`
+- **Updated default method** to Hoeffding method for ultra-conservative distribution-free bounds
+- **Fixed test expectations** to correctly expect `use_union_bound=False` by default
+- **Removed obsolete tests** for unimplemented bootstrap/cross-conformal features
+
+### Technical Improvements
+- All 327 tests passing
+- Corrected spelling of "hoeffding" method throughout codebase
+- Updated docstrings to reflect proper default method usage
+
 ## 1.2.0 (2025-01-27)
 
 ### Code Quality & Type Safety
