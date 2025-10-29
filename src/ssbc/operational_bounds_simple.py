@@ -685,7 +685,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     # Compute LOO-corrected bounds for each rate type
     singleton_lower, singleton_upper, singleton_report = compute_robust_prediction_bounds(
         singleton_loo_preds,
-        expected_n_class_test,
+        test_size,
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
@@ -694,7 +694,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
 
     doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
         doublet_loo_preds,
-        expected_n_class_test,
+        test_size,
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
@@ -703,7 +703,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
 
     abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
         abstention_loo_preds,
-        expected_n_class_test,
+        test_size,
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
@@ -712,7 +712,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
 
     error_lower, error_upper, error_report = compute_robust_prediction_bounds(
         error_loo_preds,
-        expected_n_class_test,
+        test_size,
         1 - adjusted_ci_level,
         method=prediction_method,
         inflation_factor=loo_inflation_factor,
