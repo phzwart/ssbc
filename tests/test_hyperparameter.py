@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ssbc.conformal import split_by_class
+from ssbc.calibration import split_by_class
 from ssbc.hyperparameter import sweep_and_plot_parallel_plotly, sweep_hyperparams_and_collect
 from ssbc.simulation import BinaryClassifierSimulator
 

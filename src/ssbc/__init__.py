@@ -9,25 +9,29 @@ __version__ = version("ssbc")  # Read from package metadata (pyproject.toml)
 # Core SSBC algorithm
 # Conformal prediction
 # Bootstrap uncertainty analysis
-from ssbc.bootstrap import (
-    bootstrap_calibration_uncertainty,
-    plot_bootstrap_distributions,
-)
-from ssbc.conformal import (
-    alpha_scan,
-    compute_pac_operational_metrics,
-    mondrian_conformal_calibrate,
-    split_by_class,
-)
-from ssbc.core import (
-    SSBCResult,
-    ssbc_correct,
+# Statistics utilities (now in bounds module)
+from ssbc.bounds import (
+    clopper_pearson_intervals,
+    clopper_pearson_lower,
+    clopper_pearson_upper,
+    cp_interval,
+    prediction_bounds,
 )
 
 # Cross-conformal validation
-from ssbc.cross_conformal import (
+from ssbc.calibration import (
+    alpha_scan,
+    bootstrap_calibration_uncertainty,
+    compute_pac_operational_metrics,
     cross_conformal_validation,
+    mondrian_conformal_calibrate,
+    plot_bootstrap_distributions,
     print_cross_conformal_results,
+    split_by_class,
+)
+from ssbc.core_pkg import (
+    SSBCResult,
+    ssbc_correct,
 )
 
 # Hyperparameter tuning
@@ -37,28 +41,21 @@ from ssbc.hyperparameter import (
 )
 
 # LOO uncertainty quantification
-from ssbc.loo_uncertainty import (
+from ssbc.metrics import (
     compute_robust_prediction_bounds,
     format_prediction_bounds_report,
 )
 
 # Visualization and reporting
-from ssbc.rigorous_report import (
+from ssbc.reporting import (
     generate_rigorous_pac_report,
+    plot_parallel_coordinates_plotly,
+    report_prediction_stats,
 )
 
 # Simulation (for testing and examples)
 from ssbc.simulation import (
     BinaryClassifierSimulator,
-)
-
-# Statistics utilities
-from ssbc.statistics import (
-    clopper_pearson_intervals,
-    clopper_pearson_lower,
-    clopper_pearson_upper,
-    cp_interval,
-    prediction_bounds,
 )
 
 # Utility functions
@@ -68,13 +65,9 @@ from ssbc.utils import (
 )
 
 # Validation utilities
-from ssbc.validation import (
+from ssbc.validation_pkg import (
     print_validation_results,
     validate_pac_bounds,
-)
-from ssbc.visualization import (
-    plot_parallel_coordinates_plotly,
-    report_prediction_stats,
 )
 
 __all__ = [

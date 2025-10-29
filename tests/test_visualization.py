@@ -3,9 +3,9 @@
 import pandas as pd
 import pytest
 
-from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
+from ssbc.calibration import mondrian_conformal_calibrate, split_by_class
+from ssbc.reporting import plot_parallel_coordinates_plotly, report_prediction_stats
 from ssbc.simulation import BinaryClassifierSimulator
-from ssbc.visualization import plot_parallel_coordinates_plotly, report_prediction_stats
 
 
 class TestReportPredictionStats:

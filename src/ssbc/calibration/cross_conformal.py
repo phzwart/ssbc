@@ -15,8 +15,9 @@ from typing import Any
 
 import numpy as np
 
-from ssbc.conformal import split_by_class
-from ssbc.core import ssbc_correct
+from ssbc.core_pkg import ssbc_correct
+
+from .conformal import split_by_class
 
 
 def _compute_fold_rates_mondrian(

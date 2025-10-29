@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from ssbc.core import ssbc_correct
+from ssbc.core_pkg import ssbc_correct
 
 
 @pytest.mark.parametrize("n", [1, 2, 5, 50, 200])

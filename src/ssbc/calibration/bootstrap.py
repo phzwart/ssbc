@@ -9,8 +9,9 @@ from typing import Protocol
 import numpy as np
 from joblib import Parallel, delayed
 
-from ssbc.conformal import split_by_class
-from ssbc.core import ssbc_correct
+from ssbc.core_pkg import ssbc_correct
+
+from .conformal import split_by_class
 
 # Optional plotting dependencies
 try:
@@ -285,11 +286,17 @@ def bootstrap_calibration_uncertainty(
     # Generate bootstrap seeds
     bootstrap_seeds = np.random.randint(0, 2**31, size=n_bootstrap)
 
-    # Parallel bootstrap
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(_bootstrap_single_trial)(labels, probs, alpha_target, delta, test_size, bs_seed, simulator)
-        for bs_seed in bootstrap_seeds
-    )
+    # Parallel bootstrap with safe fallback to serial
+    try:
+        results = Parallel(n_jobs=n_jobs)(
+            delayed(_bootstrap_single_trial)(labels, probs, alpha_target, delta, test_size, bs_seed, simulator)
+            for bs_seed in bootstrap_seeds
+        )
+    except Exception:
+        results = [
+            _bootstrap_single_trial(labels, probs, alpha_target, delta, test_size, bs_seed, simulator)
+            for bs_seed in bootstrap_seeds
+        ]
 
     # Extract metrics
     metrics = ["singleton", "doublet", "abstention", "singleton_error"]

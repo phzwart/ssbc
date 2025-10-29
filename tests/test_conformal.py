@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ssbc.conformal import (
+from ssbc.calibration import (
     alpha_scan,
     compute_pac_operational_metrics,
     mondrian_conformal_calibrate,

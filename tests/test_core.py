@@ -2,7 +2,7 @@
 
 import pytest
 
-from ssbc.core import SSBCResult, ssbc_correct
+from ssbc.core_pkg import SSBCResult, ssbc_correct
 
 
 class TestSSBCResult:

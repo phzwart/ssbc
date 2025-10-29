@@ -244,11 +244,22 @@ def validate_pac_bounds(
         else:
             print(f"Using {n_jobs} CPU cores for parallel execution")
 
-    # Run trials in parallel
-    trial_results = Parallel(n_jobs=n_jobs)(
-        delayed(_validate_single_trial)(trial_idx, simulator, test_size, threshold_0, threshold_1, seed)
-        for trial_idx in range(n_trials)
-    )
+    # Run trials in parallel, with safe fallback to serial if system forbids multiprocessing
+    def _safe_parallel_map(n_jobs_local: int):
+        try:
+            return Parallel(n_jobs=n_jobs_local)(
+                delayed(_validate_single_trial)(
+                    trial_idx, simulator, test_size, threshold_0, threshold_1, seed
+                )
+                for trial_idx in range(n_trials)
+            )
+        except Exception:
+            return [
+                _validate_single_trial(trial_idx, simulator, test_size, threshold_0, threshold_1, seed)
+                for trial_idx in range(n_trials)
+            ]
+
+    trial_results = _safe_parallel_map(n_jobs)
 
     # Extract results from parallel execution
     marginal_singleton_rates = [result["marginal"]["singleton"] for result in trial_results]

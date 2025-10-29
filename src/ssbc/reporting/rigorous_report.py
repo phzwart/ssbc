@@ -8,9 +8,9 @@ from typing import Any, cast
 
 import numpy as np
 
-from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
-from ssbc.core import ssbc_correct
-from ssbc.operational_bounds_simple import (
+from ssbc.calibration import mondrian_conformal_calibrate, split_by_class
+from ssbc.core_pkg import ssbc_correct
+from ssbc.metrics import (
     compute_pac_operational_bounds_marginal,
     compute_pac_operational_bounds_marginal_loo_corrected,
     compute_pac_operational_bounds_perclass,
@@ -242,7 +242,14 @@ def generate_rigorous_pac_report(
     else:
         # Convert LOO method to standard method for per-class bounds
         perclass_prediction_method = prediction_method
-        if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding", "simple", "beta_binomial"]:
+        if use_loo_correction and prediction_method in [
+            "auto",
+            "analytical",
+            "exact",
+            "hoeffding",
+            "simple",
+            "beta_binomial",
+        ]:
             # For per-class bounds, use beta_binomial as it's more conservative
             perclass_prediction_method = "beta_binomial"
 
@@ -276,64 +283,29 @@ def generate_rigorous_pac_report(
             loo_inflation_factor=loo_inflation_factor,
         )
 
-    # Build comprehensive report dict
-    # Build cleaned report with only essential information
-    report = {
-        # Essential SSBC results (no full optimization trace)
-        "ssbc_class_0": {
-            "n": ssbc_result_0.n,
-            "alpha_target": ssbc_result_0.alpha_target,
-            "alpha_corrected": ssbc_result_0.alpha_corrected,
-            "threshold": ssbc_result_0.threshold,
-            "k": ssbc_result_0.k,
-        },
-        "ssbc_class_1": {
-            "n": ssbc_result_1.n,
-            "alpha_target": ssbc_result_1.alpha_target,
-            "alpha_corrected": ssbc_result_1.alpha_corrected,
-            "threshold": ssbc_result_1.threshold,
-            "k": ssbc_result_1.k,
-        },
-        "pac_bounds_marginal": pac_bounds_marginal,
-        "pac_bounds_class_0": pac_bounds_class_0,
-        "pac_bounds_class_1": pac_bounds_class_1,
-        # Cleaned calibration result (no full prediction sets)
-        "calibration_result": {
-            "class_0": {
-                "n_class": cal_result["class_0"]["n_class"],
-                "alpha_target": cal_result["class_0"]["alpha_target"],
-                "delta": cal_result["class_0"]["delta"],
-                "abstentions": cal_result["class_0"]["abstentions"],
-                "singletons": cal_result["class_0"]["singletons"],
-                "singletons_correct": cal_result["class_0"]["singletons_correct"],
-                "singletons_incorrect": cal_result["class_0"]["singletons_incorrect"],
-                "doublets": cal_result["class_0"]["doublets"],
-                "pac_bounds": cal_result["class_0"]["pac_bounds"],
+        # Build comprehensive report dict
+        # Build cleaned report with only essential information
+        report = {
+            # Essential SSBC results (return dataclasses as-is for tests)
+            "ssbc_class_0": ssbc_result_0,
+            "ssbc_class_1": ssbc_result_1,
+            "pac_bounds_marginal": pac_bounds_marginal,
+            "pac_bounds_class_0": pac_bounds_class_0,
+            "pac_bounds_class_1": pac_bounds_class_1,
+            # Calibration result as returned by mondrian_conformal_calibrate (keys 0 and 1)
+            "calibration_result": cal_result,
+            "prediction_stats": pred_stats,
+            "parameters": {
+                "alpha_target": alpha_dict,
+                "delta": delta_dict,
+                "test_size": test_size,
+                "ci_level": ci_level,
+                "pac_level_marginal": pac_level_marginal,
+                "pac_level_0": pac_level_0,
+                "pac_level_1": pac_level_1,
+                "use_union_bound": use_union_bound,
             },
-            "class_1": {
-                "n_class": cal_result["class_1"]["n_class"],
-                "alpha_target": cal_result["class_1"]["alpha_target"],
-                "delta": cal_result["class_1"]["delta"],
-                "abstentions": cal_result["class_1"]["abstentions"],
-                "singletons": cal_result["class_1"]["singletons"],
-                "singletons_correct": cal_result["class_1"]["singletons_correct"],
-                "singletons_incorrect": cal_result["class_1"]["singletons_incorrect"],
-                "doublets": cal_result["class_1"]["doublets"],
-                "pac_bounds": cal_result["class_1"]["pac_bounds"],
-            },
-        },
-        "prediction_stats": pred_stats,
-        "parameters": {
-            "alpha_target": alpha_dict,
-            "delta": delta_dict,
-            "test_size": test_size,
-            "ci_level": ci_level,
-            "pac_level_marginal": pac_level_marginal,
-            "pac_level_0": pac_level_0,
-            "pac_level_1": pac_level_1,
-            "use_union_bound": use_union_bound,
-        },
-    }
+        }
 
     # Print comprehensive report if verbose
     if verbose:
@@ -412,7 +384,7 @@ def _print_rigorous_report(report: dict) -> None:
 
             # Error | singleton
             if sing["count"] > 0:
-                from .statistics import cp_interval
+                from ssbc.bounds import cp_interval
 
                 error_cond = cp_interval(sing_incorr["count"], sing["count"])
                 print(
@@ -493,7 +465,7 @@ def _print_rigorous_report(report: dict) -> None:
 
     # Singleton errors
     if sing["count"] > 0:
-        from .statistics import cp_interval
+        from ssbc.bounds import cp_interval
 
         error_cond_marg = cp_interval(sing["errors"], sing["count"])
         err_prop = error_cond_marg["proportion"]

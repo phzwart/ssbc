@@ -357,12 +357,12 @@ def compute_loo_corrected_prediction_bounds(
     verbose: bool = True,
 ) -> tuple[float, float, dict]:
     """Compute prediction bounds using Clopper-Pearson + sampling uncertainty with LOO correction.
-    
+
     This function provides the correct statistical approach:
     1. Use Clopper-Pearson to bound the true rate p from calibration data
     2. Add sampling uncertainty for future test sets of size n_test
     3. Account for LOO-CV correlation structure
-    
+
     Parameters
     ----------
     loo_predictions : np.ndarray, shape (n_cal,)
@@ -379,7 +379,7 @@ def compute_loo_corrected_prediction_bounds(
         Manual override for LOO variance inflation factor
     verbose : bool, default=True
         Print diagnostic information
-        
+
     Returns
     -------
     tuple[float, float, dict]
@@ -388,41 +388,41 @@ def compute_loo_corrected_prediction_bounds(
     n_cal = len(loo_predictions)
     k_cal = int(np.sum(loo_predictions))
     p_hat = np.mean(loo_predictions)
-    
+
     if method == "simple":
         # Step 1: Clopper-Pearson bounds on true rate p (calibration uncertainty)
         from scipy.stats import beta as beta_dist
-        
+
         if k_cal == 0:
             cp_lower = 0.0
-            cp_upper = beta_dist.ppf(1 - alpha/2, k_cal + 1, n_cal - k_cal)
+            cp_upper = beta_dist.ppf(1 - alpha / 2, k_cal + 1, n_cal - k_cal)
         elif k_cal == n_cal:
-            cp_lower = beta_dist.ppf(alpha/2, k_cal, n_cal - k_cal + 1)
+            cp_lower = beta_dist.ppf(alpha / 2, k_cal, n_cal - k_cal + 1)
             cp_upper = 1.0
         else:
-            cp_lower = beta_dist.ppf(alpha/2, k_cal, n_cal - k_cal + 1)
-            cp_upper = beta_dist.ppf(1 - alpha/2, k_cal + 1, n_cal - k_cal)
-        
+            cp_lower = beta_dist.ppf(alpha / 2, k_cal, n_cal - k_cal + 1)
+            cp_upper = beta_dist.ppf(1 - alpha / 2, k_cal + 1, n_cal - k_cal)
+
         # Step 2: Add sampling uncertainty for test set
         # Use LOO-corrected variance if inflation factor provided
         if inflation_factor is None:
             inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
-        
+
         # Sampling uncertainty: Var(X_test) = p(1-p)/n_test
         # Use conservative bounds from Clopper-Pearson
         sampling_var_lower = cp_lower * (1 - cp_lower) / n_test
         sampling_var_upper = cp_upper * (1 - cp_upper) / n_test
-        
+
         # Total uncertainty: calibration + sampling
         se_lower = np.sqrt(sampling_var_lower)
         se_upper = np.sqrt(sampling_var_upper)
-        
+
         # Normal approximation for sampling uncertainty
         z_critical = norm.ppf(1 - alpha / 2)
-        
+
         lower = max(0.0, cp_lower - z_critical * se_lower)
         upper = min(1.0, cp_upper + z_critical * se_upper)
-        
+
         diagnostics = {
             "method": "clopper_pearson_plus_sampling",
             "cp_lower": cp_lower,
@@ -432,47 +432,48 @@ def compute_loo_corrected_prediction_bounds(
             "inflation_factor": inflation_factor,
             "z_critical": z_critical,
         }
-        
+
     elif method == "beta_binomial":
         # Use exact Beta-Binomial approach with LOO correction
         if inflation_factor is None:
             inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
-        
+
         # Effective sample size accounting for LOO correlation
         n_effective = n_cal / inflation_factor
-        
+
         # Use beta-binomial bounds with effective sample size
-        from ssbc.statistics import prediction_bounds_beta_binomial
+        from ssbc.bounds import prediction_bounds_beta_binomial
+
         lower, upper = prediction_bounds_beta_binomial(k_cal, n_cal, n_test, 1 - alpha)
-        
+
         diagnostics = {
-            "method": "beta_binomial_loo_corrected", 
+            "method": "beta_binomial_loo_corrected",
             "inflation_factor": inflation_factor,
             "n_effective": n_effective,
         }
-        
+
     elif method == "hoeffding":
         # Use Hoeffding's inequality for distribution-free bounds
         if inflation_factor is None:
             inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
-        
+
         # Hoeffding bound: P(|X - E[X]| >= t) <= 2 * exp(-2 * t^2 / n)
         # For prediction bounds, we need to account for both calibration and test uncertainty
-        
+
         # Calibration uncertainty (LOO-corrected)
         # Hoeffding bound on calibration mean
         t_cal = np.sqrt(np.log(2 / alpha) / (2 * n_cal))
         cal_lower = max(0.0, p_hat - t_cal)
         cal_upper = min(1.0, p_hat + t_cal)
-        
+
         # Test sampling uncertainty
         # Hoeffding bound on test set mean
         t_test = np.sqrt(np.log(2 / alpha) / (2 * n_test))
-        
+
         # Conservative approach: use worst-case bounds
         lower = max(0.0, cal_lower - t_test)
         upper = min(1.0, cal_upper + t_test)
-        
+
         diagnostics = {
             "method": "hoeffding_distribution_free",
             "inflation_factor": inflation_factor,
@@ -481,10 +482,10 @@ def compute_loo_corrected_prediction_bounds(
             "cal_lower": cal_lower,
             "cal_upper": cal_upper,
         }
-        
+
     else:
         raise ValueError(f"Unknown method: {method}. Use 'simple', 'beta_binomial', or 'hoeffding'.")
-    
+
     return lower, upper, diagnostics
 
 
