@@ -9,11 +9,6 @@ __version__ = version("ssbc")  # Read from package metadata (pyproject.toml)
 # Core SSBC algorithm
 # Conformal prediction
 # Bootstrap uncertainty analysis
-from ssbc.bootstrap import (
-    bootstrap_calibration_uncertainty,
-    plot_bootstrap_distributions,
-)
-
 # Statistics utilities (now in bounds module)
 from ssbc.bounds import (
     clopper_pearson_intervals,
@@ -21,6 +16,14 @@ from ssbc.bounds import (
     clopper_pearson_upper,
     cp_interval,
     prediction_bounds,
+)
+
+# Cross-conformal validation
+from ssbc.calibration import (
+    bootstrap_calibration_uncertainty,
+    cross_conformal_validation,
+    plot_bootstrap_distributions,
+    print_cross_conformal_results,
 )
 from ssbc.conformal import (
     alpha_scan,
@@ -31,12 +34,6 @@ from ssbc.conformal import (
 from ssbc.core import (
     SSBCResult,
     ssbc_correct,
-)
-
-# Cross-conformal validation
-from ssbc.cross_conformal import (
-    cross_conformal_validation,
-    print_cross_conformal_results,
 )
 
 # Hyperparameter tuning
@@ -52,9 +49,7 @@ from ssbc.loo_uncertainty import (
 )
 
 # Visualization and reporting
-from ssbc.rigorous_report import (
-    generate_rigorous_pac_report,
-)
+from ssbc.reporting import generate_rigorous_pac_report
 
 # Simulation (for testing and examples)
 from ssbc.simulation import (
@@ -68,7 +63,7 @@ from ssbc.utils import (
 )
 
 # Validation utilities
-from ssbc.validation import (
+from ssbc.validation_pkg import (
     print_validation_results,
     validate_pac_bounds,
 )
