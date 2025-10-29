@@ -1,5 +1,17 @@
 # History
 
+## 1.2.5 (2025-01-29)
+
+### New Features
+- **Support for 'all' prediction method** - Added `prediction_method="all"` option in `generate_rigorous_pac_report()`
+- **Method comparison** - Marginal bounds now show comparison table of analytical, exact, and hoeffding methods
+- **Enhanced diagnostics** - Access comparison results via `report["pac_bounds_marginal"]["loo_diagnostics"]["comparison"]`
+
+### Technical Improvements
+- Per-class bounds use beta_binomial method when `prediction_method="all"` (more conservative)
+- Fixed ValueError when using unsupported prediction methods
+- All tests passing
+
 ## 1.2.4 (2025-01-29)
 
 ### Bug Fixes
