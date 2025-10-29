@@ -25,12 +25,7 @@ def main():
     # ========== Step 1: Generate Simulated Data ==========
     print("\n1. Generating simulated binary classification data...")
 
-    sim = BinaryClassifierSimulator(
-        p_class1=0.50,
-        beta_params_class0=(2, 7),
-        beta_params_class1=(7, 2),
-        seed=42
-    )
+    sim = BinaryClassifierSimulator(p_class1=0.50, beta_params_class0=(2, 7), beta_params_class1=(7, 2), seed=42)
 
     labels, probs = sim.generate(n_samples=1000)
 
@@ -53,10 +48,7 @@ def main():
 
     # Calibrate with SSBC
     cal_result, pred_stats = mondrian_conformal_calibrate(
-        class_data=class_data,
-        alpha_target={0: alpha_target, 1: alpha_target},
-        delta={0: delta, 1: delta},
-        mode="beta"
+        class_data=class_data, alpha_target={0: alpha_target, 1: alpha_target}, delta={0: delta, 1: delta}, mode="beta"
     )
 
     # Extract thresholds (these are the equivalent of mondrian_ssbc_thresholds output)
@@ -73,12 +65,7 @@ def main():
     print("   (This includes LOO-CV + Clopper-Pearson for estimation uncertainty)\n")
 
     report = generate_rigorous_pac_report(
-        labels=labels,
-        probs=probs,
-        alpha_target=alpha_target,
-        delta=delta,
-        use_loo_correction=True,
-        verbose=True
+        labels=labels, probs=probs, alpha_target=alpha_target, delta=delta, use_loo_correction=True, verbose=True
     )
 
     # ========== Step 5: Extract Key Error Bounds ==========

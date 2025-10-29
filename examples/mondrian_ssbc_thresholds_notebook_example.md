@@ -25,9 +25,9 @@ Replace this with your actual data:
 
 # OR use simulated data for testing:
 sim = BinaryClassifierSimulator(
-    p_class1=0.50, 
-    beta_params_class0=(2, 7), 
-    beta_params_class1=(7, 2), 
+    p_class1=0.50,
+    beta_params_class0=(2, 7),
+    beta_params_class1=(7, 2),
     seed=42
 )
 labels, probs = sim.generate(n_samples=1000)
@@ -95,7 +95,7 @@ print(f"  Expected: {pac_marg['expected_singleton_error_rate']:.3f}")
 for class_label in [0, 1]:
     pac_class = report[f"pac_bounds_class_{class_label}"]
     se_lower_c, se_upper_c = pac_class["singleton_error_rate_bounds"]
-    
+
     print(f"\nClass {class_label} Singleton Error Rate Bounds:")
     print(f"  [{se_lower_c:.3f}, {se_upper_c:.3f}]")
     print(f"  Expected: {pac_class['expected_singleton_error_rate']:.3f}")

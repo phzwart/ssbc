@@ -5,7 +5,7 @@ Compute PAC prediction bounds using the Hoeffding concentration inequality, acco
 
 ## Inputs
 - **LOO predictions**: `loo_predictions` (np.ndarray) - Binary LOO predictions from calibration set
-- **Test size**: `n_test` (int) - Number of test samples  
+- **Test size**: `n_test` (int) - Number of test samples
 - **Confidence level**: `alpha` (float) - Significance level (e.g., 0.05 for 95% confidence)
 - **Inflation factor**: `inflation_factor` (float, optional) - Accounts for LOO correlation
 

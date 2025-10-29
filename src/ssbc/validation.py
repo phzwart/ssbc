@@ -248,9 +248,7 @@ def validate_pac_bounds(
     def _safe_parallel_map(n_jobs_local: int):
         try:
             return Parallel(n_jobs=n_jobs_local)(
-                delayed(_validate_single_trial)(
-                    trial_idx, simulator, test_size, threshold_0, threshold_1, seed
-                )
+                delayed(_validate_single_trial)(trial_idx, simulator, test_size, threshold_0, threshold_1, seed)
                 for trial_idx in range(n_trials)
             )
         except Exception:
