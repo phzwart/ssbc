@@ -348,6 +348,114 @@ def compute_loo_corrected_bounds_hoeffding(
     return L_prime, U_prime, diagnostics
 
 
+def compute_loo_corrected_prediction_bounds(
+    loo_predictions: np.ndarray,
+    n_test: int,
+    alpha: float = 0.05,
+    method: str = "simple",
+    inflation_factor: float | None = None,
+    verbose: bool = True,
+) -> tuple[float, float, dict]:
+    """Compute prediction bounds using Clopper-Pearson + sampling uncertainty with LOO correction.
+    
+    This function provides the correct statistical approach:
+    1. Use Clopper-Pearson to bound the true rate p from calibration data
+    2. Add sampling uncertainty for future test sets of size n_test
+    3. Account for LOO-CV correlation structure
+    
+    Parameters
+    ----------
+    loo_predictions : np.ndarray, shape (n_cal,)
+        Binary LOO predictions (1=success, 0=failure)
+    n_test : int
+        Expected size of future test sets
+    alpha : float
+        Significance level (e.g., 0.05 for 95% confidence)
+    method : str
+        'simple' - Clopper-Pearson + normal approximation for sampling uncertainty
+        'beta_binomial' - Exact Beta-Binomial approach
+    inflation_factor : float, optional
+        Manual override for LOO variance inflation factor
+    verbose : bool, default=True
+        Print diagnostic information
+        
+    Returns
+    -------
+    tuple[float, float, dict]
+        (lower_bound, upper_bound, diagnostics)
+    """
+    n_cal = len(loo_predictions)
+    k_cal = int(np.sum(loo_predictions))
+    p_hat = np.mean(loo_predictions)
+    
+    if method == "simple":
+        # Step 1: Clopper-Pearson bounds on true rate p (calibration uncertainty)
+        from scipy.stats import beta as beta_dist
+        
+        if k_cal == 0:
+            cp_lower = 0.0
+            cp_upper = beta_dist.ppf(1 - alpha/2, k_cal + 1, n_cal - k_cal)
+        elif k_cal == n_cal:
+            cp_lower = beta_dist.ppf(alpha/2, k_cal, n_cal - k_cal + 1)
+            cp_upper = 1.0
+        else:
+            cp_lower = beta_dist.ppf(alpha/2, k_cal, n_cal - k_cal + 1)
+            cp_upper = beta_dist.ppf(1 - alpha/2, k_cal + 1, n_cal - k_cal)
+        
+        # Step 2: Add sampling uncertainty for test set
+        # Use LOO-corrected variance if inflation factor provided
+        if inflation_factor is None:
+            inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
+        
+        # Sampling uncertainty: Var(X_test) = p(1-p)/n_test
+        # Use conservative bounds from Clopper-Pearson
+        sampling_var_lower = cp_lower * (1 - cp_lower) / n_test
+        sampling_var_upper = cp_upper * (1 - cp_upper) / n_test
+        
+        # Total uncertainty: calibration + sampling
+        se_lower = np.sqrt(sampling_var_lower)
+        se_upper = np.sqrt(sampling_var_upper)
+        
+        # Normal approximation for sampling uncertainty
+        z_critical = norm.ppf(1 - alpha / 2)
+        
+        lower = max(0.0, cp_lower - z_critical * se_lower)
+        upper = min(1.0, cp_upper + z_critical * se_upper)
+        
+        diagnostics = {
+            "method": "clopper_pearson_plus_sampling",
+            "cp_lower": cp_lower,
+            "cp_upper": cp_upper,
+            "sampling_se_lower": se_lower,
+            "sampling_se_upper": se_upper,
+            "inflation_factor": inflation_factor,
+            "z_critical": z_critical,
+        }
+        
+    elif method == "beta_binomial":
+        # Use exact Beta-Binomial approach with LOO correction
+        if inflation_factor is None:
+            inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
+        
+        # Effective sample size accounting for LOO correlation
+        n_effective = n_cal / inflation_factor
+        
+        # Use beta-binomial bounds with effective sample size
+        from ssbc.statistics import prediction_bounds_beta_binomial
+        lower, upper = prediction_bounds_beta_binomial(k_cal, n_cal, n_test, 1 - alpha)
+        
+        diagnostics = {
+            "method": "beta_binomial_loo_corrected", 
+            "inflation_factor": inflation_factor,
+            "n_effective": n_effective,
+        }
+        
+    else:
+        raise ValueError(f"Unknown method: {method}. Use 'simple' or 'beta_binomial'.")
+    
+    return lower, upper, diagnostics
+
+
 def compute_robust_prediction_bounds(
     loo_predictions: np.ndarray,
     n_test: int,

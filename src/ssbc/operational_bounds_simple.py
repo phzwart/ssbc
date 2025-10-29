@@ -4,7 +4,7 @@ import numpy as np
 from joblib import Parallel, delayed
 
 from ssbc.core import SSBCResult
-from ssbc.loo_uncertainty import compute_robust_prediction_bounds
+from ssbc.loo_uncertainty import compute_robust_prediction_bounds, compute_loo_corrected_prediction_bounds
 from ssbc.statistics import prediction_bounds
 
 
@@ -738,41 +738,80 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         adjusted_ci_level = ci_level
 
     # Compute LOO-corrected bounds for each rate type
-    singleton_lower, singleton_upper, singleton_report = compute_robust_prediction_bounds(
-        singleton_loo_preds,
-        test_size,
-        1 - adjusted_ci_level,
-        method=prediction_method,
-        inflation_factor=loo_inflation_factor,
-        verbose=verbose,
-    )
+    if prediction_method in ["simple", "beta_binomial"]:
+        # Use unified Clopper-Pearson + sampling uncertainty approach
+        singleton_lower, singleton_upper, singleton_report = compute_loo_corrected_prediction_bounds(
+            singleton_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
 
-    doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
-        doublet_loo_preds,
-        test_size,
-        1 - adjusted_ci_level,
-        method=prediction_method,
-        inflation_factor=loo_inflation_factor,
-        verbose=verbose,
-    )
+        doublet_lower, doublet_upper, doublet_report = compute_loo_corrected_prediction_bounds(
+            doublet_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
 
-    abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
-        abstention_loo_preds,
-        test_size,
-        1 - adjusted_ci_level,
-        method=prediction_method,
-        inflation_factor=loo_inflation_factor,
-        verbose=verbose,
-    )
+        abstention_lower, abstention_upper, abstention_report = compute_loo_corrected_prediction_bounds(
+            abstention_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
 
-    error_lower, error_upper, error_report = compute_robust_prediction_bounds(
-        error_loo_preds,
-        test_size,
-        1 - adjusted_ci_level,
-        method=prediction_method,
-        inflation_factor=loo_inflation_factor,
-        verbose=verbose,
-    )
+        error_lower, error_upper, error_report = compute_loo_corrected_prediction_bounds(
+            error_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
+    else:
+        # Use original robust method for advanced options
+        singleton_lower, singleton_upper, singleton_report = compute_robust_prediction_bounds(
+            singleton_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
+
+        doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
+            doublet_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
+
+        abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
+            abstention_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
+
+        error_lower, error_upper, error_report = compute_robust_prediction_bounds(
+            error_loo_preds,
+            expected_n_class_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
 
     # Build result dict
     result = {

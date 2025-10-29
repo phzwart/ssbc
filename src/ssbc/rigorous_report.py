@@ -207,6 +207,7 @@ def generate_rigorous_pac_report(
     # Each class uses its own delta
     if use_loo_correction and prediction_method == "all":
         # For "all" method, use LOO-corrected bounds for per-class too
+        # Use "beta_binomial" method to match the regular per-class bounds
         pac_bounds_class_0 = compute_pac_operational_bounds_perclass_loo_corrected(
             ssbc_result_0=ssbc_result_0,
             ssbc_result_1=ssbc_result_1,
@@ -218,7 +219,7 @@ def generate_rigorous_pac_report(
             pac_level=pac_level_0,
             use_union_bound=use_union_bound,
             n_jobs=n_jobs,
-            prediction_method=prediction_method,
+            prediction_method="beta_binomial",  # Use consistent method
             loo_inflation_factor=loo_inflation_factor,
             verbose=verbose,
         )
@@ -234,7 +235,7 @@ def generate_rigorous_pac_report(
             pac_level=pac_level_1,
             use_union_bound=use_union_bound,
             n_jobs=n_jobs,
-            prediction_method=prediction_method,
+            prediction_method="beta_binomial",  # Use consistent method
             loo_inflation_factor=loo_inflation_factor,
             verbose=verbose,
         )
@@ -389,7 +390,10 @@ def _print_rigorous_report(report: dict) -> None:
             )
 
         print("\n  ✅ RIGOROUS PAC-Controlled Operational Bounds")
-        print("     (LOO-CV + Clopper-Pearson for estimation uncertainty)")
+        if "loo_diagnostics" in pac:
+            print("     (LOO-CV + Clopper-Pearson + method comparison for sampling uncertainty)")
+        else:
+            print("     (LOO-CV + Clopper-Pearson + prediction bounds for sampling uncertainty)")
         pac_level_class = params[f"pac_level_{class_label}"]
         print(f"     PAC level: {pac_level_class:.0%} (= 1 - δ), CP level: {params['ci_level']:.0%}")
         print(f"     Grid points evaluated: {pac['n_grid_points']}")
@@ -470,7 +474,10 @@ def _print_rigorous_report(report: dict) -> None:
     )
 
     print("\n  ✅ RIGOROUS PAC-Controlled Marginal Bounds")
-    print("     (LOO-CV + Clopper-Pearson for estimation uncertainty)")
+    if "loo_diagnostics" in pac_marg:
+        print("     (LOO-CV + Clopper-Pearson + method comparison for sampling uncertainty)")
+    else:
+        print("     (LOO-CV + Clopper-Pearson + prediction bounds for sampling uncertainty)")
     pac_marginal = params["pac_level_marginal"]
     ci_lvl = params["ci_level"]
     print(f"     PAC level: {pac_marginal:.0%} (= (1-δ₀)×(1-δ₁), independence), CP level: {ci_lvl:.0%}")
