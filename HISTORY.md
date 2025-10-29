@@ -1,5 +1,18 @@
 # History
 
+## 1.2.6 (2025-01-29)
+
+### Major Features
+- **Per-class LOO-corrected bounds** - Added `compute_pac_operational_bounds_perclass_loo_corrected()` function
+- **Full method comparison for all bounds** - `prediction_method="all"` now works for marginal, class_0, and class_1 bounds
+- **Enhanced per-class diagnostics** - Per-class bounds now include LOO diagnostics and method comparison tables
+
+### Technical Improvements
+- Consistent LOO uncertainty quantification across all bound types
+- Per-class bounds now use same sophisticated methods as marginal bounds
+- Better API consistency - all bound types support "all" method comparison
+- Improved operational planning capabilities for class-specific cost estimation
+
 ## 1.2.5 (2025-01-29)
 
 ### New Features

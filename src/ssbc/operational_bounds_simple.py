@@ -572,3 +572,178 @@ def compute_pac_operational_bounds_perclass(
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
     }
+
+
+def compute_pac_operational_bounds_perclass_loo_corrected(
+    ssbc_result_0: SSBCResult,
+    ssbc_result_1: SSBCResult,
+    labels: np.ndarray,
+    probs: np.ndarray,
+    class_label: int,
+    test_size: int,
+    ci_level: float = 0.95,
+    pac_level: float = 0.95,  # Kept for API compatibility (not used)
+    use_union_bound: bool = True,
+    n_jobs: int = -1,
+    prediction_method: str = "auto",
+    loo_inflation_factor: float | None = None,
+    verbose: bool = True,
+) -> dict:
+    """Compute per-class operational bounds with LOO-CV uncertainty correction.
+
+    This function uses LOO uncertainty quantification for per-class bounds,
+    enabling method comparison ("all") for individual classes.
+
+    Parameters
+    ----------
+    ssbc_result_0 : SSBCResult
+        SSBC result for class 0
+    ssbc_result_1 : SSBCResult
+        SSBC result for class 1
+    labels : np.ndarray
+        True labels
+    probs : np.ndarray
+        Predicted probabilities
+    class_label : int
+        Which class to analyze (0 or 1)
+    test_size : int
+        Expected test set size for prediction bounds
+    ci_level : float, default=0.95
+        Confidence level for prediction bounds
+    use_union_bound : bool, default=True
+        Apply Bonferroni for simultaneous guarantees
+    n_jobs : int, default=-1
+        Number of parallel jobs (-1 = all cores)
+    prediction_method : str, default="auto"
+        Method for LOO uncertainty quantification:
+        - "auto": Automatically select best method
+        - "analytical": Method 1 (recommended for n>=40)
+        - "exact": Method 2 (recommended for n=20-40)
+        - "hoeffding": Method 3 (ultra-conservative)
+        - "all": Compare all methods
+    loo_inflation_factor : float, optional
+        Manual override for LOO variance inflation factor. If None, automatically estimated.
+    verbose : bool, default=True
+        Print diagnostic information
+
+    Returns
+    -------
+    dict
+        Per-class operational bounds with LOO diagnostics (when method="all")
+    """
+    # Compute k from alpha_corrected
+    n_0 = ssbc_result_0.n
+    n_1 = ssbc_result_1.n
+    k_0 = int(np.ceil((n_0 + 1) * (1 - ssbc_result_0.alpha_corrected)))
+    k_1 = int(np.ceil((n_1 + 1) * (1 - ssbc_result_1.alpha_corrected)))
+
+    # Parallel LOO-CV: evaluate each sample
+    n = len(labels)
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_evaluate_loo_single_sample_perclass)(idx, labels, probs, k_0, k_1, class_label) for idx in range(n)
+    )
+
+    # Aggregate results (only from class_label samples)
+    results_array = np.array(results)
+    n_singletons = int(np.sum(results_array[:, 0]))
+    n_doublets = int(np.sum(results_array[:, 1]))
+    n_abstentions = int(np.sum(results_array[:, 2]))
+    n_singletons_correct = int(np.sum(results_array[:, 3]))
+
+    # Number of class_label samples in calibration
+    n_class_cal = np.sum(labels == class_label)
+
+    # Estimate expected class distribution in test set
+    n_total = len(labels)
+    class_rate_cal = n_class_cal / n_total
+    expected_n_class_test = int(test_size * class_rate_cal)
+    expected_n_class_test = max(expected_n_class_test, 1)
+
+    # Point estimates
+    singleton_rate = n_singletons / n_class_cal
+    doublet_rate = n_doublets / n_class_cal
+    abstention_rate = n_abstentions / n_class_cal
+    n_errors = n_singletons - n_singletons_correct
+    singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
+
+    # Convert to binary LOO predictions for each rate type
+    singleton_loo_preds = results_array[:, 0].astype(int)
+    doublet_loo_preds = results_array[:, 1].astype(int)
+    abstention_loo_preds = results_array[:, 2].astype(int)
+    error_loo_preds = np.zeros(n, dtype=int)
+    if n_singletons > 0:
+        # Error rate: 1 if singleton and incorrect, 0 otherwise
+        error_loo_preds = (results_array[:, 0] == 1) & (results_array[:, 3] == 0)
+
+    # Apply union bound adjustment
+    n_metrics = 4
+    if use_union_bound:
+        adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
+    else:
+        adjusted_ci_level = ci_level
+
+    # Compute LOO-corrected bounds for each rate type
+    singleton_lower, singleton_upper, singleton_report = compute_robust_prediction_bounds(
+        singleton_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
+
+    doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
+        doublet_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
+
+    abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
+        abstention_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
+
+    error_lower, error_upper, error_report = compute_robust_prediction_bounds(
+        error_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
+
+    # Build result dict
+    result = {
+        "singleton_rate_bounds": [singleton_lower, singleton_upper],
+        "doublet_rate_bounds": [doublet_lower, doublet_upper],
+        "abstention_rate_bounds": [abstention_lower, abstention_upper],
+        "singleton_error_rate_bounds": [error_lower, error_upper],
+        "expected_singleton_rate": singleton_rate,
+        "expected_doublet_rate": doublet_rate,
+        "expected_abstention_rate": abstention_rate,
+        "expected_singleton_error_rate": singleton_error_rate,
+        "n_grid_points": 1,
+        "pac_level": adjusted_ci_level,
+        "ci_level": ci_level,
+        "test_size": n_class_cal,
+        "use_union_bound": use_union_bound,
+        "n_metrics": n_metrics if use_union_bound else None,
+    }
+
+    # Add LOO diagnostics if method="all"
+    if prediction_method == "all":
+        result["loo_diagnostics"] = {
+            "singleton": singleton_report,
+            "doublet": doublet_report,
+            "abstention": abstention_report,
+            "singleton_error": error_report,
+        }
+
+    return result
