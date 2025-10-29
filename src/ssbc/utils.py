@@ -5,8 +5,87 @@ from typing import Any, Literal
 import numpy as np
 
 
+def build_mondrian_prediction_sets(
+    probs: np.ndarray,
+    threshold_0: float,
+    threshold_1: float,
+    return_lists: bool = False,
+) -> list[set[int] | list[int]]:
+    """Build prediction sets using Mondrian conformal prediction thresholds.
+
+    This function implements the standard Mondrian conformal prediction approach:
+    - For each sample, include class 0 if score_0 <= threshold_0
+    - For each sample, include class 1 if score_1 <= threshold_1
+    - Where score_k = 1 - P(class=k)
+
+    Parameters
+    ----------
+    probs : np.ndarray, shape (n, 2)
+        Probability predictions for each sample.
+        probs[i, 0] = P(class=0), probs[i, 1] = P(class=1)
+    threshold_0 : float
+        Conformal prediction threshold for class 0
+    threshold_1 : float
+        Conformal prediction threshold for class 1
+
+    return_lists : bool, default=False
+        If True, returns lists instead of sets
+
+    Returns
+    -------
+    list[set[int]] or list[list[int]]
+        List of prediction sets, where each set/list contains the classes included
+        in the prediction set for that sample.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ssbc.utils import build_mondrian_prediction_sets
+    >>>
+    >>> probs = np.array([
+    ...     [0.8, 0.2],  # High confidence class 0
+    ...     [0.5, 0.5],  # Uncertain
+    ...     [0.2, 0.8],  # High confidence class 1
+    ... ])
+    >>> threshold_0, threshold_1 = 0.3, 0.3
+    >>> pred_sets = build_mondrian_prediction_sets(probs, threshold_0, threshold_1)
+    >>> print(pred_sets)  # [{0}, {0, 1}, {1}]
+
+    Notes
+    -----
+    This function is used throughout the codebase for building Mondrian conformal
+    prediction sets. It centralizes the logic to ensure consistency across all
+    modules that perform conformal prediction evaluation.
+    """
+    n = len(probs)
+    if probs.shape != (n, 2):
+        raise ValueError(f"probs must have shape (n, 2), got {probs.shape}")
+
+    # Vectorize score computation
+    scores_0 = 1.0 - probs[:, 0]
+    scores_1 = 1.0 - probs[:, 1]
+
+    prediction_sets = []
+    for score_0, score_1 in zip(scores_0, scores_1, strict=False):
+        if return_lists:
+            pred_set = []
+            if score_0 <= threshold_0:
+                pred_set.append(0)
+            if score_1 <= threshold_1:
+                pred_set.append(1)
+        else:
+            pred_set = set()
+            if score_0 <= threshold_0:
+                pred_set.add(0)
+            if score_1 <= threshold_1:
+                pred_set.add(1)
+        prediction_sets.append(pred_set)
+
+    return prediction_sets
+
+
 def compute_operational_rate(
-    prediction_sets: list[set | list],
+    prediction_sets: list[set[int] | list[int]],
     true_labels: np.ndarray,
     rate_type: Literal["singleton", "doublet", "abstention", "error_in_singleton", "correct_in_singleton"],
 ) -> np.ndarray:
@@ -154,17 +233,7 @@ def evaluate_test_dataset(
         raise ValueError(f"test_probs must have shape ({n_test}, 2), got {test_probs.shape}")
 
     # Build prediction sets using Mondrian thresholds
-    prediction_sets = []
-    for i in range(n_test):
-        score_0 = 1.0 - test_probs[i, 0]
-        score_1 = 1.0 - test_probs[i, 1]
-
-        pred_set = set()
-        if score_0 <= threshold_0:
-            pred_set.add(0)
-        if score_1 <= threshold_1:
-            pred_set.add(1)
-        prediction_sets.append(pred_set)
+    prediction_sets = build_mondrian_prediction_sets(test_probs, threshold_0, threshold_1)
 
     # Compute indicators for all rate types
     singleton_indicators = compute_operational_rate(prediction_sets, test_labels, "singleton")

@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 from joblib import Parallel, delayed
 
+from ssbc.utils import evaluate_test_dataset
+
 
 def _validate_single_trial(
     trial_idx: int,
@@ -57,105 +59,37 @@ def _validate_single_trial(
     # Generate independent test set
     labels_test, probs_test = trial_simulator.generate(test_size)
 
-    # Apply FIXED Mondrian thresholds and evaluate
-    n_total = len(labels_test)
-    n_singletons = 0
-    n_doublets = 0
-    n_abstentions = 0
-    n_singletons_correct = 0
-
-    # Per-class counters
-    n_0 = np.sum(labels_test == 0)
-    n_1 = np.sum(labels_test == 1)
-
-    n_singletons_0 = 0
-    n_doublets_0 = 0
-    n_abstentions_0 = 0
-    n_singletons_correct_0 = 0
-
-    n_singletons_1 = 0
-    n_doublets_1 = 0
-    n_abstentions_1 = 0
-    n_singletons_correct_1 = 0
-
-    for i in range(n_total):
-        true_label = labels_test[i]
-        score_0 = 1.0 - probs_test[i, 0]
-        score_1 = 1.0 - probs_test[i, 1]
-
-        # Build prediction set using FIXED thresholds
-        in_0 = score_0 <= threshold_0
-        in_1 = score_1 <= threshold_1
-
-        # Marginal counts
-        if in_0 and in_1:
-            n_doublets += 1
-        elif in_0 or in_1:
-            n_singletons += 1
-            if (in_0 and true_label == 0) or (in_1 and true_label == 1):
-                n_singletons_correct += 1
-        else:
-            n_abstentions += 1
-
-        # Per-class counts
-        if true_label == 0:
-            if in_0 and in_1:
-                n_doublets_0 += 1
-            elif in_0 or in_1:
-                n_singletons_0 += 1
-                if in_0:
-                    n_singletons_correct_0 += 1
-            else:
-                n_abstentions_0 += 1
-        else:  # true_label == 1
-            if in_0 and in_1:
-                n_doublets_1 += 1
-            elif in_0 or in_1:
-                n_singletons_1 += 1
-                if in_1:
-                    n_singletons_correct_1 += 1
-            else:
-                n_abstentions_1 += 1
-
-    # Compute marginal rates
-    marginal_singleton_rate = n_singletons / n_total
-    marginal_doublet_rate = n_doublets / n_total
-    marginal_abstention_rate = n_abstentions / n_total
-    marginal_singleton_error_rate = (n_singletons - n_singletons_correct) / n_singletons if n_singletons > 0 else np.nan
-
-    # Compute per-class rates
-    class_0_singleton_rate = n_singletons_0 / n_0 if n_0 > 0 else np.nan
-    class_0_doublet_rate = n_doublets_0 / n_0 if n_0 > 0 else np.nan
-    class_0_abstention_rate = n_abstentions_0 / n_0 if n_0 > 0 else np.nan
-    class_0_singleton_error_rate = (
-        (n_singletons_0 - n_singletons_correct_0) / n_singletons_0 if n_singletons_0 > 0 else np.nan
+    # Use evaluate_test_dataset to compute rates (eliminates ~100 lines of duplicate code)
+    eval_results = evaluate_test_dataset(
+        test_labels=labels_test,
+        test_probs=probs_test,
+        threshold_0=threshold_0,
+        threshold_1=threshold_1,
     )
 
-    class_1_singleton_rate = n_singletons_1 / n_1 if n_1 > 0 else np.nan
-    class_1_doublet_rate = n_doublets_1 / n_1 if n_1 > 0 else np.nan
-    class_1_abstention_rate = n_abstentions_1 / n_1 if n_1 > 0 else np.nan
-    class_1_singleton_error_rate = (
-        (n_singletons_1 - n_singletons_correct_1) / n_singletons_1 if n_singletons_1 > 0 else np.nan
-    )
+    # Convert results to expected format
+    marginal = eval_results["marginal"]
+    class_0 = eval_results["class_0"]
+    class_1 = eval_results["class_1"]
 
     return {
         "marginal": {
-            "singleton": marginal_singleton_rate,
-            "doublet": marginal_doublet_rate,
-            "abstention": marginal_abstention_rate,
-            "singleton_error": marginal_singleton_error_rate,
+            "singleton": marginal["singleton_rate"],
+            "doublet": marginal["doublet_rate"],
+            "abstention": marginal["abstention_rate"],
+            "singleton_error": marginal["singleton_error_rate"],
         },
         "class_0": {
-            "singleton": class_0_singleton_rate,
-            "doublet": class_0_doublet_rate,
-            "abstention": class_0_abstention_rate,
-            "singleton_error": class_0_singleton_error_rate,
+            "singleton": class_0["singleton_rate"],
+            "doublet": class_0["doublet_rate"],
+            "abstention": class_0["abstention_rate"],
+            "singleton_error": class_0["singleton_error_rate"],
         },
         "class_1": {
-            "singleton": class_1_singleton_rate,
-            "doublet": class_1_doublet_rate,
-            "abstention": class_1_abstention_rate,
-            "singleton_error": class_1_singleton_error_rate,
+            "singleton": class_1["singleton_rate"],
+            "doublet": class_1["doublet_rate"],
+            "abstention": class_1["abstention_rate"],
+            "singleton_error": class_1["singleton_error_rate"],
         },
     }
 
@@ -336,11 +270,20 @@ def validate_pac_bounds(
     pac_0 = report["pac_bounds_class_0"]
     pac_1 = report["pac_bounds_class_1"]
 
+    # Extract PAC levels from report (for coverage checking)
+    params = report.get("parameters", {})
+    pac_level_marginal = params.get("pac_level_marginal", 0.90)  # Default if missing
+    pac_level_0 = params.get("pac_level_0", 0.90)
+    pac_level_1 = params.get("pac_level_1", 0.90)
+
     return {
         "n_trials": n_trials,
         "test_size": test_size,
         "threshold_0": threshold_0,
         "threshold_1": threshold_1,
+        "pac_level_marginal": pac_level_marginal,
+        "pac_level_0": pac_level_0,
+        "pac_level_1": pac_level_1,
         "marginal": {
             "singleton": {
                 "rates": marginal_singleton_rates,
@@ -483,7 +426,15 @@ def print_validation_results(validation: dict[str, Any]) -> None:
             q = m["quantiles"]
             coverage = m["empirical_coverage"]
 
-            coverage_check = "✅" if coverage >= 0.90 else "❌"  # Assuming 90% PAC level
+            # Use appropriate PAC level for this scope
+            if scope == "marginal":
+                pac_level = validation.get("pac_level_marginal", 0.90)
+            elif scope == "class_0":
+                pac_level = validation.get("pac_level_0", 0.90)
+            else:  # scope == "class_1"
+                pac_level = validation.get("pac_level_1", 0.90)
+
+            coverage_check = "✅" if coverage >= pac_level else "❌"
 
             print(f"\n{metric.upper().replace('_', ' ')}:")
             print(f"  Empirical mean: {m['mean']:.4f}")
