@@ -242,7 +242,7 @@ def generate_rigorous_pac_report(
     else:
         # Convert LOO method to standard method for per-class bounds
         perclass_prediction_method = prediction_method
-        if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding"]:
+        if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding", "simple", "beta_binomial"]:
             # For per-class bounds, use beta_binomial as it's more conservative
             perclass_prediction_method = "beta_binomial"
 

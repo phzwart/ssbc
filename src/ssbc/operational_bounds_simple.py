@@ -738,7 +738,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         adjusted_ci_level = ci_level
 
     # Compute LOO-corrected bounds for each rate type
-    if prediction_method in ["simple", "beta_binomial"]:
+    if prediction_method in ["simple", "beta_binomial", "hoeffding"]:
         # Use unified Clopper-Pearson + sampling uncertainty approach
         singleton_lower, singleton_upper, singleton_report = compute_loo_corrected_prediction_bounds(
             singleton_loo_preds,

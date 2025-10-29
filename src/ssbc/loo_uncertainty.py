@@ -374,6 +374,7 @@ def compute_loo_corrected_prediction_bounds(
     method : str
         'simple' - Clopper-Pearson + normal approximation for sampling uncertainty
         'beta_binomial' - Exact Beta-Binomial approach
+        'hoeffding' - Distribution-free Hoeffding bounds
     inflation_factor : float, optional
         Manual override for LOO variance inflation factor
     verbose : bool, default=True
@@ -450,8 +451,39 @@ def compute_loo_corrected_prediction_bounds(
             "n_effective": n_effective,
         }
         
+    elif method == "hoeffding":
+        # Use Hoeffding's inequality for distribution-free bounds
+        if inflation_factor is None:
+            inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
+        
+        # Hoeffding bound: P(|X - E[X]| >= t) <= 2 * exp(-2 * t^2 / n)
+        # For prediction bounds, we need to account for both calibration and test uncertainty
+        
+        # Calibration uncertainty (LOO-corrected)
+        # Hoeffding bound on calibration mean
+        t_cal = np.sqrt(np.log(2 / alpha) / (2 * n_cal))
+        cal_lower = max(0.0, p_hat - t_cal)
+        cal_upper = min(1.0, p_hat + t_cal)
+        
+        # Test sampling uncertainty
+        # Hoeffding bound on test set mean
+        t_test = np.sqrt(np.log(2 / alpha) / (2 * n_test))
+        
+        # Conservative approach: use worst-case bounds
+        lower = max(0.0, cal_lower - t_test)
+        upper = min(1.0, cal_upper + t_test)
+        
+        diagnostics = {
+            "method": "hoeffding_distribution_free",
+            "inflation_factor": inflation_factor,
+            "t_cal": t_cal,
+            "t_test": t_test,
+            "cal_lower": cal_lower,
+            "cal_upper": cal_upper,
+        }
+        
     else:
-        raise ValueError(f"Unknown method: {method}. Use 'simple' or 'beta_binomial'.")
+        raise ValueError(f"Unknown method: {method}. Use 'simple', 'beta_binomial', or 'hoeffding'.")
     
     return lower, upper, diagnostics
 
