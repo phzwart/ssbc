@@ -277,13 +277,51 @@ def generate_rigorous_pac_report(
         )
 
     # Build comprehensive report dict
+    # Build cleaned report with only essential information
     report = {
-        "ssbc_class_0": ssbc_result_0,
-        "ssbc_class_1": ssbc_result_1,
+        # Essential SSBC results (no full optimization trace)
+        "ssbc_class_0": {
+            "n": ssbc_result_0.n,
+            "alpha_target": ssbc_result_0.alpha_target,
+            "alpha_corrected": ssbc_result_0.alpha_corrected,
+            "threshold": ssbc_result_0.threshold,
+            "k": ssbc_result_0.k,
+        },
+        "ssbc_class_1": {
+            "n": ssbc_result_1.n,
+            "alpha_target": ssbc_result_1.alpha_target,
+            "alpha_corrected": ssbc_result_1.alpha_corrected,
+            "threshold": ssbc_result_1.threshold,
+            "k": ssbc_result_1.k,
+        },
         "pac_bounds_marginal": pac_bounds_marginal,
         "pac_bounds_class_0": pac_bounds_class_0,
         "pac_bounds_class_1": pac_bounds_class_1,
-        "calibration_result": cal_result,
+        # Cleaned calibration result (no full prediction sets)
+        "calibration_result": {
+            "class_0": {
+                "n_class": cal_result["class_0"]["n_class"],
+                "alpha_target": cal_result["class_0"]["alpha_target"],
+                "delta": cal_result["class_0"]["delta"],
+                "abstentions": cal_result["class_0"]["abstentions"],
+                "singletons": cal_result["class_0"]["singletons"],
+                "singletons_correct": cal_result["class_0"]["singletons_correct"],
+                "singletons_incorrect": cal_result["class_0"]["singletons_incorrect"],
+                "doublets": cal_result["class_0"]["doublets"],
+                "pac_bounds": cal_result["class_0"]["pac_bounds"],
+            },
+            "class_1": {
+                "n_class": cal_result["class_1"]["n_class"],
+                "alpha_target": cal_result["class_1"]["alpha_target"],
+                "delta": cal_result["class_1"]["delta"],
+                "abstentions": cal_result["class_1"]["abstentions"],
+                "singletons": cal_result["class_1"]["singletons"],
+                "singletons_correct": cal_result["class_1"]["singletons_correct"],
+                "singletons_incorrect": cal_result["class_1"]["singletons_incorrect"],
+                "doublets": cal_result["class_1"]["doublets"],
+                "pac_bounds": cal_result["class_1"]["pac_bounds"],
+            },
+        },
         "prediction_stats": pred_stats,
         "parameters": {
             "alpha_target": alpha_dict,
