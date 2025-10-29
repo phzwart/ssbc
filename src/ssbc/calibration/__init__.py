@@ -1,8 +1,7 @@
 """Calibration-related APIs.
 
-This package provides a stable namespace for calibration utilities without
-moving existing modules yet. It re-exports functions from the current
-module locations to avoid breaking imports while we reorganize.
+This package provides conformal prediction, bootstrap uncertainty analysis,
+and cross-conformal validation utilities.
 """
 
 from .bootstrap import (

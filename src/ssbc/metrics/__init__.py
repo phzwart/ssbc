@@ -1,7 +1,7 @@
 """Operational metrics and uncertainty APIs.
 
-This package re-exports metrics-related functions to provide a stable
-namespace. The underlying modules remain in their current locations.
+This package provides functions for computing operational bounds,
+LOO-CV uncertainty quantification, and prediction bounds.
 """
 
 from .loo_uncertainty import (

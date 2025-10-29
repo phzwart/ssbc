@@ -5,47 +5,6 @@ from typing import Any
 from ssbc.bounds import cp_interval
 
 
-def compute_conditional_rate_bounds(
-    numerator_fold_results: list[dict],
-    denominator_fold_results: list[dict],
-    weights: list[float],
-) -> tuple[float, float, float]:
-    """Compute bounds on conditional rate from fold-level counts.
-
-    For conditional rate P(A | B), computes cross-validated bounds by:
-    1. Computing A_count / B_count in each fold
-    2. Using Clopper-Pearson on aggregated counts
-
-    Parameters
-    ----------
-    numerator_fold_results : list[dict]
-        Fold results for numerator event (e.g., correct_in_singleton)
-    denominator_fold_results : list[dict]
-        Fold results for denominator event (e.g., singleton)
-    weights : list[float]
-        Fold weights
-
-    Returns
-    -------
-    rate : float
-        Estimated conditional rate
-    lower : float
-        Lower CI bound
-    upper : float
-        Upper CI bound
-    """
-    # Aggregate counts across folds
-    total_numerator = sum(fold["K_fr"] for fold in numerator_fold_results)
-    total_denominator = sum(fold["K_fr"] for fold in denominator_fold_results)
-
-    if total_denominator == 0:
-        return 0.0, 0.0, 1.0
-
-    # Compute CP interval on aggregated counts
-    ci = cp_interval(total_numerator, total_denominator)
-    return ci["proportion"], ci["lower"], ci["upper"]
-
-
 def report_prediction_stats(
     prediction_stats: dict[Any, Any],
     calibration_result: dict[Any, Any],
@@ -96,8 +55,6 @@ def report_prediction_stats(
     >>> marginal = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, 0.05)
     >>> summary = report_prediction_stats(pred_stats, cal_result, op_bounds, marginal)
     """
-    from ssbc.bounds import cp_interval
-
     summary: dict[str | int, Any] = {}
 
     if verbose:
