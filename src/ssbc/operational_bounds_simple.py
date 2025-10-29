@@ -518,12 +518,12 @@ def compute_pac_operational_bounds_perclass(
     # Ensure minimum test size for numerical stability
     expected_n_class_test = max(expected_n_class_test, 1)
 
-    # Point estimates
-    singleton_rate = n_singletons / n_class_cal
-    doublet_rate = n_doublets / n_class_cal
-    abstention_rate = n_abstentions / n_class_cal
+    # Point estimates (calibration proportions)
+    singleton_rate_cal = n_singletons / n_class_cal
+    doublet_rate_cal = n_doublets / n_class_cal
+    abstention_rate_cal = n_abstentions / n_class_cal
     n_errors = n_singletons - n_singletons_correct
-    singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
+    singleton_error_rate_cal = n_errors / n_singletons if n_singletons > 0 else 0.0
 
     # Apply prediction bounds accounting for both calibration and test set sampling uncertainty
     # These bound operational rates on future test sets of size expected_n_class_test
@@ -556,19 +556,29 @@ def compute_pac_operational_bounds_perclass(
         error_lower = 0.0
         error_upper = 1.0
 
+    # Build LOO prediction arrays for unbiased point estimates
+    singleton_loo_preds = results_array[:, 0].astype(int)
+    doublet_loo_preds = results_array[:, 1].astype(int)
+    abstention_loo_preds = results_array[:, 2].astype(int)
+    error_loo_preds = np.zeros(n, dtype=int)
+    if n_singletons > 0:
+        error_loo_preds = (results_array[:, 0] == 1) & (results_array[:, 3] == 0)
+
     return {
         "singleton_rate_bounds": [singleton_lower, singleton_upper],
         "doublet_rate_bounds": [doublet_lower, doublet_upper],
         "abstention_rate_bounds": [abstention_lower, abstention_upper],
         "singleton_error_rate_bounds": [error_lower, error_upper],
-        "expected_singleton_rate": singleton_rate,
-        "expected_doublet_rate": doublet_rate,
-        "expected_abstention_rate": abstention_rate,
-        "expected_singleton_error_rate": singleton_error_rate,
+        # Unbiased LOO estimates (means of LOO predictions)
+        "expected_singleton_rate": float(np.mean(singleton_loo_preds)) if n_class_cal > 0 else 0.0,
+        "expected_doublet_rate": float(np.mean(doublet_loo_preds)) if n_class_cal > 0 else 0.0,
+        "expected_abstention_rate": float(np.mean(abstention_loo_preds)) if n_class_cal > 0 else 0.0,
+        "expected_singleton_error_rate": float(np.mean(error_loo_preds)) if n_singletons > 0 else 0.0,
         "n_grid_points": 1,
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
-        "test_size": n_class_cal,  # Use calibration class size
+        # Report the intended future test size parameter
+        "test_size": expected_n_class_test,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
     }
@@ -659,12 +669,12 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     expected_n_class_test = int(test_size * class_rate_cal)
     expected_n_class_test = max(expected_n_class_test, 1)
 
-    # Point estimates
-    singleton_rate = n_singletons / n_class_cal
-    doublet_rate = n_doublets / n_class_cal
-    abstention_rate = n_abstentions / n_class_cal
+    # Point estimates (calibration proportions)
+    singleton_rate_cal = n_singletons / n_class_cal
+    doublet_rate_cal = n_doublets / n_class_cal
+    abstention_rate_cal = n_abstentions / n_class_cal
     n_errors = n_singletons - n_singletons_correct
-    singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
+    singleton_error_rate_cal = n_errors / n_singletons if n_singletons > 0 else 0.0
 
     # Convert to binary LOO predictions for each rate type
     singleton_loo_preds = results_array[:, 0].astype(int)
@@ -725,14 +735,16 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         "doublet_rate_bounds": [doublet_lower, doublet_upper],
         "abstention_rate_bounds": [abstention_lower, abstention_upper],
         "singleton_error_rate_bounds": [error_lower, error_upper],
-        "expected_singleton_rate": singleton_rate,
-        "expected_doublet_rate": doublet_rate,
-        "expected_abstention_rate": abstention_rate,
-        "expected_singleton_error_rate": singleton_error_rate,
+        # Unbiased LOO estimates (means of LOO predictions)
+        "expected_singleton_rate": float(np.mean(singleton_loo_preds)) if n_class_cal > 0 else 0.0,
+        "expected_doublet_rate": float(np.mean(doublet_loo_preds)) if n_class_cal > 0 else 0.0,
+        "expected_abstention_rate": float(np.mean(abstention_loo_preds)) if n_class_cal > 0 else 0.0,
+        "expected_singleton_error_rate": float(np.mean(error_loo_preds)) if n_singletons > 0 else 0.0,
         "n_grid_points": 1,
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
-        "test_size": n_class_cal,
+        # Report the intended future test size parameter
+        "test_size": test_size,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
     }
