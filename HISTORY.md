@@ -1,5 +1,13 @@
 # History
 
+## 1.2.7 (2025-01-29)
+
+### Fixed
+- **Critical bug fix**: Per-class LOO-corrected bounds were using `expected_n_class_test` instead of `test_size`
+- This caused bounds to be severely underestimated (e.g., 5.6% upper bound vs 39.4% observed rate)
+- Now uses full `test_size` parameter like marginal bounds, letting `compute_robust_prediction_bounds` handle class-specific calculations internally
+- Fixes bounds for class_0 and class_1 in rigorous PAC reports
+
 ## 1.2.6 (2025-01-29)
 
 ### Major Features
