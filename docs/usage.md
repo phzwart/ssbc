@@ -15,6 +15,36 @@ SSBC (Small-Sample Beta Correction) provides tools for:
 pip install ssbc
 ```
 
+## Package Organization
+
+SSBC is organized into focused packages that group related functionality:
+
+- **`ssbc.core_pkg`**: Core SSBC algorithm (`ssbc_correct`, `SSBCResult`)
+- **`ssbc.bounds`**: Statistical bounds computation (Clopper-Pearson, prediction bounds)
+- **`ssbc.calibration`**: Conformal prediction and calibration (Mondrian CP, bootstrap, cross-conformal)
+- **`ssbc.metrics`**: Operational metrics and uncertainty quantification (LOO-CV, operational bounds)
+- **`ssbc.reporting`**: Reporting and visualization utilities
+- **`ssbc.validation_pkg`**: Validation and empirical testing utilities
+
+For most use cases, the recommended approach is to import from the top-level `ssbc` package:
+
+```python
+from ssbc import (
+    ssbc_correct,
+    mondrian_conformal_calibrate,
+    generate_rigorous_pac_report,
+    # ... other functions
+)
+```
+
+This provides a stable API regardless of internal organization. For specialized use cases, you may also import directly from specific packages:
+
+```python
+from ssbc.calibration import split_by_class
+from ssbc.metrics import compute_pac_operational_bounds_marginal
+from ssbc.bounds import clopper_pearson_intervals
+```
+
 ## Quick Start
 
 ### Unified Workflow (Recommended)

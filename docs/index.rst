@@ -14,40 +14,54 @@ Small-Sample Beta Correction provides PAC guarantees for conformal prediction wi
 API Reference
 =============
 
-Core Modules
-------------
+Core Algorithm
+--------------
 
 .. autosummary::
    :toctree: _autosummary
    :recursive:
 
-   ssbc.core
-   ssbc.conformal
-   ssbc.statistics
+   ssbc.core_pkg
+   ssbc.bounds
 
-Operational Bounds & Reporting
--------------------------------
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   ssbc.operational_bounds_simple
-   ssbc.rigorous_report
-
-Uncertainty Analysis
---------------------
+Calibration & Conformal Prediction
+-----------------------------------
 
 .. autosummary::
    :toctree: _autosummary
    :recursive:
 
-   ssbc.bootstrap
-   ssbc.cross_conformal
-   ssbc.validation
+   ssbc.calibration
 
-Utilities & Visualization
--------------------------
+Metrics & Operational Bounds
+-----------------------------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   ssbc.metrics
+
+Reporting & Visualization
+--------------------------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   ssbc.reporting
+
+Uncertainty Analysis & Validation
+-----------------------------------
+
+.. autosummary::
+   :toctree: _autosummary
+   :recursive:
+
+   ssbc.validation_pkg
+
+Utilities & Tools
+-----------------
 
 .. autosummary::
    :toctree: _autosummary
@@ -55,7 +69,6 @@ Utilities & Visualization
 
    ssbc.utils
    ssbc.simulation
-   ssbc.visualization
    ssbc.hyperparameter
 
 Complete Package
