@@ -813,25 +813,88 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
             verbose=verbose,
         )
 
-    # Build result dict
+    # Compute both approaches with proper uncertainty quantification
+    
+    # Approach A: Fraction of whole dataset (denominator is fixed)
+    # These bounds are already computed above (using expected_n_class_test)
+    approach_a_singleton_bounds = [singleton_lower, singleton_upper]
+    approach_a_doublet_bounds = [doublet_lower, doublet_upper]
+    approach_a_abstention_bounds = [abstention_lower, abstention_upper]
+    approach_a_error_bounds = [error_lower, error_upper]
+    
+    # Approach B: Fraction of class samples (denominator is uncertain)
+    # Need to account for class rate uncertainty in denominator
+    from ssbc.statistics import prediction_bounds
+    
+    # Class rate bounds (uncertainty in denominator)
+    n_total_cal = len(labels)
+    class_rate_lower, class_rate_upper = prediction_bounds(
+        n_class_cal, n_total_cal, test_size, adjusted_ci_level, "simple"
+    )
+    
+    # For Approach B, we need to account for both numerator and denominator uncertainty
+    # This is a complex ratio estimation problem - for now, use conservative bounds
+    # TODO: Implement proper ratio estimation with uncertain denominators
+    
+    # Conservative approach: use worst-case class rate bounds
+    min_class_rate = class_rate_lower
+    max_class_rate = class_rate_upper
+    
+    # Approach B bounds (fraction of class samples)
+    # Use the class-specific bounds but adjust for class rate uncertainty
+    approach_b_singleton_bounds = [
+        singleton_lower * min_class_rate / class_rate_cal,
+        singleton_upper * max_class_rate / class_rate_cal
+    ]
+    approach_b_doublet_bounds = [
+        doublet_lower * min_class_rate / class_rate_cal,
+        doublet_upper * max_class_rate / class_rate_cal
+    ]
+    approach_b_abstention_bounds = [
+        abstention_lower * min_class_rate / class_rate_cal,
+        abstention_upper * max_class_rate / class_rate_cal
+    ]
+    approach_b_error_bounds = [
+        error_lower * min_class_rate / class_rate_cal,
+        error_upper * max_class_rate / class_rate_cal
+    ]
+    
+    # Build result dict with both approaches
     result = {
-        "singleton_rate_bounds": [singleton_lower, singleton_upper],
-        "doublet_rate_bounds": [doublet_lower, doublet_upper],
-        "abstention_rate_bounds": [abstention_lower, abstention_upper],
-        "singleton_error_rate_bounds": [error_lower, error_upper],
+        # Approach A: Fraction of whole dataset
+        "singleton_rate_bounds_whole_dataset": approach_a_singleton_bounds,
+        "doublet_rate_bounds_whole_dataset": approach_a_doublet_bounds,
+        "abstention_rate_bounds_whole_dataset": approach_a_abstention_bounds,
+        "singleton_error_rate_bounds_whole_dataset": approach_a_error_bounds,
+        
+        # Approach B: Fraction of class samples
+        "singleton_rate_bounds_class_samples": approach_b_singleton_bounds,
+        "doublet_rate_bounds_class_samples": approach_b_doublet_bounds,
+        "abstention_rate_bounds_class_samples": approach_b_abstention_bounds,
+        "singleton_error_rate_bounds_class_samples": approach_b_error_bounds,
+        
+        # Backward compatibility (default to Approach A)
+        "singleton_rate_bounds": approach_a_singleton_bounds,
+        "doublet_rate_bounds": approach_a_doublet_bounds,
+        "abstention_rate_bounds": approach_a_abstention_bounds,
+        "singleton_error_rate_bounds": approach_a_error_bounds,
+        
         # Unbiased LOO estimates (means of LOO predictions)
         "expected_singleton_rate": float(np.mean(singleton_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_doublet_rate": float(np.mean(doublet_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_abstention_rate": float(np.mean(abstention_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_singleton_error_rate": float(np.mean(error_loo_preds)) if n_singletons > 0 else 0.0,
+        
+        # Class rate uncertainty
+        "class_rate_bounds": [class_rate_lower, class_rate_upper],
+        "class_rate_calibration": class_rate_cal,
+        
         "n_grid_points": 1,
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
-        # Report the intended future test size parameter
-        "test_size": test_size,
+        "test_size": expected_n_class_test,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
-        # columns: [idx, true_label, set_size, is_singleton, is_doublet, is_abstention, is_singleton_correct]
         "loo_per_sample": loo_per_sample,
     }
 
