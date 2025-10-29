@@ -8,16 +8,18 @@ from .statistical import (
     clopper_pearson_intervals,
     clopper_pearson_lower,
     clopper_pearson_upper,
-    compute_all_bounds,
     cp_interval,
+    ensure_ci,
     prediction_bounds,
+    prediction_bounds_beta_binomial,
 )
 
 __all__ = [
     "clopper_pearson_intervals",
-    "clopper_pearson_lower", 
+    "clopper_pearson_lower",
     "clopper_pearson_upper",
-    "compute_all_bounds",
     "cp_interval",
+    "ensure_ci",
     "prediction_bounds",
+    "prediction_bounds_beta_binomial",
 ]

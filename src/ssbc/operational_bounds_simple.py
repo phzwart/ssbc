@@ -3,9 +3,9 @@
 import numpy as np
 from joblib import Parallel, delayed
 
+from ssbc.bounds import prediction_bounds
 from ssbc.core import SSBCResult
 from ssbc.loo_uncertainty import compute_loo_corrected_prediction_bounds, compute_robust_prediction_bounds
-from ssbc.statistics import prediction_bounds
 
 
 def _safe_parallel_map(n_jobs: int, func, iterable):
@@ -19,6 +19,7 @@ def _safe_parallel_map(n_jobs: int, func, iterable):
     except Exception:
         # Fallback to serial execution
         return [func(*args) for args in iterable]
+
 
 def _evaluate_loo_single_sample_marginal(
     idx: int,
@@ -707,7 +708,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     abstention_loo_preds = results_array[class_mask, 2].astype(int)
     error_loo_preds = np.zeros(np.sum(class_mask), dtype=int)
     if n_singletons > 0:
-        error_loo_preds = ((results_array[class_mask, 0] == 1) & (results_array[class_mask, 3] == 0))
+        error_loo_preds = (results_array[class_mask, 0] == 1) & (results_array[class_mask, 3] == 0)
 
     # Build per-sample LOO summary for downstream stratification (full, not filtered)
     set_sizes = (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int)
@@ -818,7 +819,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
 
     # Approach B: Fraction of class samples (denominator is uncertain)
     # Need to account for class rate uncertainty in denominator
-    from ssbc.statistics import prediction_bounds
+    from ssbc.bounds import prediction_bounds
 
     # Class rate bounds (uncertainty in denominator)
     n_total_cal = len(labels)
@@ -839,19 +840,19 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     # This provides conservative bounds for the ratio of operational rates
     approach_b_singleton_bounds = [
         singleton_lower * min_class_rate / class_rate_cal,
-        singleton_upper * max_class_rate / class_rate_cal
+        singleton_upper * max_class_rate / class_rate_cal,
     ]
     approach_b_doublet_bounds = [
         doublet_lower * min_class_rate / class_rate_cal,
-        doublet_upper * max_class_rate / class_rate_cal
+        doublet_upper * max_class_rate / class_rate_cal,
     ]
     approach_b_abstention_bounds = [
         abstention_lower * min_class_rate / class_rate_cal,
-        abstention_upper * max_class_rate / class_rate_cal
+        abstention_upper * max_class_rate / class_rate_cal,
     ]
     approach_b_error_bounds = [
         error_lower * min_class_rate / class_rate_cal,
-        error_upper * max_class_rate / class_rate_cal
+        error_upper * max_class_rate / class_rate_cal,
     ]
 
     # Build result dict with both approaches
@@ -861,29 +862,24 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         "doublet_rate_bounds_whole_dataset": approach_a_doublet_bounds,
         "abstention_rate_bounds_whole_dataset": approach_a_abstention_bounds,
         "singleton_error_rate_bounds_whole_dataset": approach_a_error_bounds,
-
         # Approach B: Fraction of class samples
         "singleton_rate_bounds_class_samples": approach_b_singleton_bounds,
         "doublet_rate_bounds_class_samples": approach_b_doublet_bounds,
         "abstention_rate_bounds_class_samples": approach_b_abstention_bounds,
         "singleton_error_rate_bounds_class_samples": approach_b_error_bounds,
-
         # Backward compatibility (default to Approach A)
         "singleton_rate_bounds": approach_a_singleton_bounds,
         "doublet_rate_bounds": approach_a_doublet_bounds,
         "abstention_rate_bounds": approach_a_abstention_bounds,
         "singleton_error_rate_bounds": approach_a_error_bounds,
-
         # Unbiased LOO estimates (means of LOO predictions)
         "expected_singleton_rate": float(np.mean(singleton_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_doublet_rate": float(np.mean(doublet_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_abstention_rate": float(np.mean(abstention_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_singleton_error_rate": float(np.mean(error_loo_preds)) if n_singletons > 0 else 0.0,
-
         # Class rate uncertainty
         "class_rate_bounds": [class_rate_lower, class_rate_upper],
         "class_rate_calibration": class_rate_cal,
-
         "n_grid_points": 1,
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,

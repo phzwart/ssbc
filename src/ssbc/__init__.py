@@ -13,6 +13,15 @@ from ssbc.bootstrap import (
     bootstrap_calibration_uncertainty,
     plot_bootstrap_distributions,
 )
+
+# Statistics utilities (now in bounds module)
+from ssbc.bounds import (
+    clopper_pearson_intervals,
+    clopper_pearson_lower,
+    clopper_pearson_upper,
+    cp_interval,
+    prediction_bounds,
+)
 from ssbc.conformal import (
     alpha_scan,
     compute_pac_operational_metrics,
@@ -50,15 +59,6 @@ from ssbc.rigorous_report import (
 # Simulation (for testing and examples)
 from ssbc.simulation import (
     BinaryClassifierSimulator,
-)
-
-# Statistics utilities
-from ssbc.statistics import (
-    clopper_pearson_intervals,
-    clopper_pearson_lower,
-    clopper_pearson_upper,
-    cp_interval,
-    prediction_bounds,
 )
 
 # Utility functions

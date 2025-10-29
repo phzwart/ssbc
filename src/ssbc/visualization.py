@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from ssbc.statistics import cp_interval
+from ssbc.bounds import cp_interval
 
 
 def compute_conditional_rate_bounds(
@@ -96,7 +96,7 @@ def report_prediction_stats(
     >>> marginal = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, 0.05)
     >>> summary = report_prediction_stats(pred_stats, cal_result, op_bounds, marginal)
     """
-    from ssbc.statistics import cp_interval
+    from ssbc.bounds import cp_interval
 
     summary: dict[str | int, Any] = {}
 

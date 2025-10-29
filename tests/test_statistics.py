@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from ssbc.statistics import clopper_pearson_intervals, cp_interval, ensure_ci
+from ssbc.bounds import clopper_pearson_intervals, cp_interval, ensure_ci
 
 
 class TestClopperPearsonIntervals:

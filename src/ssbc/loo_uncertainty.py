@@ -395,13 +395,13 @@ def compute_loo_corrected_prediction_bounds(
 
         if k_cal == 0:
             cp_lower = 0.0
-            cp_upper = beta_dist.ppf(1 - alpha/2, k_cal + 1, n_cal - k_cal)
+            cp_upper = beta_dist.ppf(1 - alpha / 2, k_cal + 1, n_cal - k_cal)
         elif k_cal == n_cal:
-            cp_lower = beta_dist.ppf(alpha/2, k_cal, n_cal - k_cal + 1)
+            cp_lower = beta_dist.ppf(alpha / 2, k_cal, n_cal - k_cal + 1)
             cp_upper = 1.0
         else:
-            cp_lower = beta_dist.ppf(alpha/2, k_cal, n_cal - k_cal + 1)
-            cp_upper = beta_dist.ppf(1 - alpha/2, k_cal + 1, n_cal - k_cal)
+            cp_lower = beta_dist.ppf(alpha / 2, k_cal, n_cal - k_cal + 1)
+            cp_upper = beta_dist.ppf(1 - alpha / 2, k_cal + 1, n_cal - k_cal)
 
         # Step 2: Add sampling uncertainty for test set
         # Use LOO-corrected variance if inflation factor provided
@@ -442,7 +442,8 @@ def compute_loo_corrected_prediction_bounds(
         n_effective = n_cal / inflation_factor
 
         # Use beta-binomial bounds with effective sample size
-        from ssbc.statistics import prediction_bounds_beta_binomial
+        from ssbc.bounds import prediction_bounds_beta_binomial
+
         lower, upper = prediction_bounds_beta_binomial(k_cal, n_cal, n_test, 1 - alpha)
 
         diagnostics = {
