@@ -4,7 +4,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ssbc.core import ssbc_correct
+from ssbc.core_pkg import ssbc_correct
 
 app = typer.Typer(
     name="ssbc",

@@ -20,18 +20,16 @@ from ssbc.bounds import (
 
 # Cross-conformal validation
 from ssbc.calibration import (
+    alpha_scan,
     bootstrap_calibration_uncertainty,
+    compute_pac_operational_metrics,
     cross_conformal_validation,
+    mondrian_conformal_calibrate,
     plot_bootstrap_distributions,
     print_cross_conformal_results,
-)
-from ssbc.conformal import (
-    alpha_scan,
-    compute_pac_operational_metrics,
-    mondrian_conformal_calibrate,
     split_by_class,
 )
-from ssbc.core import (
+from ssbc.core_pkg import (
     SSBCResult,
     ssbc_correct,
 )
@@ -43,13 +41,17 @@ from ssbc.hyperparameter import (
 )
 
 # LOO uncertainty quantification
-from ssbc.loo_uncertainty import (
+from ssbc.metrics import (
     compute_robust_prediction_bounds,
     format_prediction_bounds_report,
 )
 
 # Visualization and reporting
-from ssbc.reporting import generate_rigorous_pac_report
+from ssbc.reporting import (
+    generate_rigorous_pac_report,
+    plot_parallel_coordinates_plotly,
+    report_prediction_stats,
+)
 
 # Simulation (for testing and examples)
 from ssbc.simulation import (
@@ -66,10 +68,6 @@ from ssbc.utils import (
 from ssbc.validation_pkg import (
     print_validation_results,
     validate_pac_bounds,
-)
-from ssbc.visualization import (
-    plot_parallel_coordinates_plotly,
-    report_prediction_stats,
 )
 
 __all__ = [

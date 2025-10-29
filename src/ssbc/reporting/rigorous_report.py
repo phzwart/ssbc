@@ -8,9 +8,9 @@ from typing import Any, cast
 
 import numpy as np
 
-from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
-from ssbc.core import ssbc_correct
-from ssbc.operational_bounds_simple import (
+from ssbc.calibration import mondrian_conformal_calibrate, split_by_class
+from ssbc.core_pkg import ssbc_correct
+from ssbc.metrics import (
     compute_pac_operational_bounds_marginal,
     compute_pac_operational_bounds_marginal_loo_corrected,
     compute_pac_operational_bounds_perclass,

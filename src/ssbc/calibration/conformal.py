@@ -7,7 +7,7 @@ import pandas as pd
 from scipy.stats import beta as beta_dist
 
 from ssbc.bounds import clopper_pearson_lower, clopper_pearson_upper, cp_interval
-from ssbc.core import ssbc_correct
+from ssbc.core_pkg import ssbc_correct
 
 
 def split_by_class(labels: np.ndarray, probs: np.ndarray) -> dict[int, dict[str, Any]]:

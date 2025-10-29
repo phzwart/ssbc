@@ -3,8 +3,8 @@
 Re-export reporting and visualization helpers under a dedicated namespace.
 """
 
-from ssbc.rigorous_report import generate_rigorous_pac_report
-from ssbc.visualization import (
+from .rigorous_report import generate_rigorous_pac_report
+from .visualization import (
     plot_parallel_coordinates_plotly,
     report_prediction_stats,
 )

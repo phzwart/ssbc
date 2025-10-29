@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from ssbc.bootstrap import bootstrap_calibration_uncertainty
+from ssbc.calibration import bootstrap_calibration_uncertainty
 from ssbc.simulation import BinaryClassifierSimulator
 
 

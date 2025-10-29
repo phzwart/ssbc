@@ -14,8 +14,8 @@ from ssbc.bounds import (
     cp_interval,
     prediction_bounds,
 )
-from ssbc.conformal import mondrian_conformal_calibrate, split_by_class
-from ssbc.core import ssbc_correct
+from ssbc.calibration import mondrian_conformal_calibrate, split_by_class
+from ssbc.core_pkg import ssbc_correct
 
 
 class TestEdgeCases:

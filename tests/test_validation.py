@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from ssbc.rigorous_report import generate_rigorous_pac_report
+from ssbc.reporting import generate_rigorous_pac_report
 from ssbc.simulation import BinaryClassifierSimulator
 from ssbc.validation import print_validation_results, validate_pac_bounds
 

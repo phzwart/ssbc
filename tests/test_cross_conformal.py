@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from ssbc.cross_conformal import cross_conformal_validation, print_cross_conformal_results
+from ssbc.calibration import cross_conformal_validation, print_cross_conformal_results
 from ssbc.simulation import BinaryClassifierSimulator
 
 

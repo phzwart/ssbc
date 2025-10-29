@@ -9,8 +9,9 @@ from typing import Protocol
 import numpy as np
 from joblib import Parallel, delayed
 
-from ssbc.conformal import split_by_class
-from ssbc.core import ssbc_correct
+from ssbc.core_pkg import ssbc_correct
+
+from .conformal import split_by_class
 
 # Optional plotting dependencies
 try:
