@@ -1,0 +1,17 @@
+# Requirements file for ReadTheDocs and general installation
+# Generated from pyproject.toml dependencies
+
+# Core dependencies
+joblib>=1.1.0
+matplotlib>=3.5.0
+numpy>=1.21.0
+pandas>=1.3.0
+plotly>=5.0.0
+rich>=10.0.0
+scipy>=1.7.0
+typer>=0.9.0
+
+# Documentation dependencies (for ReadTheDocs)
+sphinx>=7.0
+sphinx-rtd-theme>=1.0.0
+myst-parser>=0.18.0
