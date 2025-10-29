@@ -150,6 +150,22 @@ def compute_pac_operational_bounds_marginal(
     n_abstentions = int(np.sum(results_array[:, 2]))
     n_singletons_correct = int(np.sum(results_array[:, 3]))
 
+    # Build per-sample LOO summary for downstream stratification
+    # set_size: 2 if doublet, 1 if singleton, 0 if abstention
+    set_sizes = (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int)
+    loo_per_sample = np.stack(
+        [
+            np.arange(n, dtype=int),
+            labels.astype(int),
+            set_sizes,
+            results_array[:, 0].astype(int),
+            results_array[:, 1].astype(int),
+            results_array[:, 2].astype(int),
+            results_array[:, 3].astype(int),
+        ],
+        axis=1,
+    )
+
     # Point estimates
     singleton_rate = n_singletons / n
     doublet_rate = n_doublets / n
@@ -369,6 +385,19 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         "test_size": test_size,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
+        # columns: [idx, true_label, set_size, is_singleton, is_doublet, is_abstention, is_singleton_correct]
+        "loo_per_sample": np.stack(
+            [
+                np.arange(n, dtype=int),
+                labels.astype(int),
+                (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int),
+                results_array[:, 0].astype(int),
+                results_array[:, 1].astype(int),
+                results_array[:, 2].astype(int),
+                results_array[:, 3].astype(int),
+            ],
+            axis=1,
+        ),
         "loo_diagnostics": {
             "singleton": singleton_report,
             "doublet": doublet_report,
@@ -501,10 +530,10 @@ def compute_pac_operational_bounds_perclass(
 
     # Aggregate results (only from class_label samples)
     results_array = np.array(results)
-    n_singletons = int(np.sum(results_array[:, 0]))
-    n_doublets = int(np.sum(results_array[:, 1]))
-    n_abstentions = int(np.sum(results_array[:, 2]))
-    n_singletons_correct = int(np.sum(results_array[:, 3]))
+    n_singletons = int(np.sum(results_array[:, 0] * (labels == class_label)[:, None]))
+    n_doublets = int(np.sum(results_array[:, 1] * (labels == class_label)[:, None]))
+    n_abstentions = int(np.sum(results_array[:, 2] * (labels == class_label)[:, None]))
+    n_singletons_correct = int(np.sum(results_array[:, 3] * (labels == class_label)[:, None]))
 
     # Number of class_label samples in calibration
     n_class_cal = np.sum(labels == class_label)
@@ -677,13 +706,29 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     singleton_error_rate_cal = n_errors / n_singletons if n_singletons > 0 else 0.0
 
     # Convert to binary LOO predictions for each rate type
-    singleton_loo_preds = results_array[:, 0].astype(int)
-    doublet_loo_preds = results_array[:, 1].astype(int)
-    abstention_loo_preds = results_array[:, 2].astype(int)
-    error_loo_preds = np.zeros(n, dtype=int)
+    # Restrict LOO binary arrays to class_label rows only (for unbiased per-class means)
+    class_mask = labels == class_label
+    singleton_loo_preds = results_array[class_mask, 0].astype(int)
+    doublet_loo_preds = results_array[class_mask, 1].astype(int)
+    abstention_loo_preds = results_array[class_mask, 2].astype(int)
+    error_loo_preds = np.zeros(np.sum(class_mask), dtype=int)
     if n_singletons > 0:
-        # Error rate: 1 if singleton and incorrect, 0 otherwise
-        error_loo_preds = (results_array[:, 0] == 1) & (results_array[:, 3] == 0)
+        error_loo_preds = ((results_array[class_mask, 0] == 1) & (results_array[class_mask, 3] == 0))
+
+    # Build per-sample LOO summary for downstream stratification (full, not filtered)
+    set_sizes = (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int)
+    loo_per_sample = np.stack(
+        [
+            np.arange(n, dtype=int),
+            labels.astype(int),
+            set_sizes,
+            results_array[:, 0].astype(int),
+            results_array[:, 1].astype(int),
+            results_array[:, 2].astype(int),
+            results_array[:, 3].astype(int),
+        ],
+        axis=1,
+    )
 
     # Apply union bound adjustment
     n_metrics = 4
@@ -747,6 +792,8 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         "test_size": test_size,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
+        # columns: [idx, true_label, set_size, is_singleton, is_doublet, is_abstention, is_singleton_correct]
+        "loo_per_sample": loo_per_sample,
     }
 
     # Add LOO diagnostics if method="all"
