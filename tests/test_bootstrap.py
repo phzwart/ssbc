@@ -221,7 +221,7 @@ class TestPlotBootstrapDistributions:
             # Should not crash (just don't show the plot)
             import matplotlib
 
-            from ssbc.bootstrap import plot_bootstrap_distributions
+            from ssbc.calibration import plot_bootstrap_distributions
 
             matplotlib.use("Agg")  # Non-interactive backend
             import matplotlib.pyplot as plt
