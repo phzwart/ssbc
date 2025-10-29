@@ -242,7 +242,9 @@ def generate_rigorous_pac_report(
     else:
         # Convert LOO method to standard method for per-class bounds
         perclass_prediction_method = prediction_method
-        if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding", "simple", "beta_binomial"]:
+        if use_loo_correction and prediction_method in [
+            "auto", "analytical", "exact", "hoeffding", "simple", "beta_binomial"
+        ]:
             # For per-class bounds, use beta_binomial as it's more conservative
             perclass_prediction_method = "beta_binomial"
 
@@ -278,50 +280,15 @@ def generate_rigorous_pac_report(
 
     # Build comprehensive report dict
     # Build cleaned report with only essential information
-    report = {
-        # Essential SSBC results (no full optimization trace)
-        "ssbc_class_0": {
-            "n": ssbc_result_0.n,
-            "alpha_target": ssbc_result_0.alpha_target,
-            "alpha_corrected": ssbc_result_0.alpha_corrected,
-            "threshold": ssbc_result_0.threshold,
-            "k": ssbc_result_0.k,
-        },
-        "ssbc_class_1": {
-            "n": ssbc_result_1.n,
-            "alpha_target": ssbc_result_1.alpha_target,
-            "alpha_corrected": ssbc_result_1.alpha_corrected,
-            "threshold": ssbc_result_1.threshold,
-            "k": ssbc_result_1.k,
-        },
+        report = {
+            # Essential SSBC results (return dataclasses as-is for tests)
+            "ssbc_class_0": ssbc_result_0,
+            "ssbc_class_1": ssbc_result_1,
         "pac_bounds_marginal": pac_bounds_marginal,
         "pac_bounds_class_0": pac_bounds_class_0,
         "pac_bounds_class_1": pac_bounds_class_1,
-        # Cleaned calibration result (no full prediction sets)
-        "calibration_result": {
-            "class_0": {
-                "n_class": cal_result["class_0"]["n_class"],
-                "alpha_target": cal_result["class_0"]["alpha_target"],
-                "delta": cal_result["class_0"]["delta"],
-                "abstentions": cal_result["class_0"]["abstentions"],
-                "singletons": cal_result["class_0"]["singletons"],
-                "singletons_correct": cal_result["class_0"]["singletons_correct"],
-                "singletons_incorrect": cal_result["class_0"]["singletons_incorrect"],
-                "doublets": cal_result["class_0"]["doublets"],
-                "pac_bounds": cal_result["class_0"]["pac_bounds"],
-            },
-            "class_1": {
-                "n_class": cal_result["class_1"]["n_class"],
-                "alpha_target": cal_result["class_1"]["alpha_target"],
-                "delta": cal_result["class_1"]["delta"],
-                "abstentions": cal_result["class_1"]["abstentions"],
-                "singletons": cal_result["class_1"]["singletons"],
-                "singletons_correct": cal_result["class_1"]["singletons_correct"],
-                "singletons_incorrect": cal_result["class_1"]["singletons_incorrect"],
-                "doublets": cal_result["class_1"]["doublets"],
-                "pac_bounds": cal_result["class_1"]["pac_bounds"],
-            },
-        },
+            # Calibration result as returned by mondrian_conformal_calibrate (keys 0 and 1)
+            "calibration_result": cal_result,
         "prediction_stats": pred_stats,
         "parameters": {
             "alpha_target": alpha_dict,

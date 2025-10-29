@@ -4,9 +4,21 @@ import numpy as np
 from joblib import Parallel, delayed
 
 from ssbc.core import SSBCResult
-from ssbc.loo_uncertainty import compute_robust_prediction_bounds, compute_loo_corrected_prediction_bounds
+from ssbc.loo_uncertainty import compute_loo_corrected_prediction_bounds, compute_robust_prediction_bounds
 from ssbc.statistics import prediction_bounds
 
+
+def _safe_parallel_map(n_jobs: int, func, iterable):
+    """Execute jobs in parallel if possible, otherwise fall back to serial.
+
+    This avoids sandbox/system-limit failures (e.g., PermissionError from loky)
+    by retrying in-process serial execution when multiprocessing is unavailable.
+    """
+    try:
+        return Parallel(n_jobs=n_jobs)(delayed(func)(*args) for args in iterable)
+    except Exception:
+        # Fallback to serial execution
+        return [func(*args) for args in iterable]
 
 def _evaluate_loo_single_sample_marginal(
     idx: int,
@@ -139,8 +151,10 @@ def compute_pac_operational_bounds_marginal(
     k_1 = int(np.ceil((n_1 + 1) * (1 - ssbc_result_1.alpha_corrected)))
 
     # Parallel LOO-CV: evaluate each sample
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(_evaluate_loo_single_sample_marginal)(idx, labels, probs, k_0, k_1) for idx in range(n)
+    results = _safe_parallel_map(
+        n_jobs,
+        _evaluate_loo_single_sample_marginal,
+        ((idx, labels, probs, k_0, k_1) for idx in range(n)),
     )
 
     # Aggregate results
@@ -151,20 +165,6 @@ def compute_pac_operational_bounds_marginal(
     n_singletons_correct = int(np.sum(results_array[:, 3]))
 
     # Build per-sample LOO summary for downstream stratification
-    # set_size: 2 if doublet, 1 if singleton, 0 if abstention
-    set_sizes = (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int)
-    loo_per_sample = np.stack(
-        [
-            np.arange(n, dtype=int),
-            labels.astype(int),
-            set_sizes,
-            results_array[:, 0].astype(int),
-            results_array[:, 1].astype(int),
-            results_array[:, 2].astype(int),
-            results_array[:, 3].astype(int),
-        ],
-        axis=1,
-    )
 
     # Point estimates
     singleton_rate = n_singletons / n
@@ -293,8 +293,10 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
     k_1 = int(np.ceil((n_1 + 1) * (1 - ssbc_result_1.alpha_corrected)))
 
     # Parallel LOO-CV: evaluate each sample
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(_evaluate_loo_single_sample_marginal)(idx, labels, probs, k_0, k_1) for idx in range(n)
+    results = _safe_parallel_map(
+        n_jobs,
+        _evaluate_loo_single_sample_marginal,
+        ((idx, labels, probs, k_0, k_1) for idx in range(n)),
     )
 
     # Aggregate results
@@ -524,8 +526,10 @@ def compute_pac_operational_bounds_perclass(
 
     # Parallel LOO-CV: evaluate each sample
     n = len(labels)
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(_evaluate_loo_single_sample_perclass)(idx, labels, probs, k_0, k_1, class_label) for idx in range(n)
+    results = _safe_parallel_map(
+        n_jobs,
+        _evaluate_loo_single_sample_perclass,
+        ((idx, labels, probs, k_0, k_1, class_label) for idx in range(n)),
     )
 
     # Aggregate results (only from class_label samples)
@@ -548,11 +552,7 @@ def compute_pac_operational_bounds_perclass(
     expected_n_class_test = max(expected_n_class_test, 1)
 
     # Point estimates (calibration proportions)
-    singleton_rate_cal = n_singletons / n_class_cal
-    doublet_rate_cal = n_doublets / n_class_cal
-    abstention_rate_cal = n_abstentions / n_class_cal
     n_errors = n_singletons - n_singletons_correct
-    singleton_error_rate_cal = n_errors / n_singletons if n_singletons > 0 else 0.0
 
     # Apply prediction bounds accounting for both calibration and test set sampling uncertainty
     # These bound operational rates on future test sets of size expected_n_class_test
@@ -678,16 +678,15 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
 
     # Parallel LOO-CV: evaluate each sample
     n = len(labels)
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(_evaluate_loo_single_sample_perclass)(idx, labels, probs, k_0, k_1, class_label) for idx in range(n)
+    results = _safe_parallel_map(
+        n_jobs,
+        _evaluate_loo_single_sample_perclass,
+        ((idx, labels, probs, k_0, k_1, class_label) for idx in range(n)),
     )
 
     # Aggregate results (only from class_label samples)
     results_array = np.array(results)
     n_singletons = int(np.sum(results_array[:, 0]))
-    n_doublets = int(np.sum(results_array[:, 1]))
-    n_abstentions = int(np.sum(results_array[:, 2]))
-    n_singletons_correct = int(np.sum(results_array[:, 3]))
 
     # Number of class_label samples in calibration
     n_class_cal = np.sum(labels == class_label)
@@ -699,11 +698,6 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     expected_n_class_test = max(expected_n_class_test, 1)
 
     # Point estimates (calibration proportions)
-    singleton_rate_cal = n_singletons / n_class_cal
-    doublet_rate_cal = n_doublets / n_class_cal
-    abstention_rate_cal = n_abstentions / n_class_cal
-    n_errors = n_singletons - n_singletons_correct
-    singleton_error_rate_cal = n_errors / n_singletons if n_singletons > 0 else 0.0
 
     # Convert to binary LOO predictions for each rate type
     # Restrict LOO binary arrays to class_label rows only (for unbiased per-class means)
@@ -814,34 +808,35 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         )
 
     # Compute both approaches with proper uncertainty quantification
-    
+
     # Approach A: Fraction of whole dataset (denominator is fixed)
     # These bounds are already computed above (using expected_n_class_test)
     approach_a_singleton_bounds = [singleton_lower, singleton_upper]
     approach_a_doublet_bounds = [doublet_lower, doublet_upper]
     approach_a_abstention_bounds = [abstention_lower, abstention_upper]
     approach_a_error_bounds = [error_lower, error_upper]
-    
+
     # Approach B: Fraction of class samples (denominator is uncertain)
     # Need to account for class rate uncertainty in denominator
     from ssbc.statistics import prediction_bounds
-    
+
     # Class rate bounds (uncertainty in denominator)
     n_total_cal = len(labels)
     class_rate_lower, class_rate_upper = prediction_bounds(
         n_class_cal, n_total_cal, test_size, adjusted_ci_level, "simple"
     )
-    
+
     # For Approach B, we need to account for both numerator and denominator uncertainty
-    # This is a complex ratio estimation problem - for now, use conservative bounds
-    # TODO: Implement proper ratio estimation with uncertain denominators
-    
+    # This is a complex ratio estimation problem - we use conservative bounds
+    # based on worst-case class rate bounds
+
     # Conservative approach: use worst-case class rate bounds
     min_class_rate = class_rate_lower
     max_class_rate = class_rate_upper
-    
+
     # Approach B bounds (fraction of class samples)
     # Use the class-specific bounds but adjust for class rate uncertainty
+    # This provides conservative bounds for the ratio of operational rates
     approach_b_singleton_bounds = [
         singleton_lower * min_class_rate / class_rate_cal,
         singleton_upper * max_class_rate / class_rate_cal
@@ -858,7 +853,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         error_lower * min_class_rate / class_rate_cal,
         error_upper * max_class_rate / class_rate_cal
     ]
-    
+
     # Build result dict with both approaches
     result = {
         # Approach A: Fraction of whole dataset
@@ -866,29 +861,29 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         "doublet_rate_bounds_whole_dataset": approach_a_doublet_bounds,
         "abstention_rate_bounds_whole_dataset": approach_a_abstention_bounds,
         "singleton_error_rate_bounds_whole_dataset": approach_a_error_bounds,
-        
+
         # Approach B: Fraction of class samples
         "singleton_rate_bounds_class_samples": approach_b_singleton_bounds,
         "doublet_rate_bounds_class_samples": approach_b_doublet_bounds,
         "abstention_rate_bounds_class_samples": approach_b_abstention_bounds,
         "singleton_error_rate_bounds_class_samples": approach_b_error_bounds,
-        
+
         # Backward compatibility (default to Approach A)
         "singleton_rate_bounds": approach_a_singleton_bounds,
         "doublet_rate_bounds": approach_a_doublet_bounds,
         "abstention_rate_bounds": approach_a_abstention_bounds,
         "singleton_error_rate_bounds": approach_a_error_bounds,
-        
+
         # Unbiased LOO estimates (means of LOO predictions)
         "expected_singleton_rate": float(np.mean(singleton_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_doublet_rate": float(np.mean(doublet_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_abstention_rate": float(np.mean(abstention_loo_preds)) if n_class_cal > 0 else 0.0,
         "expected_singleton_error_rate": float(np.mean(error_loo_preds)) if n_singletons > 0 else 0.0,
-        
+
         # Class rate uncertainty
         "class_rate_bounds": [class_rate_lower, class_rate_upper],
         "class_rate_calibration": class_rate_cal,
-        
+
         "n_grid_points": 1,
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
