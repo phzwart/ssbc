@@ -206,8 +206,9 @@ def generate_rigorous_pac_report(
     # Each class uses its own delta
     # Convert LOO method to standard method for per-class bounds
     perclass_prediction_method = prediction_method
-    if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding"]:
+    if use_loo_correction and prediction_method in ["auto", "analytical", "exact", "hoeffding", "all"]:
         # For per-class bounds, use beta_binomial as it's more conservative
+        # Note: "all" method comparison is only available for marginal bounds
         perclass_prediction_method = "beta_binomial"
 
     pac_bounds_class_0 = compute_pac_operational_bounds_perclass(
