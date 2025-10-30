@@ -6,7 +6,7 @@ from joblib import Parallel, delayed
 from ssbc.bounds import prediction_bounds
 from ssbc.core_pkg import SSBCResult
 
-from .loo_uncertainty import compute_loo_corrected_prediction_bounds, compute_robust_prediction_bounds
+from .loo_uncertainty import compute_robust_prediction_bounds
 
 
 def _safe_parallel_map(n_jobs: int, func, iterable):
@@ -166,8 +166,6 @@ def compute_pac_operational_bounds_marginal(
     n_abstentions = int(np.sum(results_array[:, 2]))
     n_singletons_correct = int(np.sum(results_array[:, 3]))
 
-    # Build per-sample LOO summary for downstream stratification
-
     # Point estimates
     singleton_rate = n_singletons / n
     doublet_rate = n_doublets / n
@@ -175,11 +173,27 @@ def compute_pac_operational_bounds_marginal(
     n_errors = n_singletons - n_singletons_correct
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
 
+    # Class-specific singleton error rates (normalized against full dataset)
+    n_errors_class0 = int(np.sum((results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 0)))
+    n_errors_class1 = int(np.sum((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0)))
+    singleton_error_rate_class0 = n_errors_class0 / n if n > 0 else 0.0
+    singleton_error_rate_class1 = n_errors_class1 / n if n > 0 else 0.0
+
+    # Conditional error rates: P(error | singleton & class)
+    singleton_class0_mask = (results_array[:, 0] == 1) & (labels == 0)
+    singleton_class1_mask = (results_array[:, 0] == 1) & (labels == 1)
+    n_singletons_class0 = int(np.sum(singleton_class0_mask))
+    n_singletons_class1 = int(np.sum(singleton_class1_mask))
+    singleton_error_rate_cond_class0 = n_errors_class0 / n_singletons_class0 if n_singletons_class0 > 0 else 0.0
+    singleton_error_rate_cond_class1 = n_errors_class1 / n_singletons_class1 if n_singletons_class1 > 0 else 0.0
+
     # Apply prediction bounds accounting for both calibration and test set sampling uncertainty
     # These bound operational rates on future test sets of size test_size
     # SE = sqrt(p̂(1-p̂) * (1/n_cal + 1/n_test)) accounts for both sources of uncertainty
 
-    n_metrics = 4
+    # Now we have 8 metrics: singleton, doublet, abstention, error (conditional),
+    # error_class0 (normalized), error_class1 (normalized), error_cond_class0, error_cond_class1
+    n_metrics = 8
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
@@ -203,15 +217,61 @@ def compute_pac_operational_bounds_marginal(
         error_lower = 0.0
         error_upper = 1.0
 
+    # Class-specific singleton error rates (normalized against full dataset)
+    error_class0_lower, error_class0_upper = prediction_bounds(
+        n_errors_class0, n, test_size, adjusted_ci_level, prediction_method
+    )
+    error_class1_lower, error_class1_upper = prediction_bounds(
+        n_errors_class1, n, test_size, adjusted_ci_level, prediction_method
+    )
+
+    # Conditional error rates: P(error | singleton & class)
+    expected_n_singletons_class0_test = int(test_size * (n_singletons_class0 / n)) if n > 0 else 1
+    expected_n_singletons_class0_test = max(expected_n_singletons_class0_test, 1) if n_singletons_class0 > 0 else 1
+    expected_n_singletons_class1_test = int(test_size * (n_singletons_class1 / n)) if n > 0 else 1
+    expected_n_singletons_class1_test = max(expected_n_singletons_class1_test, 1) if n_singletons_class1 > 0 else 1
+
+    if n_singletons_class0 > 0:
+        error_cond_class0_lower, error_cond_class0_upper = prediction_bounds(
+            n_errors_class0,
+            n_singletons_class0,
+            expected_n_singletons_class0_test,
+            adjusted_ci_level,
+            prediction_method,
+        )
+    else:
+        error_cond_class0_lower = 0.0
+        error_cond_class0_upper = 1.0
+
+    if n_singletons_class1 > 0:
+        error_cond_class1_lower, error_cond_class1_upper = prediction_bounds(
+            n_errors_class1,
+            n_singletons_class1,
+            expected_n_singletons_class1_test,
+            adjusted_ci_level,
+            prediction_method,
+        )
+    else:
+        error_cond_class1_lower = 0.0
+        error_cond_class1_upper = 1.0
+
     return {
         "singleton_rate_bounds": [singleton_lower, singleton_upper],
         "doublet_rate_bounds": [doublet_lower, doublet_upper],
         "abstention_rate_bounds": [abstention_lower, abstention_upper],
         "singleton_error_rate_bounds": [error_lower, error_upper],
+        "singleton_error_rate_class0_bounds": [error_class0_lower, error_class0_upper],
+        "singleton_error_rate_class1_bounds": [error_class1_lower, error_class1_upper],
+        "singleton_error_rate_cond_class0_bounds": [error_cond_class0_lower, error_cond_class0_upper],
+        "singleton_error_rate_cond_class1_bounds": [error_cond_class1_lower, error_cond_class1_upper],
         "expected_singleton_rate": singleton_rate,
         "expected_doublet_rate": doublet_rate,
         "expected_abstention_rate": abstention_rate,
         "expected_singleton_error_rate": singleton_error_rate,
+        "expected_singleton_error_rate_class0": singleton_error_rate_class0,
+        "expected_singleton_error_rate_class1": singleton_error_rate_class1,
+        "expected_singleton_error_rate_cond_class0": singleton_error_rate_cond_class0,
+        "expected_singleton_error_rate_cond_class1": singleton_error_rate_cond_class1,
         "n_grid_points": 1,  # Single scenario (fixed thresholds)
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
@@ -324,8 +384,46 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         # Error rate: 1 if singleton and incorrect, 0 otherwise
         error_loo_preds = (results_array[:, 0] == 1) & (results_array[:, 3] == 0)
 
+    # Class-specific singleton error rates (normalized against full dataset)
+    # Error rate for singletons with true_label=0, normalized by total samples
+    error_class0_loo_preds = ((results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 0)).astype(int)
+    # Error rate for singletons with true_label=1, normalized by total samples
+    error_class1_loo_preds = ((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0)).astype(int)
+
+    # Point estimates for class-specific error rates (normalized against full dataset)
+    singleton_error_rate_class0 = float(np.mean(error_class0_loo_preds)) if n > 0 else 0.0
+    singleton_error_rate_class1 = float(np.mean(error_class1_loo_preds)) if n > 0 else 0.0
+
+    # Conditional error rates: P(error | singleton & class)
+    # Binary predictions: 1 if singleton with class_label AND error, 0 otherwise
+    singleton_class0_mask = (results_array[:, 0] == 1) & (labels == 0)
+    singleton_class1_mask = (results_array[:, 0] == 1) & (labels == 1)
+    n_singletons_class0 = int(np.sum(singleton_class0_mask))
+    n_singletons_class1 = int(np.sum(singleton_class1_mask))
+    n_errors_class0_singleton = int(np.sum(error_class0_loo_preds))
+    n_errors_class1_singleton = int(np.sum(error_class1_loo_preds))
+
+    # Conditional rates
+    singleton_error_rate_cond_class0 = (
+        n_errors_class0_singleton / n_singletons_class0 if n_singletons_class0 > 0 else 0.0
+    )
+    singleton_error_rate_cond_class1 = (
+        n_errors_class1_singleton / n_singletons_class1 if n_singletons_class1 > 0 else 0.0
+    )
+
+    # LOO predictions for conditional error rates (need to filter by singleton & class)
+    error_cond_class0_loo_preds = np.zeros(n, dtype=int)
+    if n_singletons_class0 > 0:
+        error_cond_class0_loo_preds[singleton_class0_mask] = (results_array[singleton_class0_mask, 3] == 0).astype(int)
+
+    error_cond_class1_loo_preds = np.zeros(n, dtype=int)
+    if n_singletons_class1 > 0:
+        error_cond_class1_loo_preds[singleton_class1_mask] = (results_array[singleton_class1_mask, 3] == 0).astype(int)
+
     # Apply union bound adjustment
-    n_metrics = 4
+    # Now we have 8 metrics: singleton, doublet, abstention, error (conditional),
+    # error_class0 (normalized), error_class1 (normalized), error_cond_class0, error_cond_class1
+    n_metrics = 8
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
     else:
@@ -374,39 +472,93 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         error_upper = 1.0
         error_report = {"selected_method": "no_singletons", "diagnostics": {}}
 
+    # Class-specific singleton error rates (normalized against full dataset)
+    error_class0_lower, error_class0_upper, error_class0_report = compute_robust_prediction_bounds(
+        error_class0_loo_preds,
+        test_size,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
+
+    error_class1_lower, error_class1_upper, error_class1_report = compute_robust_prediction_bounds(
+        error_class1_loo_preds,
+        test_size,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
+
+    # Conditional error rates: P(error | singleton & class)
+    # Need to compute bounds using only singleton samples from each class
+    # For prediction bounds, estimate test set size for class-X singletons
+    expected_n_singletons_class0_test = int(test_size * (n_singletons_class0 / n)) if n > 0 else 1
+    expected_n_singletons_class0_test = max(expected_n_singletons_class0_test, 1) if n_singletons_class0 > 0 else 1
+    expected_n_singletons_class1_test = int(test_size * (n_singletons_class1 / n)) if n > 0 else 1
+    expected_n_singletons_class1_test = max(expected_n_singletons_class1_test, 1) if n_singletons_class1 > 0 else 1
+
+    if n_singletons_class0 > 0:
+        error_cond_class0_lower, error_cond_class0_upper, error_cond_class0_report = compute_robust_prediction_bounds(
+            error_cond_class0_loo_preds[singleton_class0_mask],
+            expected_n_singletons_class0_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
+    else:
+        error_cond_class0_lower = 0.0
+        error_cond_class0_upper = 1.0
+        error_cond_class0_report = {"selected_method": "no_singletons_class0", "diagnostics": {}}
+
+    if n_singletons_class1 > 0:
+        error_cond_class1_lower, error_cond_class1_upper, error_cond_class1_report = compute_robust_prediction_bounds(
+            error_cond_class1_loo_preds[singleton_class1_mask],
+            expected_n_singletons_class1_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=verbose,
+        )
+    else:
+        error_cond_class1_lower = 0.0
+        error_cond_class1_upper = 1.0
+        error_cond_class1_report = {"selected_method": "no_singletons_class1", "diagnostics": {}}
+
     return {
         "singleton_rate_bounds": [singleton_lower, singleton_upper],
         "doublet_rate_bounds": [doublet_lower, doublet_upper],
         "abstention_rate_bounds": [abstention_lower, abstention_upper],
         "singleton_error_rate_bounds": [error_lower, error_upper],
+        "singleton_error_rate_class0_bounds": [error_class0_lower, error_class0_upper],
+        "singleton_error_rate_class1_bounds": [error_class1_lower, error_class1_upper],
+        "singleton_error_rate_cond_class0_bounds": [error_cond_class0_lower, error_cond_class0_upper],
+        "singleton_error_rate_cond_class1_bounds": [error_cond_class1_lower, error_cond_class1_upper],
         "expected_singleton_rate": singleton_rate,
         "expected_doublet_rate": doublet_rate,
         "expected_abstention_rate": abstention_rate,
         "expected_singleton_error_rate": singleton_error_rate,
+        "expected_singleton_error_rate_class0": singleton_error_rate_class0,
+        "expected_singleton_error_rate_class1": singleton_error_rate_class1,
+        "expected_singleton_error_rate_cond_class0": singleton_error_rate_cond_class0,
+        "expected_singleton_error_rate_cond_class1": singleton_error_rate_cond_class1,
         "n_grid_points": 1,  # Single scenario (fixed thresholds)
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
         "test_size": test_size,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
-        # columns: [idx, true_label, set_size, is_singleton, is_doublet, is_abstention, is_singleton_correct]
-        "loo_per_sample": np.stack(
-            [
-                np.arange(n, dtype=int),
-                labels.astype(int),
-                (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int),
-                results_array[:, 0].astype(int),
-                results_array[:, 1].astype(int),
-                results_array[:, 2].astype(int),
-                results_array[:, 3].astype(int),
-            ],
-            axis=1,
-        ),
         "loo_diagnostics": {
             "singleton": singleton_report,
             "doublet": doublet_report,
             "abstention": abstention_report,
             "singleton_error": error_report,
+            "singleton_error_class0": error_class0_report,
+            "singleton_error_class1": error_class1_report,
+            "singleton_error_cond_class0": error_cond_class0_report,
+            "singleton_error_cond_class1": error_cond_class1_report,
         },
     }
 
@@ -711,21 +863,6 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     if n_singletons > 0:
         error_loo_preds = (results_array[class_mask, 0] == 1) & (results_array[class_mask, 3] == 0)
 
-    # Build per-sample LOO summary for downstream stratification (full, not filtered)
-    set_sizes = (results_array[:, 1] * 2 + results_array[:, 0] * 1).astype(int)
-    loo_per_sample = np.stack(
-        [
-            np.arange(n, dtype=int),
-            labels.astype(int),
-            set_sizes,
-            results_array[:, 0].astype(int),
-            results_array[:, 1].astype(int),
-            results_array[:, 2].astype(int),
-            results_array[:, 3].astype(int),
-        ],
-        axis=1,
-    )
-
     # Apply union bound adjustment
     n_metrics = 4
     if use_union_bound:
@@ -734,80 +871,43 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         adjusted_ci_level = ci_level
 
     # Compute LOO-corrected bounds for each rate type
-    if prediction_method in ["simple", "beta_binomial", "hoeffding"]:
-        # Use unified Clopper-Pearson + sampling uncertainty approach
-        singleton_lower, singleton_upper, singleton_report = compute_loo_corrected_prediction_bounds(
-            singleton_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
+    # Use compute_robust_prediction_bounds for consistency with marginal bounds
+    # This supports all methods including "all", "auto", "analytical", "exact", "hoeffding", etc.
+    singleton_lower, singleton_upper, singleton_report = compute_robust_prediction_bounds(
+        singleton_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
-        doublet_lower, doublet_upper, doublet_report = compute_loo_corrected_prediction_bounds(
-            doublet_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
+    doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
+        doublet_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
-        abstention_lower, abstention_upper, abstention_report = compute_loo_corrected_prediction_bounds(
-            abstention_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
+    abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
+        abstention_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
-        error_lower, error_upper, error_report = compute_loo_corrected_prediction_bounds(
-            error_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
-    else:
-        # Use original robust method for advanced options
-        singleton_lower, singleton_upper, singleton_report = compute_robust_prediction_bounds(
-            singleton_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
-
-        doublet_lower, doublet_upper, doublet_report = compute_robust_prediction_bounds(
-            doublet_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
-
-        abstention_lower, abstention_upper, abstention_report = compute_robust_prediction_bounds(
-            abstention_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
-
-        error_lower, error_upper, error_report = compute_robust_prediction_bounds(
-            error_loo_preds,
-            expected_n_class_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
+    error_lower, error_upper, error_report = compute_robust_prediction_bounds(
+        error_loo_preds,
+        expected_n_class_test,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
     # Compute both approaches with proper uncertainty quantification
 
@@ -887,16 +987,13 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         "test_size": expected_n_class_test,
         "use_union_bound": use_union_bound,
         "n_metrics": n_metrics if use_union_bound else None,
-        "loo_per_sample": loo_per_sample,
-    }
-
-    # Add LOO diagnostics if method="all"
-    if prediction_method == "all":
-        result["loo_diagnostics"] = {
+        # Always include LOO diagnostics (for method reporting)
+        "loo_diagnostics": {
             "singleton": singleton_report,
             "doublet": doublet_report,
             "abstention": abstention_report,
             "singleton_error": error_report,
-        }
+        },
+    }
 
     return result

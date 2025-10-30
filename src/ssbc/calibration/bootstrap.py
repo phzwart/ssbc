@@ -414,5 +414,5 @@ def plot_bootstrap_distributions(
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"✅ Saved bootstrap visualization to: {save_path}")
-    else:
-        plt.show()
+    # In non-interactive/test environments, avoid plt.show() to prevent warnings
+    # Callers can explicitly show or save the returned figure if needed.

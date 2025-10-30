@@ -66,8 +66,13 @@ from ssbc.utils import (
 
 # Validation utilities
 from ssbc.validation_pkg import (
+    get_calibration_bounds_dataframe,
+    plot_calibration_excess,
+    plot_validation_bounds,
+    print_calibration_validation_results,
     print_validation_results,
     validate_pac_bounds,
+    validate_prediction_interval_calibration,
 )
 
 __all__ = [
@@ -104,6 +109,11 @@ __all__ = [
     # Validation utilities
     "validate_pac_bounds",
     "print_validation_results",
+    "plot_validation_bounds",
+    "validate_prediction_interval_calibration",
+    "print_calibration_validation_results",
+    "get_calibration_bounds_dataframe",
+    "plot_calibration_excess",
     # Rigorous reporting
     "generate_rigorous_pac_report",
     # Hyperparameter

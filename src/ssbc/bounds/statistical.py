@@ -124,7 +124,7 @@ def clopper_pearson_intervals(labels: np.ndarray, confidence: float = 0.95) -> d
 
     for label in [0, 1]:
         count = np.sum(labels == label)
-        proportion = count / n_total
+        proportion = count / n_total if n_total > 0 else float("nan")
 
         # Clopper-Pearson uses Beta distribution quantiles
         # Lower bound: Beta(count, n-count+1) at alpha/2
@@ -235,7 +235,7 @@ def prediction_bounds_lower(k_cal: int, n_cal: int, n_test: int, confidence: flo
 
     # Standard error accounting for both calibration and test set sampling
     # SE = sqrt(p̂(1-p̂) * (1/n_cal + 1/n_test))
-    se = np.sqrt(p_hat * (1 - p_hat) * (1 / n_cal + 1 / n_test))
+    se = np.sqrt(np.clip(p_hat * (1 - p_hat) * (1 / n_cal + 1 / n_test), 0.0, None))
 
     # Z-score for confidence level
     alpha = 1 - confidence
@@ -293,7 +293,7 @@ def prediction_bounds_upper(k_cal: int, n_cal: int, n_test: int, confidence: flo
 
     # Standard error accounting for both calibration and test set sampling
     # SE = sqrt(p̂(1-p̂) * (1/n_cal + 1/n_test))
-    se = np.sqrt(p_hat * (1 - p_hat) * (1 / n_cal + 1 / n_test))
+    se = np.sqrt(np.clip(p_hat * (1 - p_hat) * (1 / n_cal + 1 / n_test), 0.0, None))
 
     # Z-score for confidence level
     alpha = 1 - confidence

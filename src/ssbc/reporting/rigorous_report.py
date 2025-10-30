@@ -28,7 +28,7 @@ def generate_rigorous_pac_report(
     use_union_bound: bool = False,
     n_jobs: int = -1,
     verbose: bool = True,
-    prediction_method: str = "hoeffding",
+    prediction_method: str = "exact",
     use_loo_correction: bool = True,
     loo_inflation_factor: float = 2.0,
 ) -> dict[str, Any]:
@@ -205,9 +205,10 @@ def generate_rigorous_pac_report(
 
     # Step 4: Compute PAC operational bounds - PER-CLASS
     # Each class uses its own delta
-    if use_loo_correction and prediction_method == "all":
-        # For "all" method, use LOO-corrected bounds for per-class too
-        # Use "beta_binomial" method to match the regular per-class bounds
+    # Use same approach as marginal: always use LOO-corrected bounds with the same prediction_method
+    if use_loo_correction:
+        # Use LOO-corrected bounds for per-class (same as marginal)
+        # Now supports all methods including "all" for method comparison
         pac_bounds_class_0 = compute_pac_operational_bounds_perclass_loo_corrected(
             ssbc_result_0=ssbc_result_0,
             ssbc_result_1=ssbc_result_1,
@@ -219,7 +220,7 @@ def generate_rigorous_pac_report(
             pac_level=pac_level_0,
             use_union_bound=use_union_bound,
             n_jobs=n_jobs,
-            prediction_method="beta_binomial",  # Use consistent method
+            prediction_method=prediction_method,  # Use same method as marginal
             loo_inflation_factor=loo_inflation_factor,
             verbose=verbose,
         )
@@ -235,23 +236,13 @@ def generate_rigorous_pac_report(
             pac_level=pac_level_1,
             use_union_bound=use_union_bound,
             n_jobs=n_jobs,
-            prediction_method="beta_binomial",  # Use consistent method
+            prediction_method=prediction_method,  # Use same method as marginal
             loo_inflation_factor=loo_inflation_factor,
             verbose=verbose,
         )
     else:
-        # Convert LOO method to standard method for per-class bounds
+        # No LOO correction - use standard bounds
         perclass_prediction_method = prediction_method
-        if use_loo_correction and prediction_method in [
-            "auto",
-            "analytical",
-            "exact",
-            "hoeffding",
-            "simple",
-            "beta_binomial",
-        ]:
-            # For per-class bounds, use beta_binomial as it's more conservative
-            perclass_prediction_method = "beta_binomial"
 
         pac_bounds_class_0 = compute_pac_operational_bounds_perclass(
             ssbc_result_0=ssbc_result_0,
@@ -283,29 +274,29 @@ def generate_rigorous_pac_report(
             loo_inflation_factor=loo_inflation_factor,
         )
 
-        # Build comprehensive report dict
-        # Build cleaned report with only essential information
-        report = {
-            # Essential SSBC results (return dataclasses as-is for tests)
-            "ssbc_class_0": ssbc_result_0,
-            "ssbc_class_1": ssbc_result_1,
-            "pac_bounds_marginal": pac_bounds_marginal,
-            "pac_bounds_class_0": pac_bounds_class_0,
-            "pac_bounds_class_1": pac_bounds_class_1,
-            # Calibration result as returned by mondrian_conformal_calibrate (keys 0 and 1)
-            "calibration_result": cal_result,
-            "prediction_stats": pred_stats,
-            "parameters": {
-                "alpha_target": alpha_dict,
-                "delta": delta_dict,
-                "test_size": test_size,
-                "ci_level": ci_level,
-                "pac_level_marginal": pac_level_marginal,
-                "pac_level_0": pac_level_0,
-                "pac_level_1": pac_level_1,
-                "use_union_bound": use_union_bound,
-            },
-        }
+    # Build comprehensive report dict (common to all paths)
+    # Build cleaned report with only essential information
+    report = {
+        # Essential SSBC results (return dataclasses as-is for tests)
+        "ssbc_class_0": ssbc_result_0,
+        "ssbc_class_1": ssbc_result_1,
+        "pac_bounds_marginal": pac_bounds_marginal,
+        "pac_bounds_class_0": pac_bounds_class_0,
+        "pac_bounds_class_1": pac_bounds_class_1,
+        # Calibration result as returned by mondrian_conformal_calibrate (keys 0 and 1)
+        "calibration_result": cal_result,
+        "prediction_stats": pred_stats,
+        "parameters": {
+            "alpha_target": alpha_dict,
+            "delta": delta_dict,
+            "test_size": test_size,
+            "ci_level": ci_level,
+            "pac_level_marginal": pac_level_marginal,
+            "pac_level_0": pac_level_0,
+            "pac_level_1": pac_level_1,
+            "use_union_bound": use_union_bound,
+        },
+    }
 
     # Print comprehensive report if verbose
     if verbose:
@@ -399,34 +390,87 @@ def _print_rigorous_report(report: dict) -> None:
                 f"95% CI: [{doub['lower']:.3f}, {doub['upper']:.3f}]"
             )
 
-        print("\n  ✅ RIGOROUS PAC-Controlled Operational Bounds")
+        print("\n  ✅ Prediction Interval Operational Bounds")
         if "loo_diagnostics" in pac:
             print("     (LOO-CV + Clopper-Pearson + method comparison for sampling uncertainty)")
         else:
             print("     (LOO-CV + Clopper-Pearson + prediction bounds for sampling uncertainty)")
         pac_level_class = params[f"pac_level_{class_label}"]
-        print(f"     PAC level: {pac_level_class:.0%} (= 1 - δ), CP level: {params['ci_level']:.0%}")
+        print(f"     Threshold calibration: {pac_level_class:.0%} (1-δ), Confidence level: {params['ci_level']:.0%}")
         print(f"     Grid points evaluated: {pac['n_grid_points']}")
 
+        # Helper to print bounds with method comparison
+        def _print_rate_with_methods(rate_name: str, bounds: tuple, expected: float, diagnostics: dict | None = None):
+            """Print rate bounds, showing method comparison if available."""
+            lower, upper = bounds
+            print(f"\n     {rate_name}:")
+            print(f"       Expected: {expected:.3f}")
+
+            if diagnostics and "comparison" in diagnostics:
+                # Method comparison available
+                comp = diagnostics["comparison"]
+                selected = diagnostics.get("selected_method", "unknown")
+                print("       Method comparison:")
+                for method_name, method_lower, method_upper, method_width in zip(
+                    comp["method"], comp["lower"], comp["upper"], comp["width"], strict=False
+                ):
+                    # Match selected method - handle both "exact" and "exact (auto-corrected)" cases
+                    method_lower_name = method_name.lower().replace(" ", "_")
+                    if "analytical" in method_lower_name and (
+                        "analytical" in selected.lower() or selected.lower() == "analytical"
+                    ):
+                        marker = "← Selected"
+                    elif "exact" in method_lower_name and "exact" in selected.lower():
+                        marker = "← Selected"
+                    elif "hoeffding" in method_lower_name and "hoeffding" in selected.lower():
+                        marker = "← Selected"
+                    else:
+                        marker = ""
+                    print(
+                        f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] "
+                        f"(width: {method_width:.3f}) {marker}"
+                    )
+                print(f"       Selected bounds: [{lower:.3f}, {upper:.3f}]")
+            else:
+                # Single method - show which method if available
+                method_info = diagnostics.get("selected_method", "") if diagnostics else ""
+                # Fallback to "method" key if "selected_method" not available
+                if not method_info and diagnostics and "method" in diagnostics:
+                    method_name = diagnostics["method"]
+                    # Convert internal method names to user-friendly names
+                    method_map = {
+                        "clopper_pearson_plus_sampling": "simple",
+                        "beta_binomial_loo_corrected": "beta_binomial",
+                        "hoeffding_distribution_free": "hoeffding",
+                    }
+                    method_info = method_map.get(method_name, method_name)
+                if method_info:
+                    print(f"       Method: {method_info}")
+                print(f"       Bounds: [{lower:.3f}, {upper:.3f}]")
+
+        # Get diagnostics if available
+        loo_diag = pac.get("loo_diagnostics", {})
+        singleton_diag = loo_diag.get("singleton") if loo_diag else None
+        doublet_diag = loo_diag.get("doublet") if loo_diag else None
+        abstention_diag = loo_diag.get("abstention") if loo_diag else None
+        error_diag = loo_diag.get("singleton_error") if loo_diag else None
+
         s_lower, s_upper = pac["singleton_rate_bounds"]
-        print("\n     SINGLETON:")
-        print(f"       Bounds: [{s_lower:.3f}, {s_upper:.3f}]")
-        print(f"       Expected: {pac['expected_singleton_rate']:.3f}")
+        _print_rate_with_methods("SINGLETON", (s_lower, s_upper), pac["expected_singleton_rate"], singleton_diag)
 
         d_lower, d_upper = pac["doublet_rate_bounds"]
-        print("\n     DOUBLET:")
-        print(f"       Bounds: [{d_lower:.3f}, {d_upper:.3f}]")
-        print(f"       Expected: {pac['expected_doublet_rate']:.3f}")
+        _print_rate_with_methods("DOUBLET", (d_lower, d_upper), pac["expected_doublet_rate"], doublet_diag)
 
         a_lower, a_upper = pac["abstention_rate_bounds"]
-        print("\n     ABSTENTION:")
-        print(f"       Bounds: [{a_lower:.3f}, {a_upper:.3f}]")
-        print(f"       Expected: {pac['expected_abstention_rate']:.3f}")
+        _print_rate_with_methods("ABSTENTION", (a_lower, a_upper), pac["expected_abstention_rate"], abstention_diag)
 
         se_lower, se_upper = pac["singleton_error_rate_bounds"]
-        print("\n     CONDITIONAL ERROR (P(error | singleton)):")
-        print(f"       Bounds: [{se_lower:.3f}, {se_upper:.3f}]")
-        print(f"       Expected: {pac['expected_singleton_error_rate']:.3f}")
+        _print_rate_with_methods(
+            "CONDITIONAL ERROR (P(error | singleton), bounds normalized by class size)",
+            (se_lower, se_upper),
+            pac["expected_singleton_error_rate"],
+            error_diag,
+        )
 
     # Marginal report
     pac_marg = report["pac_bounds_marginal"]
@@ -483,35 +527,142 @@ def _print_rigorous_report(report: dict) -> None:
         f"95% CI: [{doub['lower']:.3f}, {doub['upper']:.3f}]"
     )
 
-    print("\n  ✅ RIGOROUS PAC-Controlled Marginal Bounds")
+    print("\n  ✅ Prediction Interval Operational Bounds")
     if "loo_diagnostics" in pac_marg:
         print("     (LOO-CV + Clopper-Pearson + method comparison for sampling uncertainty)")
     else:
         print("     (LOO-CV + Clopper-Pearson + prediction bounds for sampling uncertainty)")
     pac_marginal = params["pac_level_marginal"]
     ci_lvl = params["ci_level"]
-    print(f"     PAC level: {pac_marginal:.0%} (= (1-δ₀)×(1-δ₁), independence), CP level: {ci_lvl:.0%}")
+    print(f"     Threshold calibration: {pac_marginal:.0%} (1-δ), Confidence level: {ci_lvl:.0%}")
     print(f"     Grid points evaluated: {pac_marg['n_grid_points']}")
 
+    # Helper to print bounds with method comparison (reused for marginal)
+    def _print_rate_with_methods_marginal(
+        rate_name: str, bounds: tuple, expected: float, diagnostics: dict | None = None
+    ):
+        """Print rate bounds, showing method comparison if available."""
+        lower, upper = bounds
+        print(f"\n     {rate_name}:")
+        print(f"       Expected: {expected:.3f}")
+
+        if diagnostics and "comparison" in diagnostics:
+            # Method comparison available
+            comp = diagnostics["comparison"]
+            selected = diagnostics.get("selected_method", "unknown")
+            print("       Method comparison:")
+            for method_name, method_lower, method_upper, method_width in zip(
+                comp["method"], comp["lower"], comp["upper"], comp["width"], strict=False
+            ):
+                # Match selected method - handle both "exact" and "exact (auto-corrected)" cases
+                method_lower_name = method_name.lower().replace(" ", "_")
+                if "analytical" in method_lower_name and (
+                    "analytical" in selected.lower() or selected.lower() == "analytical"
+                ):
+                    marker = "← Selected"
+                elif "exact" in method_lower_name and "exact" in selected.lower():
+                    marker = "← Selected"
+                elif "hoeffding" in method_lower_name and "hoeffding" in selected.lower():
+                    marker = "← Selected"
+                else:
+                    marker = ""
+                print(
+                    f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] "
+                    f"(width: {method_width:.3f}) {marker}"
+                )
+            print(f"       Selected bounds: [{lower:.3f}, {upper:.3f}]")
+        else:
+            # Single method - show which method if available
+            method_info = diagnostics.get("selected_method", "") if diagnostics else ""
+            # Fallback to "method" key if "selected_method" not available
+            if not method_info and diagnostics and "method" in diagnostics:
+                method_name = diagnostics["method"]
+                # Convert internal method names to user-friendly names
+                method_map = {
+                    "clopper_pearson_plus_sampling": "simple",
+                    "beta_binomial_loo_corrected": "beta_binomial",
+                    "hoeffding_distribution_free": "hoeffding",
+                }
+                method_info = method_map.get(method_name, method_name)
+            if method_info:
+                print(f"       Method: {method_info}")
+            print(f"       Bounds: [{lower:.3f}, {upper:.3f}]")
+
+    # Get diagnostics if available
+    loo_diag_marg = pac_marg.get("loo_diagnostics", {})
+    singleton_diag_marg = loo_diag_marg.get("singleton") if loo_diag_marg else None
+    doublet_diag_marg = loo_diag_marg.get("doublet") if loo_diag_marg else None
+    abstention_diag_marg = loo_diag_marg.get("abstention") if loo_diag_marg else None
+    error_diag_marg = loo_diag_marg.get("singleton_error") if loo_diag_marg else None
+    error_class0_diag_marg = loo_diag_marg.get("singleton_error_class0") if loo_diag_marg else None
+    error_class1_diag_marg = loo_diag_marg.get("singleton_error_class1") if loo_diag_marg else None
+    error_cond_class0_diag_marg = loo_diag_marg.get("singleton_error_cond_class0") if loo_diag_marg else None
+    error_cond_class1_diag_marg = loo_diag_marg.get("singleton_error_cond_class1") if loo_diag_marg else None
+
     s_lower, s_upper = pac_marg["singleton_rate_bounds"]
-    print("\n     SINGLETON:")
-    print(f"       Bounds: [{s_lower:.3f}, {s_upper:.3f}]")
-    print(f"       Expected: {pac_marg['expected_singleton_rate']:.3f}")
+    _print_rate_with_methods_marginal(
+        "SINGLETON", (s_lower, s_upper), pac_marg["expected_singleton_rate"], singleton_diag_marg
+    )
 
     d_lower, d_upper = pac_marg["doublet_rate_bounds"]
-    print("\n     DOUBLET:")
-    print(f"       Bounds: [{d_lower:.3f}, {d_upper:.3f}]")
-    print(f"       Expected: {pac_marg['expected_doublet_rate']:.3f}")
+    _print_rate_with_methods_marginal(
+        "DOUBLET", (d_lower, d_upper), pac_marg["expected_doublet_rate"], doublet_diag_marg
+    )
 
     a_lower, a_upper = pac_marg["abstention_rate_bounds"]
-    print("\n     ABSTENTION:")
-    print(f"       Bounds: [{a_lower:.3f}, {a_upper:.3f}]")
-    print(f"       Expected: {pac_marg['expected_abstention_rate']:.3f}")
+    _print_rate_with_methods_marginal(
+        "ABSTENTION", (a_lower, a_upper), pac_marg["expected_abstention_rate"], abstention_diag_marg
+    )
 
     se_lower, se_upper = pac_marg["singleton_error_rate_bounds"]
-    print("\n     CONDITIONAL ERROR (P(error | singleton)):")
-    print(f"       Bounds: [{se_lower:.3f}, {se_upper:.3f}]")
-    print(f"       Expected: {pac_marg['expected_singleton_error_rate']:.3f}")
+    _print_rate_with_methods_marginal(
+        "CONDITIONAL ERROR (P(error | singleton))",
+        (se_lower, se_upper),
+        pac_marg["expected_singleton_error_rate"],
+        error_diag_marg,
+    )
+
+    # Class-specific error rates (normalized against full dataset)
+    if "singleton_error_rate_class0_bounds" in pac_marg:
+        se_class0_lower, se_class0_upper = pac_marg["singleton_error_rate_class0_bounds"]
+        se_class0_expected = pac_marg.get("expected_singleton_error_rate_class0", 0.0)
+        _print_rate_with_methods_marginal(
+            "ERROR RATE (Class 0 singletons, normalized by total)",
+            (se_class0_lower, se_class0_upper),
+            se_class0_expected,
+            error_class0_diag_marg,
+        )
+
+    if "singleton_error_rate_class1_bounds" in pac_marg:
+        se_class1_lower, se_class1_upper = pac_marg["singleton_error_rate_class1_bounds"]
+        se_class1_expected = pac_marg.get("expected_singleton_error_rate_class1", 0.0)
+        _print_rate_with_methods_marginal(
+            "ERROR RATE (Class 1 singletons, normalized by total)",
+            (se_class1_lower, se_class1_upper),
+            se_class1_expected,
+            error_class1_diag_marg,
+        )
+
+    # Conditional error rates: P(error | singleton & class)
+    if "singleton_error_rate_cond_class0_bounds" in pac_marg:
+        se_cond_class0_lower, se_cond_class0_upper = pac_marg["singleton_error_rate_cond_class0_bounds"]
+        se_cond_class0_expected = pac_marg.get("expected_singleton_error_rate_cond_class0", 0.0)
+        _print_rate_with_methods_marginal(
+            "CONDITIONAL ERROR (P(error | singleton & class=0))",
+            (se_cond_class0_lower, se_cond_class0_upper),
+            se_cond_class0_expected,
+            error_cond_class0_diag_marg,
+        )
+
+    if "singleton_error_rate_cond_class1_bounds" in pac_marg:
+        se_cond_class1_lower, se_cond_class1_upper = pac_marg["singleton_error_rate_cond_class1_bounds"]
+        se_cond_class1_expected = pac_marg.get("expected_singleton_error_rate_cond_class1", 0.0)
+        _print_rate_with_methods_marginal(
+            "CONDITIONAL ERROR (P(error | singleton & class=1))",
+            (se_cond_class1_lower, se_cond_class1_upper),
+            se_cond_class1_expected,
+            error_cond_class1_diag_marg,
+        )
 
     print("\n  📈 Deployment Expectations:")
     print(f"     Automation (singletons): {s_lower:.1%} - {s_upper:.1%}")

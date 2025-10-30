@@ -8,6 +8,7 @@ from scipy.stats import beta as beta_dist
 
 from ssbc.bounds import clopper_pearson_lower, clopper_pearson_upper, cp_interval
 from ssbc.core_pkg import ssbc_correct
+from ssbc.utils import build_mondrian_prediction_sets
 
 
 def split_by_class(labels: np.ndarray, probs: np.ndarray) -> dict[int, dict[str, Any]]:
@@ -187,19 +188,8 @@ def mondrian_conformal_calibrate(
             continue
 
         probs = data["probs"]
-        prediction_sets = []
-
-        for i in range(n_class):
-            score_0 = 1.0 - probs[i, 0]
-            score_1 = 1.0 - probs[i, 1]
-
-            pred_set = []
-            if score_0 <= threshold_0:
-                pred_set.append(0)
-            if score_1 <= threshold_1:
-                pred_set.append(1)
-
-            prediction_sets.append(pred_set)
+        # Build prediction sets using shared utility (returns lists for compatibility)
+        prediction_sets = build_mondrian_prediction_sets(probs, threshold_0, threshold_1, return_lists=True)
 
         # Count set sizes and correctness
         n_abstentions = sum(len(ps) == 0 for ps in prediction_sets)
@@ -256,19 +246,8 @@ def mondrian_conformal_calibrate(
 
     n_total = len(all_labels)
 
-    # Compute prediction sets for all samples
-    all_prediction_sets = []
-    for i in range(n_total):
-        score_0 = 1.0 - all_probs[i, 0]
-        score_1 = 1.0 - all_probs[i, 1]
-
-        pred_set = []
-        if score_0 <= threshold_0:
-            pred_set.append(0)
-        if score_1 <= threshold_1:
-            pred_set.append(1)
-
-        all_prediction_sets.append(pred_set)
+    # Compute prediction sets for all samples using shared utility
+    all_prediction_sets = build_mondrian_prediction_sets(all_probs, threshold_0, threshold_1, return_lists=True)
 
     # Count overall set sizes
     n_abstentions_total = sum(len(ps) == 0 for ps in all_prediction_sets)
@@ -592,16 +571,12 @@ def _count_prediction_sets(
     n_singletons_1 = 0  # Singletons when true label is 1
     n_singletons_correct_1 = 0  # Correct singletons when true label is 1
 
-    for i in range(n):
-        score_0 = 1.0 - probs[i, 0]
-        score_1 = 1.0 - probs[i, 1]
-        true_label = labels[i]
+    # Build prediction sets using shared utility
+    prediction_sets = build_mondrian_prediction_sets(probs, threshold_0, threshold_1, return_lists=True)
 
-        pred_set = []
-        if score_0 <= threshold_0:
-            pred_set.append(0)
-        if score_1 <= threshold_1:
-            pred_set.append(1)
+    for i in range(n):
+        true_label = labels[i]
+        pred_set = prediction_sets[i]
 
         set_size = len(pred_set)
         if set_size == 0:
