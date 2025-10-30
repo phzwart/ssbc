@@ -405,7 +405,7 @@ def _print_rigorous_report(report: dict) -> None:
             lower, upper = bounds
             print(f"\n     {rate_name}:")
             print(f"       Expected: {expected:.3f}")
-            
+
             if diagnostics and "comparison" in diagnostics:
                 # Method comparison available
                 comp = diagnostics["comparison"]
@@ -416,7 +416,9 @@ def _print_rigorous_report(report: dict) -> None:
                 ):
                     # Match selected method - handle both "exact" and "exact (auto-corrected)" cases
                     method_lower_name = method_name.lower().replace(" ", "_")
-                    if "analytical" in method_lower_name and ("analytical" in selected.lower() or selected.lower() == "analytical"):
+                    if "analytical" in method_lower_name and (
+                        "analytical" in selected.lower() or selected.lower() == "analytical"
+                    ):
                         marker = "← Selected"
                     elif "exact" in method_lower_name and "exact" in selected.lower():
                         marker = "← Selected"
@@ -424,7 +426,9 @@ def _print_rigorous_report(report: dict) -> None:
                         marker = "← Selected"
                     else:
                         marker = ""
-                    print(f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] (width: {method_width:.3f}) {marker}")
+                    print(
+                        f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] (width: {method_width:.3f}) {marker}"
+                    )
                 print(f"       Selected bounds: [{lower:.3f}, {upper:.3f}]")
             else:
                 # Single method - show which method if available
@@ -533,12 +537,14 @@ def _print_rigorous_report(report: dict) -> None:
     print(f"     Grid points evaluated: {pac_marg['n_grid_points']}")
 
     # Helper to print bounds with method comparison (reused for marginal)
-    def _print_rate_with_methods_marginal(rate_name: str, bounds: tuple, expected: float, diagnostics: dict | None = None):
+    def _print_rate_with_methods_marginal(
+        rate_name: str, bounds: tuple, expected: float, diagnostics: dict | None = None
+    ):
         """Print rate bounds, showing method comparison if available."""
         lower, upper = bounds
         print(f"\n     {rate_name}:")
         print(f"       Expected: {expected:.3f}")
-        
+
         if diagnostics and "comparison" in diagnostics:
             # Method comparison available
             comp = diagnostics["comparison"]
@@ -549,7 +555,9 @@ def _print_rigorous_report(report: dict) -> None:
             ):
                 # Match selected method - handle both "exact" and "exact (auto-corrected)" cases
                 method_lower_name = method_name.lower().replace(" ", "_")
-                if "analytical" in method_lower_name and ("analytical" in selected.lower() or selected.lower() == "analytical"):
+                if "analytical" in method_lower_name and (
+                    "analytical" in selected.lower() or selected.lower() == "analytical"
+                ):
                     marker = "← Selected"
                 elif "exact" in method_lower_name and "exact" in selected.lower():
                     marker = "← Selected"
@@ -557,7 +565,9 @@ def _print_rigorous_report(report: dict) -> None:
                     marker = "← Selected"
                 else:
                     marker = ""
-                print(f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] (width: {method_width:.3f}) {marker}")
+                print(
+                    f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] (width: {method_width:.3f}) {marker}"
+                )
             print(f"       Selected bounds: [{lower:.3f}, {upper:.3f}]")
         else:
             # Single method - show which method if available
@@ -588,17 +598,26 @@ def _print_rigorous_report(report: dict) -> None:
     error_cond_class1_diag_marg = loo_diag_marg.get("singleton_error_cond_class1") if loo_diag_marg else None
 
     s_lower, s_upper = pac_marg["singleton_rate_bounds"]
-    _print_rate_with_methods_marginal("SINGLETON", (s_lower, s_upper), pac_marg["expected_singleton_rate"], singleton_diag_marg)
+    _print_rate_with_methods_marginal(
+        "SINGLETON", (s_lower, s_upper), pac_marg["expected_singleton_rate"], singleton_diag_marg
+    )
 
     d_lower, d_upper = pac_marg["doublet_rate_bounds"]
-    _print_rate_with_methods_marginal("DOUBLET", (d_lower, d_upper), pac_marg["expected_doublet_rate"], doublet_diag_marg)
+    _print_rate_with_methods_marginal(
+        "DOUBLET", (d_lower, d_upper), pac_marg["expected_doublet_rate"], doublet_diag_marg
+    )
 
     a_lower, a_upper = pac_marg["abstention_rate_bounds"]
-    _print_rate_with_methods_marginal("ABSTENTION", (a_lower, a_upper), pac_marg["expected_abstention_rate"], abstention_diag_marg)
+    _print_rate_with_methods_marginal(
+        "ABSTENTION", (a_lower, a_upper), pac_marg["expected_abstention_rate"], abstention_diag_marg
+    )
 
     se_lower, se_upper = pac_marg["singleton_error_rate_bounds"]
     _print_rate_with_methods_marginal(
-        "CONDITIONAL ERROR (P(error | singleton))", (se_lower, se_upper), pac_marg["expected_singleton_error_rate"], error_diag_marg
+        "CONDITIONAL ERROR (P(error | singleton))",
+        (se_lower, se_upper),
+        pac_marg["expected_singleton_error_rate"],
+        error_diag_marg,
     )
 
     # Class-specific error rates (normalized against full dataset)

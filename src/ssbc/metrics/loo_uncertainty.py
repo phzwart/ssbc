@@ -564,7 +564,7 @@ def compute_robust_prediction_bounds(
 
     # Always estimate inflation factor for reporting, but use provided value if given
     estimated_inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
-    
+
     # Use provided inflation factor for calculations if available, otherwise use estimated
     if inflation_factor is None:
         if method in ["analytical", "hoeffding"]:
@@ -578,7 +578,9 @@ def compute_robust_prediction_bounds(
     else:
         # User provided value - use it for calculations, but still report estimated
         if verbose:
-            print(f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated from data: {estimated_inflation_factor:.3f})")
+            print(
+                f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated from data: {estimated_inflation_factor:.3f})"
+            )
 
     # Compute bounds with selected method
     if method == "analytical":
@@ -606,7 +608,9 @@ def compute_robust_prediction_bounds(
                 print(f"Using estimated LOO inflation factor: {inflation_factor:.3f} for comparison...")
         else:
             if verbose:
-                print(f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated: {estimated_inflation_factor:.3f}) for comparison...")
+                print(
+                    f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated: {estimated_inflation_factor:.3f}) for comparison..."
+                )
 
         # Compute all three methods
         L1, U1, diag1 = compute_loo_corrected_bounds_analytical(

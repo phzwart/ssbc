@@ -111,7 +111,7 @@ def validate_pac_bounds(
     1. Extracting the FIXED thresholds from calibration
     2. Running n_trials simulations with fresh test sets
     3. Measuring empirical coverage of all reported bounds (analytical, exact, hoeffding)
-    
+
     When the report includes method comparison (prediction_method="all"), validates
     all three methods separately. Otherwise, validates only the selected method.
 
@@ -288,26 +288,24 @@ def validate_pac_bounds(
     # Helper function to extract method comparison bounds
     def extract_method_bounds(pac_bounds: dict, metric_key: str) -> dict[str, tuple[float, float]]:
         """Extract bounds for all methods (analytical, exact, hoeffding) if available.
-        
+
         Returns dict mapping method names to (lower, upper) bounds.
         If comparison not available, returns only the selected method bounds.
         """
         method_bounds = {}
-        
+
         # Get the default selected bounds
         rate_key = f"{metric_key}_rate_bounds"
         default_bounds = pac_bounds.get(rate_key, (np.nan, np.nan))
-        
+
         # Check if method comparison is available
         loo_diag = pac_bounds.get("loo_diagnostics", {})
         metric_diag = loo_diag.get(metric_key, {}) if loo_diag else {}
-        
+
         if metric_diag and "comparison" in metric_diag:
             # Extract bounds for all methods from comparison table
             comp = metric_diag["comparison"]
-            for method_name, method_lower, method_upper in zip(
-                comp["method"], comp["lower"], comp["upper"]
-            ):
+            for method_name, method_lower, method_upper in zip(comp["method"], comp["lower"], comp["upper"]):
                 # Normalize method names
                 method_key = method_name.lower().replace(" ", "_")
                 if "analytical" in method_key:
@@ -320,7 +318,7 @@ def validate_pac_bounds(
             # No comparison available - use selected bounds with default method name
             selected_method = metric_diag.get("selected_method", "selected") if metric_diag else "selected"
             method_bounds[selected_method] = default_bounds
-        
+
         return method_bounds
 
     # Helper function to validate a metric across all methods
@@ -333,15 +331,15 @@ def validate_pac_bounds(
         """Validate a metric across all reported methods."""
         # Extract bounds for all methods
         method_bounds_map = extract_method_bounds(pac_bounds, metric_key)
-        
+
         # Get default bounds (selected method)
         rate_key = f"{metric_key}_rate_bounds"
         default_bounds = pac_bounds.get(rate_key, (np.nan, np.nan))
-        
+
         # Get expected rate
         expected_key = f"expected_{metric_key}_rate"
         expected = pac_bounds.get(expected_key, np.nan)
-        
+
         # Validate each method
         method_validations = {}
         for method_name, bounds in method_bounds_map.items():
@@ -353,14 +351,16 @@ def validate_pac_bounds(
                 "bounds": bounds,
                 "empirical_coverage": coverage,
             }
-        
+
         return {
             "rates": rates,
             "mean": np.nanmean(rates) if use_nan_check else np.mean(rates),
             "quantiles": compute_quantiles(rates),
             "bounds": default_bounds,  # Selected/default bounds
             "expected": expected,
-            "empirical_coverage": check_coverage_with_nan(rates, default_bounds) if use_nan_check else check_coverage(rates, default_bounds),
+            "empirical_coverage": check_coverage_with_nan(rates, default_bounds)
+            if use_nan_check
+            else check_coverage(rates, default_bounds),
             "method_validations": method_validations,  # All method-specific validations
         }
 
@@ -377,9 +377,7 @@ def validate_pac_bounds(
             "singleton": validate_metric_all_methods(
                 marginal_singleton_rates, pac_marg, "singleton", use_nan_check=False
             ),
-            "doublet": validate_metric_all_methods(
-                marginal_doublet_rates, pac_marg, "doublet", use_nan_check=False
-            ),
+            "doublet": validate_metric_all_methods(marginal_doublet_rates, pac_marg, "doublet", use_nan_check=False),
             "abstention": validate_metric_all_methods(
                 marginal_abstention_rates, pac_marg, "abstention", use_nan_check=False
             ),
@@ -388,12 +386,8 @@ def validate_pac_bounds(
             ),
         },
         "class_0": {
-            "singleton": validate_metric_all_methods(
-                class_0_singleton_rates, pac_0, "singleton", use_nan_check=False
-            ),
-            "doublet": validate_metric_all_methods(
-                class_0_doublet_rates, pac_0, "doublet", use_nan_check=False
-            ),
+            "singleton": validate_metric_all_methods(class_0_singleton_rates, pac_0, "singleton", use_nan_check=False),
+            "doublet": validate_metric_all_methods(class_0_doublet_rates, pac_0, "doublet", use_nan_check=False),
             "abstention": validate_metric_all_methods(
                 class_0_abstention_rates, pac_0, "abstention", use_nan_check=False
             ),
@@ -402,12 +396,8 @@ def validate_pac_bounds(
             ),
         },
         "class_1": {
-            "singleton": validate_metric_all_methods(
-                class_1_singleton_rates, pac_1, "singleton", use_nan_check=False
-            ),
-            "doublet": validate_metric_all_methods(
-                class_1_doublet_rates, pac_1, "doublet", use_nan_check=False
-            ),
+            "singleton": validate_metric_all_methods(class_1_singleton_rates, pac_1, "singleton", use_nan_check=False),
+            "doublet": validate_metric_all_methods(class_1_doublet_rates, pac_1, "doublet", use_nan_check=False),
             "abstention": validate_metric_all_methods(
                 class_1_abstention_rates, pac_1, "abstention", use_nan_check=False
             ),
@@ -464,7 +454,7 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                 print(f"  Selected coverage: {coverage:.1%} {coverage_check}")
             else:
                 print("  Selected coverage: N/A (no valid samples)")
-            
+
             # Show method-specific validations if available
             if "method_validations" in m and m["method_validations"]:
                 print(f"  Method-specific validation:")
@@ -478,11 +468,15 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                         method_check = "✅" if not np.isnan(method_coverage) and method_coverage >= ci_level else "❌"
                         method_width = method_bounds[1] - method_bounds[0]
                         if not np.isnan(method_coverage):
-                            print(f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
-                                  f"(width: {method_width:.4f}, coverage: {method_coverage:.1%}) {method_check}")
+                            print(
+                                f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
+                                f"(width: {method_width:.4f}, coverage: {method_coverage:.1%}) {method_check}"
+                            )
                         else:
-                            print(f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
-                                  f"(width: {method_width:.4f}, coverage: N/A)")
+                            print(
+                                f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
+                                f"(width: {method_width:.4f}, coverage: N/A)"
+                            )
                 # Also show any other methods (for backward compatibility)
                 for method_name in m["method_validations"]:
                     if method_name not in method_order:
@@ -492,11 +486,15 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                         method_check = "✅" if not np.isnan(method_coverage) and method_coverage >= ci_level else "❌"
                         method_width = method_bounds[1] - method_bounds[0]
                         if not np.isnan(method_coverage):
-                            print(f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
-                                  f"(width: {method_width:.4f}, coverage: {method_coverage:.1%}) {method_check}")
+                            print(
+                                f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
+                                f"(width: {method_width:.4f}, coverage: {method_coverage:.1%}) {method_check}"
+                            )
                         else:
-                            print(f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
-                                  f"(width: {method_width:.4f}, coverage: N/A)")
+                            print(
+                                f"    {method_name.capitalize():12s}: [{method_bounds[0]:.4f}, {method_bounds[1]:.4f}] "
+                                f"(width: {method_width:.4f}, coverage: N/A)"
+                            )
 
     print("\n" + "=" * 80)
 
@@ -512,10 +510,10 @@ def plot_validation_bounds(
     return_figs: bool = False,
 ) -> tuple | None:
     """Plot empirical distributions with prediction interval bounds for all methods.
-    
+
     Creates visualization comparing empirical rates against bounds from analytical,
     exact, and hoeffding methods when available.
-    
+
     Parameters
     ----------
     validation : dict
@@ -540,7 +538,7 @@ def plot_validation_bounds(
         If True, returns matplotlib Figure objects for further customization.
         Returns (fig_main, fig_detail) or (fig_main, None) if show_detail=False.
         If False, calls plt.show() and returns None.
-    
+
     Returns
     -------
     tuple or None
@@ -548,7 +546,7 @@ def plot_validation_bounds(
             - (fig_main, fig_detail) if show_detail=True
             - (fig_main, None) if show_detail=False
         If return_figs=False: None (displays plots directly)
-    
+
     Examples
     --------
     >>> from ssbc import validate_pac_bounds, plot_validation_bounds
@@ -559,7 +557,7 @@ def plot_validation_bounds(
     ...     validation, metric="singleton", return_figs=True
     ... )
     >>> fig_main.savefig("validation_main.png")
-    
+
     Notes
     -----
     The main plot shows all three methods overlaid on the same histogram for easy
@@ -575,41 +573,41 @@ def plot_validation_bounds(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
-    
+
     # Validate metric exists
     valid_metrics = ["singleton", "doublet", "abstention", "singleton_error"]
     if metric not in valid_metrics:
         raise ValueError(f"metric must be one of {valid_metrics}, got '{metric}'")
-    
+
     # Check that metric exists in validation
     if metric not in validation["marginal"]:
         raise ValueError(
             f"Metric '{metric}' not found in validation results. "
             f"Available metrics: {list(validation['marginal'].keys())}"
         )
-    
+
     # Default method colors if not provided
     if method_colors is None:
         method_colors = {
-            "analytical": ("#2E86AB", "solid"),      # Blue
-            "exact": ("#A23B72", "dashed"),          # Purple
-            "hoeffding": ("#F18F01", "dashdot"),     # Orange
+            "analytical": ("#2E86AB", "solid"),  # Blue
+            "exact": ("#A23B72", "dashed"),  # Purple
+            "hoeffding": ("#F18F01", "dashdot"),  # Orange
         }
-    
+
     scopes = [("marginal", "Marginal"), ("class_0", "Class 0"), ("class_1", "Class 1")]
     method_order = ["analytical", "exact", "hoeffding"]
-    
+
     # ===== Main comparison plot =====
     fig_main, axes = plt.subplots(1, 3, figsize=main_figsize)
-    
+
     for idx, (scope, title) in enumerate(scopes):
         ax = axes[idx]
         rates = validation[scope][metric]["rates"]
         expected = validation[scope][metric]["expected"]
-        
+
         # Plot histogram
-        ax.hist(rates, bins=bins, alpha=0.6, edgecolor='black', color='gray', label='Empirical distribution')
-        
+        ax.hist(rates, bins=bins, alpha=0.6, edgecolor="black", color="gray", label="Empirical distribution")
+
         # Plot bounds for each method if available
         if "method_validations" in validation[scope][metric] and validation[scope][metric]["method_validations"]:
             for method_name in method_order:
@@ -618,38 +616,38 @@ def plot_validation_bounds(
                     method_bounds = method_val["bounds"]
                     method_coverage = method_val["empirical_coverage"]
                     color, linestyle = method_colors.get(method_name, ("black", "solid"))
-                    
+
                     # Plot method bounds
                     ax.axvline(
-                        method_bounds[0], 
-                        color=color, 
-                        linestyle=linestyle, 
-                        linewidth=2, 
+                        method_bounds[0],
+                        color=color,
+                        linestyle=linestyle,
+                        linewidth=2,
                         alpha=0.8,
-                        label=f'{method_name.capitalize()} lower'
+                        label=f"{method_name.capitalize()} lower",
                     )
                     ax.axvline(
-                        method_bounds[1], 
-                        color=color, 
-                        linestyle=linestyle, 
-                        linewidth=2, 
+                        method_bounds[1],
+                        color=color,
+                        linestyle=linestyle,
+                        linewidth=2,
                         alpha=0.8,
-                        label=f'{method_name.capitalize()} upper (cov: {method_coverage:.1%})'
+                        label=f"{method_name.capitalize()} upper (cov: {method_coverage:.1%})",
                     )
         else:
             # Fallback to selected bounds if method comparison not available
             bounds = validation[scope][metric]["bounds"]
             coverage = validation[scope][metric]["empirical_coverage"]
-            ax.axvline(bounds[0], color='r', linestyle='--', linewidth=2, label='Lower bound')
-            ax.axvline(bounds[1], color='r', linestyle='--', linewidth=2, label=f'Upper bound (cov: {coverage:.1%})')
-        
+            ax.axvline(bounds[0], color="r", linestyle="--", linewidth=2, label="Lower bound")
+            ax.axvline(bounds[1], color="r", linestyle="--", linewidth=2, label=f"Upper bound (cov: {coverage:.1%})")
+
         # Plot expected and empirical mean
-        ax.axvline(expected, color='g', linestyle='-', linewidth=2.5, label='Expected (LOO)', zorder=5)
-        ax.axvline(np.mean(rates), color='darkorange', linestyle=':', linewidth=2, label='Empirical mean', zorder=5)
-        
-        ax.set_xlabel(f'{metric.replace("_", " ").title()} Rate', fontsize=11)
-        ax.set_ylabel('Frequency', fontsize=11)
-        
+        ax.axvline(expected, color="g", linestyle="-", linewidth=2.5, label="Expected (LOO)", zorder=5)
+        ax.axvline(np.mean(rates), color="darkorange", linestyle=":", linewidth=2, label="Empirical mean", zorder=5)
+
+        ax.set_xlabel(f"{metric.replace('_', ' ').title()} Rate", fontsize=11)
+        ax.set_ylabel("Frequency", fontsize=11)
+
         # Build title with coverage info
         if "method_validations" in validation[scope][metric] and validation[scope][metric]["method_validations"]:
             coverages = []
@@ -659,63 +657,91 @@ def plot_validation_bounds(
                     if not np.isnan(cov):
                         coverages.append(f"{method_name[0].upper()}:{cov:.1%}")
             coverage_str = ", ".join(coverages) if coverages else ""
-            ax.set_title(f'{title} {metric.replace("_", " ").title()} Rates\nCoverages: {coverage_str}', fontsize=11)
+            ax.set_title(f"{title} {metric.replace('_', ' ').title()} Rates\nCoverages: {coverage_str}", fontsize=11)
         else:
             cov = validation[scope][metric]["empirical_coverage"]
-            ax.set_title(f'{title} {metric.replace("_", " ").title()} Rates\nCoverage: {cov:.1%}', fontsize=11)
-        
-        ax.legend(loc='upper right', fontsize=8, framealpha=0.9)
+            ax.set_title(f"{title} {metric.replace('_', ' ').title()} Rates\nCoverage: {cov:.1%}", fontsize=11)
+
+        ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
         ax.grid(alpha=0.3)
-    
+
     plt.tight_layout()
-    
+
     # ===== Detailed method comparison plot =====
     fig_detail = None
     if show_detail:
-        if "method_validations" in validation["marginal"][metric] and validation["marginal"][metric]["method_validations"]:
+        if (
+            "method_validations" in validation["marginal"][metric]
+            and validation["marginal"][metric]["method_validations"]
+        ):
             fig_detail, axes2 = plt.subplots(3, 3, figsize=detail_figsize)
-            
+
             for method_idx, method_name in enumerate(method_order):
                 if method_name in validation["marginal"][metric]["method_validations"]:
                     color, linestyle = method_colors.get(method_name, ("black", "solid"))
-                    
+
                     for scope_idx, (scope, title) in enumerate(scopes):
                         ax = axes2[scope_idx, method_idx]
                         rates = validation[scope][metric]["rates"]
                         expected = validation[scope][metric]["expected"]
-                        
+
                         if method_name in validation[scope][metric]["method_validations"]:
                             method_val = validation[scope][metric]["method_validations"][method_name]
                             method_bounds = method_val["bounds"]
                             method_coverage = method_val["empirical_coverage"]
-                            
+
                             # Plot histogram
-                            ax.hist(rates, bins=bins, alpha=0.6, edgecolor='black', color='lightgray')
-                            
+                            ax.hist(rates, bins=bins, alpha=0.6, edgecolor="black", color="lightgray")
+
                             # Plot method bounds
-                            ax.axvline(method_bounds[0], color=color, linestyle=linestyle, linewidth=2.5, 
-                                     label=f'Lower [{method_bounds[0]:.3f}]', alpha=0.9)
-                            ax.axvline(method_bounds[1], color=color, linestyle=linestyle, linewidth=2.5, 
-                                     label=f'Upper [{method_bounds[1]:.3f}]', alpha=0.9)
-                            
+                            ax.axvline(
+                                method_bounds[0],
+                                color=color,
+                                linestyle=linestyle,
+                                linewidth=2.5,
+                                label=f"Lower [{method_bounds[0]:.3f}]",
+                                alpha=0.9,
+                            )
+                            ax.axvline(
+                                method_bounds[1],
+                                color=color,
+                                linestyle=linestyle,
+                                linewidth=2.5,
+                                label=f"Upper [{method_bounds[1]:.3f}]",
+                                alpha=0.9,
+                            )
+
                             # Plot expected and mean
-                            ax.axvline(expected, color='g', linestyle='-', linewidth=2, label='Expected', zorder=5)
-                            ax.axvline(np.mean(rates), color='darkorange', linestyle=':', linewidth=2, 
-                                     label=f'Mean [{np.mean(rates):.3f}]', zorder=5)
-                            
-                            ax.set_xlabel(f'{metric.replace("_", " ").title()} Rate', fontsize=10)
-                            ax.set_ylabel('Frequency', fontsize=10)
-                            cov_str = f'{method_coverage:.1%}' if not np.isnan(method_coverage) else 'N/A'
-                            ax.set_title(f'{title} - {method_name.capitalize()}\nCoverage: {cov_str}', fontsize=10)
-                            ax.legend(loc='upper right', fontsize=8, framealpha=0.9)
+                            ax.axvline(expected, color="g", linestyle="-", linewidth=2, label="Expected", zorder=5)
+                            ax.axvline(
+                                np.mean(rates),
+                                color="darkorange",
+                                linestyle=":",
+                                linewidth=2,
+                                label=f"Mean [{np.mean(rates):.3f}]",
+                                zorder=5,
+                            )
+
+                            ax.set_xlabel(f"{metric.replace('_', ' ').title()} Rate", fontsize=10)
+                            ax.set_ylabel("Frequency", fontsize=10)
+                            cov_str = f"{method_coverage:.1%}" if not np.isnan(method_coverage) else "N/A"
+                            ax.set_title(f"{title} - {method_name.capitalize()}\nCoverage: {cov_str}", fontsize=10)
+                            ax.legend(loc="upper right", fontsize=8, framealpha=0.9)
                             ax.grid(alpha=0.3)
                         else:
-                            ax.text(0.5, 0.5, f'{method_name.capitalize()}\nnot available', 
-                                   ha='center', va='center', transform=ax.transAxes, fontsize=12)
-                            ax.axis('off')
-            
+                            ax.text(
+                                0.5,
+                                0.5,
+                                f"{method_name.capitalize()}\nnot available",
+                                ha="center",
+                                va="center",
+                                transform=ax.transAxes,
+                                fontsize=12,
+                            )
+                            ax.axis("off")
+
             plt.tight_layout()
-    
+
     # Display or return figures
     if return_figs:
         return (fig_main, fig_detail) if show_detail else (fig_main, None)
@@ -741,19 +767,19 @@ def validate_prediction_interval_calibration(
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Validate that prediction interval confidence level holds across calibration datasets.
-    
+
     This meta-validation checks if the nominal confidence level (e.g., 95%) actually
     holds when repeating the entire calibration+validation process many times with
     different calibration datasets.
-    
+
     For each of BigN calibration datasets:
     1. Generate random calibration data
     2. Compute prediction interval bounds
     3. Validate bounds with many test sets
     4. Record empirical coverage
-    
+
     Then aggregates results to see if ~95% of calibrations achieve ≥95% coverage.
-    
+
     Parameters
     ----------
     simulator : DataGenerator
@@ -784,7 +810,7 @@ def validate_prediction_interval_calibration(
         Number of parallel jobs (-1 = all cores)
     verbose : bool, default=False
         If True, print progress for each calibration dataset
-    
+
     Returns
     -------
     dict
@@ -809,7 +835,7 @@ def validate_prediction_interval_calibration(
           - 'quantiles': {q05, q25, q50, q75, q95}
           - 'fraction_above_target': Fraction achieving ≥ci_level
           - 'fraction_above_95pct': Fraction achieving ≥95% (for comparison)
-    
+
     Examples
     --------
     >>> from ssbc import BinaryClassifierSimulator, validate_prediction_interval_calibration
@@ -824,16 +850,16 @@ def validate_prediction_interval_calibration(
     >>> print(f"Fraction achieving ≥95%: {results['marginal']['singleton']['selected']['fraction_above_target']:.1%}")
     """
     from ssbc import generate_rigorous_pac_report
-    
+
     if seed is not None:
         np.random.seed(seed)
-    
+
     # Helper to run validation for one calibration dataset
     def _single_calibration_validation(cal_idx: int) -> dict[str, Any]:
         """Run full validation for one calibration dataset."""
         # Generate unique seed for this calibration
         cal_seed = (seed + cal_idx * 10000) if seed is not None else None
-        
+
         # Generate calibration dataset
         if cal_seed is not None:
             np.random.seed(cal_seed)
@@ -845,9 +871,9 @@ def validate_prediction_interval_calibration(
             )
         else:
             cal_simulator = simulator
-        
+
         cal_labels, cal_probs = cal_simulator.generate(n_calibration)
-        
+
         # Generate PAC report (suppress verbose output)
         report = generate_rigorous_pac_report(
             labels=cal_labels,
@@ -863,7 +889,7 @@ def validate_prediction_interval_calibration(
             use_loo_correction=use_loo_correction,
             loo_inflation_factor=loo_inflation_factor,
         )
-        
+
         # Validate bounds
         validation = validate_pac_bounds(
             report=report,
@@ -874,14 +900,14 @@ def validate_prediction_interval_calibration(
             verbose=False,  # Suppress validation progress
             n_jobs=n_jobs,
         )
-        
+
         # Extract coverages and quantiles for all methods
         result = {}
         for scope in ["marginal", "class_0", "class_1"]:
             result[scope] = {}
             for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
                 m = validation[scope][metric]
-                
+
                 # Get observed quantiles from test set rates
                 rates = m["rates"]
                 # Filter NaN values for quantile calculation (especially for singleton_error)
@@ -892,10 +918,10 @@ def validate_prediction_interval_calibration(
                 else:
                     observed_q05 = np.nan
                     observed_q95 = np.nan
-                
+
                 # Get selected bounds
                 selected_bounds = m["bounds"]
-                
+
                 result[scope][metric] = {
                     "selected": {
                         "coverage": m["empirical_coverage"],
@@ -905,7 +931,7 @@ def validate_prediction_interval_calibration(
                     "observed_q05": observed_q05,
                     "observed_q95": observed_q95,
                 }
-                
+
                 # Extract method-specific coverages and bounds if available
                 if "method_validations" in m and m["method_validations"]:
                     for method_name in ["analytical", "exact", "hoeffding"]:
@@ -917,14 +943,14 @@ def validate_prediction_interval_calibration(
                                 "lower": float(method_bounds[0]),
                                 "upper": float(method_bounds[1]),
                             }
-        
+
         return result
-    
+
     # Run BigN calibrations
     if verbose:
         print(f"Running meta-validation: {BigN} calibration datasets, {n_trials} trials each...")
         print(f"Progress: ", end="", flush=True)
-    
+
     # Parallelize calibration validations
     def _safe_parallel_map_cal(n_jobs_local: int):
         try:
@@ -935,12 +961,12 @@ def validate_prediction_interval_calibration(
         except Exception:
             # Fallback to serial
             return [_single_calibration_validation(cal_idx) for cal_idx in range(BigN)]
-    
+
     all_results = _safe_parallel_map_cal(n_jobs)
-    
+
     if verbose:
         print("Done!")
-    
+
     # Aggregate coverages across all calibrations
     def compute_coverage_stats(coverages: np.ndarray, target_level: float) -> dict[str, Any]:
         """Compute statistics for coverage array."""
@@ -960,7 +986,7 @@ def validate_prediction_interval_calibration(
                 "fraction_above_target": np.nan,
                 "fraction_above_95pct": np.nan,
             }
-        
+
         return {
             "coverages": coverages,
             "mean": float(np.mean(valid)),
@@ -975,7 +1001,7 @@ def validate_prediction_interval_calibration(
             "fraction_above_target": float(np.mean(valid >= target_level)),
             "fraction_above_95pct": float(np.mean(valid >= 0.95)),
         }
-    
+
     # Aggregate results
     aggregated = {
         "n_calibrations": BigN,
@@ -983,19 +1009,16 @@ def validate_prediction_interval_calibration(
         "n_trials_per_calibration": n_trials,
         "ci_level": ci_level,
     }
-    
+
     for scope in ["marginal", "class_0", "class_1"]:
         aggregated[scope] = {}
         for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
             aggregated[scope][metric] = {}
-            
+
             # Collect selected method coverages
-            selected_coverages = np.array([
-                all_results[i][scope][metric]["selected"]["coverage"] 
-                for i in range(BigN)
-            ])
+            selected_coverages = np.array([all_results[i][scope][metric]["selected"]["coverage"] for i in range(BigN)])
             aggregated[scope][metric]["selected"] = compute_coverage_stats(selected_coverages, ci_level)
-            
+
             # Collect method-specific coverages
             method_names = ["analytical", "exact", "hoeffding"]
             for method_name in method_names:
@@ -1006,24 +1029,24 @@ def validate_prediction_interval_calibration(
                     else:
                         method_coverages.append(np.nan)
                 method_coverages = np.array(method_coverages)
-                
+
                 if not np.all(np.isnan(method_coverages)):
                     aggregated[scope][metric][method_name] = compute_coverage_stats(method_coverages, ci_level)
-    
+
     # Store raw calibration data for quantile analysis
     aggregated["_raw_calibration_data"] = all_results
-    
+
     return aggregated
 
 
 def print_calibration_validation_results(results: dict[str, Any]) -> None:
     """Pretty print meta-validation results.
-    
+
     Parameters
     ----------
     results : dict
         Output from validate_prediction_interval_calibration()
-    
+
     Examples
     --------
     >>> results = validate_prediction_interval_calibration(...)
@@ -1037,16 +1060,16 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
     print(f"  Calibration size: {results['n_calibration']}")
     print(f"  Trials per calibration: {results['n_trials_per_calibration']}")
     print(f"  Target confidence level: {results['ci_level']:.0%}")
-    
+
     for scope in ["marginal", "class_0", "class_1"]:
         scope_name = scope.upper() if scope == "marginal" else f"CLASS {scope[-1]}"
         print(f"\n{'=' * 80}")
         print(f"{scope_name}")
         print("=" * 80)
-        
+
         for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
             print(f"\n{metric.upper().replace('_', ' ')}:")
-            
+
             # Check which methods are available
             available_methods = []
             if "selected" in results[scope][metric]:
@@ -1054,7 +1077,7 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
             for method_name in ["analytical", "exact", "hoeffding"]:
                 if method_name in results[scope][metric]:
                     available_methods.append(method_name)
-            
+
             # Print stats for each method
             for method_name in available_methods:
                 stats = results[scope][metric][method_name]
@@ -1062,16 +1085,16 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
                 target = results["ci_level"]
                 frac_target = stats["fraction_above_target"]
                 frac_95 = stats["fraction_above_95pct"]
-                
+
                 method_display = "Selected" if method_name == "selected" else method_name.capitalize()
-                
+
                 print(f"  {method_display}:")
                 print(f"    Mean coverage: {stats['mean']:.2%}")
                 print(f"    Median coverage: {stats['median']:.2%}")
                 print(f"    Quantiles: [5%: {q['q05']:.2%}, 50%: {q['q50']:.2%}, 95%: {q['q95']:.2%}]")
                 print(f"    Fraction ≥ {target:.0%}: {frac_target:.1%} {'✅' if frac_target >= 0.95 else '❌'}")
                 print(f"    Fraction ≥ 95%: {frac_95:.1%}")
-    
+
     print("\n" + "=" * 80)
     print("INTERPRETATION")
     print("=" * 80)
@@ -1088,10 +1111,10 @@ def get_calibration_bounds_dataframe(
     metric: str | None = None,
 ) -> Any:
     """Extract calibration bounds and observed quantiles as DataFrame.
-    
+
     Converts the raw calibration data from validate_prediction_interval_calibration()
     into a pandas DataFrame format for easy plotting and analysis.
-    
+
     Parameters
     ----------
     results : dict
@@ -1102,7 +1125,7 @@ def get_calibration_bounds_dataframe(
     metric : str, optional
         Filter to specific metric: "singleton", "doublet", "abstention", "singleton_error".
         If None, includes all metrics.
-    
+
     Returns
     -------
     DataFrame
@@ -1120,7 +1143,7 @@ def get_calibration_bounds_dataframe(
         - exact_upper: Upper bound from exact method (NaN if not available)
         - hoeffding_lower: Lower bound from hoeffding method (NaN if not available)
         - hoeffding_upper: Upper bound from hoeffding method (NaN if not available)
-    
+
     Examples
     --------
     >>> import pandas as pd
@@ -1137,29 +1160,29 @@ def get_calibration_bounds_dataframe(
         import pandas as pd
     except ImportError:
         raise ImportError("pandas is required for DataFrame conversion. Install with: pip install pandas")
-    
+
     if "_raw_calibration_data" not in results:
         raise ValueError(
             "Results dict does not contain raw calibration data. "
             "Make sure to use validate_prediction_interval_calibration() output."
         )
-    
+
     raw_data = results["_raw_calibration_data"]
     BigN = len(raw_data)
-    
+
     # Build DataFrame rows
     rows = []
     scopes = ["marginal", "class_0", "class_1"] if scope is None else [scope]
     metrics = ["singleton", "doublet", "abstention", "singleton_error"] if metric is None else [metric]
-    
+
     for cal_idx in range(BigN):
         for scope_name in scopes:
             for metric_name in metrics:
                 if scope_name not in raw_data[cal_idx] or metric_name not in raw_data[cal_idx][scope_name]:
                     continue
-                
+
                 m = raw_data[cal_idx][scope_name][metric_name]
-                
+
                 row = {
                     "calibration_idx": cal_idx,
                     "scope": scope_name,
@@ -1167,7 +1190,7 @@ def get_calibration_bounds_dataframe(
                     "observed_q05": m.get("observed_q05", np.nan),
                     "observed_q95": m.get("observed_q95", np.nan),
                 }
-                
+
                 # Add selected bounds
                 if "selected" in m:
                     row["selected_lower"] = m["selected"].get("lower", np.nan)
@@ -1175,7 +1198,7 @@ def get_calibration_bounds_dataframe(
                 else:
                     row["selected_lower"] = np.nan
                     row["selected_upper"] = np.nan
-                
+
                 # Add method-specific bounds
                 for method_name in ["analytical", "exact", "hoeffding"]:
                     if method_name in m:
@@ -1184,9 +1207,9 @@ def get_calibration_bounds_dataframe(
                     else:
                         row[f"{method_name}_lower"] = np.nan
                         row[f"{method_name}_upper"] = np.nan
-                
+
                 rows.append(row)
-    
+
     df = pd.DataFrame(rows)
     return df
 
@@ -1201,11 +1224,11 @@ def plot_calibration_excess(
     return_fig: bool = False,
 ) -> Any:
     """Plot excess (difference between observed and predicted quantiles).
-    
+
     Creates histograms showing:
     - Lower excess: observed_q05 - predicted_lower (positive = predicted too high)
     - Upper excess: predicted_upper - observed_q95 (positive = predicted too high)
-    
+
     Parameters
     ----------
     df : DataFrame
@@ -1225,12 +1248,12 @@ def plot_calibration_excess(
         Number of histogram bins
     return_fig : bool, default=False
         If True, returns matplotlib Figure object. If False, calls plt.show()
-    
+
     Returns
     -------
     Figure or None
         If return_fig=True, returns Figure object. Otherwise None.
-    
+
     Examples
     --------
     >>> from ssbc import get_calibration_bounds_dataframe, plot_calibration_excess
@@ -1244,30 +1267,30 @@ def plot_calibration_excess(
         import matplotlib.pyplot as plt
     except ImportError:
         raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
-    
+
     try:
         import pandas as pd
     except ImportError:
         raise ImportError("pandas is required. Install with: pip install pandas")
-    
+
     # Filter DataFrame
     df_filtered = df.copy()
     if scope is not None:
-        df_filtered = df_filtered[df_filtered['scope'] == scope]
+        df_filtered = df_filtered[df_filtered["scope"] == scope]
     if metric is not None:
-        df_filtered = df_filtered[df_filtered['metric'] == metric]
-    
+        df_filtered = df_filtered[df_filtered["metric"] == metric]
+
     if len(df_filtered) == 0:
         raise ValueError("No data matching the specified scope/metric filters")
-    
+
     # Determine which methods are available
     available_methods = []
     method_colors = {
         "analytical": "#2E86AB",  # Blue
-        "exact": "#A23B72",        # Purple
-        "hoeffding": "#F18F01",    # Orange
+        "exact": "#A23B72",  # Purple
+        "hoeffding": "#F18F01",  # Orange
     }
-    
+
     if methods is None:
         # Check which methods have non-NaN data
         for method_name in ["analytical", "exact", "hoeffding"]:
@@ -1276,89 +1299,100 @@ def plot_calibration_excess(
                     available_methods.append(method_name)
     else:
         available_methods = [m for m in methods if f"{m}_lower" in df_filtered.columns]
-    
+
     if len(available_methods) == 0:
         raise ValueError("No method data available in DataFrame")
-    
+
     # Create figure with two subplots (lower and upper excess)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-    
+
     # Plot lower excess: observed_q05 - predicted_lower
     # Positive excess = predicted lower bound is too high (conservative)
     # Negative excess = predicted lower bound is too low (underestimates)
     for method_name in available_methods:
         lower_pred = df_filtered[f"{method_name}_lower"]
-        lower_obs = df_filtered['observed_q05']
-        
+        lower_obs = df_filtered["observed_q05"]
+
         # Compute excess only for non-NaN pairs
         valid_mask = lower_pred.notna() & lower_obs.notna()
         if valid_mask.sum() > 0:
             excess_lower = lower_obs[valid_mask] - lower_pred[valid_mask]
             color = method_colors.get(method_name, "gray")
-            
+
             ax1.hist(
                 excess_lower,
                 bins=bins,
                 alpha=0.6,
-                label=f'{method_name.capitalize()} (n={len(excess_lower)})',
+                label=f"{method_name.capitalize()} (n={len(excess_lower)})",
                 color=color,
-                edgecolor='black',
+                edgecolor="black",
             )
-    
-    ax1.axvline(0, color='k', linestyle='--', linewidth=2, label='Perfect (0 excess)', zorder=10)
-    ax1.set_xlabel('Lower Excess: Observed Q05 - Predicted Lower', fontsize=11)
-    ax1.set_ylabel('Frequency', fontsize=11)
-    ax1.set_title('Lower Bound Calibration', fontsize=12, fontweight='bold')
-    ax1.legend(loc='upper right', fontsize=9)
+
+    ax1.axvline(0, color="k", linestyle="--", linewidth=2, label="Perfect (0 excess)", zorder=10)
+    ax1.set_xlabel("Lower Excess: Observed Q05 - Predicted Lower", fontsize=11)
+    ax1.set_ylabel("Frequency", fontsize=11)
+    ax1.set_title("Lower Bound Calibration", fontsize=12, fontweight="bold")
+    ax1.legend(loc="upper right", fontsize=9)
     ax1.grid(alpha=0.3)
-    
+
     # Add interpretation text
-    ax1.text(0.02, 0.98, 'Positive = Predicted too high (conservative)\nNegative = Predicted too low (risky)',
-             transform=ax1.transAxes, fontsize=8, verticalalignment='top',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    
+    ax1.text(
+        0.02,
+        0.98,
+        "Positive = Predicted too high (conservative)\nNegative = Predicted too low (risky)",
+        transform=ax1.transAxes,
+        fontsize=8,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
     # Plot upper excess: predicted_upper - observed_q95
     # Positive excess = predicted upper bound is higher than needed (conservative)
     # Negative excess = predicted upper bound is too low (underestimates)
     for method_name in available_methods:
         upper_pred = df_filtered[f"{method_name}_upper"]
-        upper_obs = df_filtered['observed_q95']
-        
+        upper_obs = df_filtered["observed_q95"]
+
         # Compute excess only for non-NaN pairs
         valid_mask = upper_pred.notna() & upper_obs.notna()
         if valid_mask.sum() > 0:
             excess_upper = upper_pred[valid_mask] - upper_obs[valid_mask]
             color = method_colors.get(method_name, "gray")
-            
+
             ax2.hist(
                 excess_upper,
                 bins=bins,
                 alpha=0.6,
-                label=f'{method_name.capitalize()} (n={len(excess_upper)})',
+                label=f"{method_name.capitalize()} (n={len(excess_upper)})",
                 color=color,
-                edgecolor='black',
+                edgecolor="black",
             )
-    
-    ax2.axvline(0, color='k', linestyle='--', linewidth=2, label='Perfect (0 excess)', zorder=10)
-    ax2.set_xlabel('Upper Excess: Predicted Upper - Observed Q95', fontsize=11)
-    ax2.set_ylabel('Frequency', fontsize=11)
-    ax2.set_title('Upper Bound Calibration', fontsize=12, fontweight='bold')
-    ax2.legend(loc='upper right', fontsize=9)
+
+    ax2.axvline(0, color="k", linestyle="--", linewidth=2, label="Perfect (0 excess)", zorder=10)
+    ax2.set_xlabel("Upper Excess: Predicted Upper - Observed Q95", fontsize=11)
+    ax2.set_ylabel("Frequency", fontsize=11)
+    ax2.set_title("Upper Bound Calibration", fontsize=12, fontweight="bold")
+    ax2.legend(loc="upper right", fontsize=9)
     ax2.grid(alpha=0.3)
-    
+
     # Add interpretation text
-    ax2.text(0.02, 0.98, 'Positive = Predicted too high (conservative)\nNegative = Predicted too low (risky)',
-             transform=ax2.transAxes, fontsize=8, verticalalignment='top',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-    
+    ax2.text(
+        0.02,
+        0.98,
+        "Positive = Predicted too high (conservative)\nNegative = Predicted too low (risky)",
+        transform=ax2.transAxes,
+        fontsize=8,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
     # Add overall title with scope/metric info
     scope_str = scope if scope else "All Scopes"
     metric_str = metric if metric else "All Metrics"
-    fig.suptitle(f'Calibration Excess Analysis: {scope_str} - {metric_str}', 
-                 fontsize=14, fontweight='bold', y=1.02)
-    
+    fig.suptitle(f"Calibration Excess Analysis: {scope_str} - {metric_str}", fontsize=14, fontweight="bold", y=1.02)
+
     plt.tight_layout()
-    
+
     if return_fig:
         return fig
     else:

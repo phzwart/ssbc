@@ -174,12 +174,8 @@ def compute_pac_operational_bounds_marginal(
     singleton_error_rate = n_errors / n_singletons if n_singletons > 0 else 0.0
 
     # Class-specific singleton error rates (normalized against full dataset)
-    n_errors_class0 = int(
-        np.sum((results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 0))
-    )
-    n_errors_class1 = int(
-        np.sum((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0))
-    )
+    n_errors_class0 = int(np.sum((results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 0)))
+    n_errors_class1 = int(np.sum((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0)))
     singleton_error_rate_class0 = n_errors_class0 / n if n > 0 else 0.0
     singleton_error_rate_class1 = n_errors_class1 / n if n > 0 else 0.0
 
@@ -188,12 +184,8 @@ def compute_pac_operational_bounds_marginal(
     singleton_class1_mask = (results_array[:, 0] == 1) & (labels == 1)
     n_singletons_class0 = int(np.sum(singleton_class0_mask))
     n_singletons_class1 = int(np.sum(singleton_class1_mask))
-    singleton_error_rate_cond_class0 = (
-        n_errors_class0 / n_singletons_class0 if n_singletons_class0 > 0 else 0.0
-    )
-    singleton_error_rate_cond_class1 = (
-        n_errors_class1 / n_singletons_class1 if n_singletons_class1 > 0 else 0.0
-    )
+    singleton_error_rate_cond_class0 = n_errors_class0 / n_singletons_class0 if n_singletons_class0 > 0 else 0.0
+    singleton_error_rate_cond_class1 = n_errors_class1 / n_singletons_class1 if n_singletons_class1 > 0 else 0.0
 
     # Apply prediction bounds accounting for both calibration and test set sampling uncertainty
     # These bound operational rates on future test sets of size test_size
@@ -241,7 +233,11 @@ def compute_pac_operational_bounds_marginal(
 
     if n_singletons_class0 > 0:
         error_cond_class0_lower, error_cond_class0_upper = prediction_bounds(
-            n_errors_class0, n_singletons_class0, expected_n_singletons_class0_test, adjusted_ci_level, prediction_method
+            n_errors_class0,
+            n_singletons_class0,
+            expected_n_singletons_class0_test,
+            adjusted_ci_level,
+            prediction_method,
         )
     else:
         error_cond_class0_lower = 0.0
@@ -249,7 +245,11 @@ def compute_pac_operational_bounds_marginal(
 
     if n_singletons_class1 > 0:
         error_cond_class1_lower, error_cond_class1_upper = prediction_bounds(
-            n_errors_class1, n_singletons_class1, expected_n_singletons_class1_test, adjusted_ci_level, prediction_method
+            n_errors_class1,
+            n_singletons_class1,
+            expected_n_singletons_class1_test,
+            adjusted_ci_level,
+            prediction_method,
         )
     else:
         error_cond_class1_lower = 0.0
@@ -386,13 +386,9 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
 
     # Class-specific singleton error rates (normalized against full dataset)
     # Error rate for singletons with true_label=0, normalized by total samples
-    error_class0_loo_preds = (
-        (results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 0)
-    ).astype(int)
+    error_class0_loo_preds = ((results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 0)).astype(int)
     # Error rate for singletons with true_label=1, normalized by total samples
-    error_class1_loo_preds = (
-        (results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0)
-    ).astype(int)
+    error_class1_loo_preds = ((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0)).astype(int)
 
     # Point estimates for class-specific error rates (normalized against full dataset)
     singleton_error_rate_class0 = float(np.mean(error_class0_loo_preds)) if n > 0 else 0.0
@@ -418,18 +414,14 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
     # LOO predictions for conditional error rates (need to filter by singleton & class)
     error_cond_class0_loo_preds = np.zeros(n, dtype=int)
     if n_singletons_class0 > 0:
-        error_cond_class0_loo_preds[singleton_class0_mask] = (
-            results_array[singleton_class0_mask, 3] == 0
-        ).astype(int)
+        error_cond_class0_loo_preds[singleton_class0_mask] = (results_array[singleton_class0_mask, 3] == 0).astype(int)
 
     error_cond_class1_loo_preds = np.zeros(n, dtype=int)
     if n_singletons_class1 > 0:
-        error_cond_class1_loo_preds[singleton_class1_mask] = (
-            results_array[singleton_class1_mask, 3] == 0
-        ).astype(int)
+        error_cond_class1_loo_preds[singleton_class1_mask] = (results_array[singleton_class1_mask, 3] == 0).astype(int)
 
     # Apply union bound adjustment
-    # Now we have 8 metrics: singleton, doublet, abstention, error (conditional), 
+    # Now we have 8 metrics: singleton, doublet, abstention, error (conditional),
     # error_class0 (normalized), error_class1 (normalized), error_cond_class0, error_cond_class1
     n_metrics = 8
     if use_union_bound:
@@ -870,7 +862,6 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     error_loo_preds = np.zeros(np.sum(class_mask), dtype=int)
     if n_singletons > 0:
         error_loo_preds = (results_array[class_mask, 0] == 1) & (results_array[class_mask, 3] == 0)
-
 
     # Apply union bound adjustment
     n_metrics = 4
