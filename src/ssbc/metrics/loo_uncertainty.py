@@ -579,7 +579,10 @@ def compute_robust_prediction_bounds(
         # User provided value - use it for calculations, but still report estimated
         if verbose:
             print(
-                f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated from data: {estimated_inflation_factor:.3f})"
+                "Using provided LOO inflation factor: "
+                f"{inflation_factor:.3f} "
+                "(estimated from data: "
+                f"{estimated_inflation_factor:.3f})"
             )
 
     # Compute bounds with selected method
@@ -609,7 +612,10 @@ def compute_robust_prediction_bounds(
         else:
             if verbose:
                 print(
-                    f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated: {estimated_inflation_factor:.3f}) for comparison..."
+                    "Using provided LOO inflation factor: "
+                    f"{inflation_factor:.3f} "
+                    "(estimated: "
+                    f"{estimated_inflation_factor:.3f}) for comparison..."
                 )
 
         # Compute all three methods

@@ -410,9 +410,9 @@ def _print_rigorous_report(report: dict) -> None:
                 # Method comparison available
                 comp = diagnostics["comparison"]
                 selected = diagnostics.get("selected_method", "unknown")
-                print(f"       Method comparison:")
+                print("       Method comparison:")
                 for method_name, method_lower, method_upper, method_width in zip(
-                    comp["method"], comp["lower"], comp["upper"], comp["width"]
+                    comp["method"], comp["lower"], comp["upper"], comp["width"], strict=False
                 ):
                     # Match selected method - handle both "exact" and "exact (auto-corrected)" cases
                     method_lower_name = method_name.lower().replace(" ", "_")
@@ -427,7 +427,8 @@ def _print_rigorous_report(report: dict) -> None:
                     else:
                         marker = ""
                     print(
-                        f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] (width: {method_width:.3f}) {marker}"
+                        f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] "
+                        f"(width: {method_width:.3f}) {marker}"
                     )
                 print(f"       Selected bounds: [{lower:.3f}, {upper:.3f}]")
             else:
@@ -549,9 +550,9 @@ def _print_rigorous_report(report: dict) -> None:
             # Method comparison available
             comp = diagnostics["comparison"]
             selected = diagnostics.get("selected_method", "unknown")
-            print(f"       Method comparison:")
+            print("       Method comparison:")
             for method_name, method_lower, method_upper, method_width in zip(
-                comp["method"], comp["lower"], comp["upper"], comp["width"]
+                comp["method"], comp["lower"], comp["upper"], comp["width"], strict=False
             ):
                 # Match selected method - handle both "exact" and "exact (auto-corrected)" cases
                 method_lower_name = method_name.lower().replace(" ", "_")
@@ -566,7 +567,8 @@ def _print_rigorous_report(report: dict) -> None:
                 else:
                     marker = ""
                 print(
-                    f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] (width: {method_width:.3f}) {marker}"
+                    f"         {method_name:15s}: [{method_lower:.3f}, {method_upper:.3f}] "
+                    f"(width: {method_width:.3f}) {marker}"
                 )
             print(f"       Selected bounds: [{lower:.3f}, {upper:.3f}]")
         else:

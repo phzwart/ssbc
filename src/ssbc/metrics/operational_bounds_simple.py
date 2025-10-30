@@ -6,7 +6,7 @@ from joblib import Parallel, delayed
 from ssbc.bounds import prediction_bounds
 from ssbc.core_pkg import SSBCResult
 
-from .loo_uncertainty import compute_loo_corrected_prediction_bounds, compute_robust_prediction_bounds
+from .loo_uncertainty import compute_robust_prediction_bounds
 
 
 def _safe_parallel_map(n_jobs: int, func, iterable):

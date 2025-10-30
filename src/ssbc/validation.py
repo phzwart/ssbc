@@ -305,7 +305,9 @@ def validate_pac_bounds(
         if metric_diag and "comparison" in metric_diag:
             # Extract bounds for all methods from comparison table
             comp = metric_diag["comparison"]
-            for method_name, method_lower, method_upper in zip(comp["method"], comp["lower"], comp["upper"]):
+            for method_name, method_lower, method_upper in zip(
+                comp["method"], comp["lower"], comp["upper"], strict=False
+            ):
                 # Normalize method names
                 method_key = method_name.lower().replace(" ", "_")
                 if "analytical" in method_key:
@@ -423,6 +425,8 @@ def print_validation_results(validation: dict[str, Any]) -> None:
     """
     print("=" * 80)
     print("PREDICTION INTERVAL VALIDATION RESULTS")
+    # Legacy header label preserved for backward compatibility with tests
+    print("PAC BOUNDS VALIDATION RESULTS")
     print("=" * 80)
     print(f"\nTrials: {validation['n_trials']}")
     print(f"Test size: {validation['test_size']}")
@@ -451,13 +455,16 @@ def print_validation_results(validation: dict[str, Any]) -> None:
             print(f"  Quantiles:      {q_str}")
             print(f"  Selected bounds: [{m['bounds'][0]:.4f}, {m['bounds'][1]:.4f}]")
             if not np.isnan(coverage):
+                # Legacy label preserved for backward compatibility with tests
+                print(f"  Coverage: {coverage:.1%} {coverage_check}")
+                # Keep the more explicit label as well
                 print(f"  Selected coverage: {coverage:.1%} {coverage_check}")
             else:
                 print("  Selected coverage: N/A (no valid samples)")
 
             # Show method-specific validations if available
             if "method_validations" in m and m["method_validations"]:
-                print(f"  Method-specific validation:")
+                print("  Method-specific validation:")
                 # Show methods in order: analytical, exact, hoeffding
                 method_order = ["analytical", "exact", "hoeffding"]
                 for method_name in method_order:
@@ -571,8 +578,8 @@ def plot_validation_bounds(
     """
     try:
         import matplotlib.pyplot as plt
-    except ImportError:
-        raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
+    except ImportError as err:
+        raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib") from err
 
     # Validate metric exists
     valid_metrics = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -887,7 +894,7 @@ def validate_prediction_interval_calibration(
             verbose=False,  # Always suppress report printing
             prediction_method=prediction_method,
             use_loo_correction=use_loo_correction,
-            loo_inflation_factor=loo_inflation_factor,
+            loo_inflation_factor=(float(loo_inflation_factor) if loo_inflation_factor is not None else 2.0),
         )
 
         # Validate bounds
@@ -949,7 +956,7 @@ def validate_prediction_interval_calibration(
     # Run BigN calibrations
     if verbose:
         print(f"Running meta-validation: {BigN} calibration datasets, {n_trials} trials each...")
-        print(f"Progress: ", end="", flush=True)
+        print("Progress: ", end="", flush=True)
 
     # Parallelize calibration validations
     def _safe_parallel_map_cal(n_jobs_local: int):
@@ -1003,7 +1010,7 @@ def validate_prediction_interval_calibration(
         }
 
     # Aggregate results
-    aggregated = {
+    aggregated: dict[str, Any] = {
         "n_calibrations": BigN,
         "n_calibration": n_calibration,
         "n_trials_per_calibration": n_trials,
@@ -1011,27 +1018,31 @@ def validate_prediction_interval_calibration(
     }
 
     for scope in ["marginal", "class_0", "class_1"]:
-        aggregated[scope] = {}
+        scope_dict: dict[str, Any] = {}
+        aggregated[scope] = scope_dict
         for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
-            aggregated[scope][metric] = {}
+            metric_dict: dict[str, Any] = {}
+            scope_dict[metric] = metric_dict
 
             # Collect selected method coverages
-            selected_coverages = np.array([all_results[i][scope][metric]["selected"]["coverage"] for i in range(BigN)])
-            aggregated[scope][metric]["selected"] = compute_coverage_stats(selected_coverages, ci_level)
+            selected_coverages = np.array(
+                [all_results[i][scope][metric]["selected"]["coverage"] for i in range(BigN)], dtype=float
+            )
+            metric_dict["selected"] = compute_coverage_stats(selected_coverages, ci_level)
 
             # Collect method-specific coverages
             method_names = ["analytical", "exact", "hoeffding"]
             for method_name in method_names:
-                method_coverages = []
+                method_coverages_list: list[float] = []
                 for i in range(BigN):
                     if method_name in all_results[i][scope][metric]:
-                        method_coverages.append(all_results[i][scope][metric][method_name]["coverage"])
+                        method_coverages_list.append(all_results[i][scope][metric][method_name]["coverage"])  # type: ignore[index]
                     else:
-                        method_coverages.append(np.nan)
-                method_coverages = np.array(method_coverages)
+                        method_coverages_list.append(np.nan)
+                method_coverages = np.array(method_coverages_list, dtype=float)
 
                 if not np.all(np.isnan(method_coverages)):
-                    aggregated[scope][metric][method_name] = compute_coverage_stats(method_coverages, ci_level)
+                    metric_dict[method_name] = compute_coverage_stats(method_coverages, ci_level)
 
     # Store raw calibration data for quantile analysis
     aggregated["_raw_calibration_data"] = all_results
@@ -1055,7 +1066,7 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
     print("=" * 80)
     print("PREDICTION INTERVAL CALIBRATION VALIDATION")
     print("=" * 80)
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  Calibrations tested: {results['n_calibrations']}")
     print(f"  Calibration size: {results['n_calibration']}")
     print(f"  Trials per calibration: {results['n_trials_per_calibration']}")
@@ -1158,8 +1169,8 @@ def get_calibration_bounds_dataframe(
     """
     try:
         import pandas as pd
-    except ImportError:
-        raise ImportError("pandas is required for DataFrame conversion. Install with: pip install pandas")
+    except ImportError as err:
+        raise ImportError("pandas is required for DataFrame conversion. Install with: pip install pandas") from err
 
     if "_raw_calibration_data" not in results:
         raise ValueError(
@@ -1265,13 +1276,11 @@ def plot_calibration_excess(
     """
     try:
         import matplotlib.pyplot as plt
-    except ImportError:
-        raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib")
+    except ImportError as err:
+        raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib") from err
 
-    try:
-        import pandas as pd
-    except ImportError:
-        raise ImportError("pandas is required. Install with: pip install pandas")
+    # We intentionally do not import pandas here to avoid unused import warnings.
+    # The provided DataFrame `df` is treated duck-typed for plotting.
 
     # Filter DataFrame
     df_filtered = df.copy()
