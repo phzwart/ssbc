@@ -562,17 +562,23 @@ def compute_robust_prediction_bounds(
         if verbose:
             print(f"Auto-selected LOO method: {method} (n_cal={n_cal})")
 
-    # Estimate inflation factor if needed (for analytical and hoeffding methods)
-    if inflation_factor is None and method in ["analytical", "hoeffding"]:
-        if verbose:
-            print("Estimating LOO inflation factor from data...")
-        inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=verbose)
-    elif inflation_factor is not None:
-        if verbose:
-            print(f"Using provided LOO inflation factor: {inflation_factor:.3f}")
+    # Always estimate inflation factor for reporting, but use provided value if given
+    estimated_inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
+    
+    # Use provided inflation factor for calculations if available, otherwise use estimated
+    if inflation_factor is None:
+        if method in ["analytical", "hoeffding"]:
+            inflation_factor = estimated_inflation_factor
+            if verbose:
+                print(f"Using estimated LOO inflation factor: {inflation_factor:.3f}")
+        else:
+            # Not needed for this method, but still report estimated value
+            if verbose:
+                print(f"LOO inflation factor not needed for this method (estimated: {estimated_inflation_factor:.3f})")
     else:
+        # User provided value - use it for calculations, but still report estimated
         if verbose:
-            print("LOO inflation factor not needed for this method")
+            print(f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated from data: {estimated_inflation_factor:.3f})")
 
     # Compute bounds with selected method
     if method == "analytical":
@@ -592,11 +598,15 @@ def compute_robust_prediction_bounds(
         selected_method = "hoeffding"
 
     elif method == "all":
-        # Estimate inflation factor for methods that need it
+        # Always estimate inflation factor for reporting
+        # Use provided value if available, otherwise use estimated
         if inflation_factor is None:
+            inflation_factor = estimated_inflation_factor
             if verbose:
-                print("Estimating LOO inflation factor from data for comparison...")
-            inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=verbose)
+                print(f"Using estimated LOO inflation factor: {inflation_factor:.3f} for comparison...")
+        else:
+            if verbose:
+                print(f"Using provided LOO inflation factor: {inflation_factor:.3f} (estimated: {estimated_inflation_factor:.3f}) for comparison...")
 
         # Compute all three methods
         L1, U1, diag1 = compute_loo_corrected_bounds_analytical(
@@ -612,14 +622,12 @@ def compute_robust_prediction_bounds(
         selected_method = "analytical"
 
         # Check if analytical is suspiciously narrow
+        # Auto-correct to exact if analytical bounds are too narrow
+        # Suppress warning when method="all" since we're explicitly comparing methods
         if (U1 - L1) < 0.7 * (U2 - L2):
-            warnings.warn(
-                "Analytical bounds are significantly narrower than exact binomial. "
-                "Consider using 'exact' method for more conservative bounds.",
-                stacklevel=2,
-            )
             L, U = L2, U2
             selected_method = "exact (auto-corrected)"
+            # Note: No warning here - method="all" is for comparison, auto-correction is expected
 
         # Build comparison table
         comparison = {
@@ -634,6 +642,8 @@ def compute_robust_prediction_bounds(
             "bounds": (L, U),
             "comparison": comparison,
             "diagnostics": {"analytical": diag1, "exact": diag2, "hoeffding": diag3},
+            "inflation_factor_used": inflation_factor if inflation_factor is not None else None,
+            "inflation_factor_estimated": estimated_inflation_factor,
         }
 
         return L, U, report
@@ -641,13 +651,15 @@ def compute_robust_prediction_bounds(
     else:
         raise ValueError(f"Unknown method: {method}")
 
-    # Build report
+    # Build report - always include estimated inflation factor
     report = {
         "selected_method": selected_method,
         "bounds": (L, U),
         "diagnostics": diag,
         "alpha": alpha,
         "confidence_level": 1 - alpha,
+        "inflation_factor_used": inflation_factor if inflation_factor is not None else None,
+        "inflation_factor_estimated": estimated_inflation_factor,
     }
 
     return L, U, report
