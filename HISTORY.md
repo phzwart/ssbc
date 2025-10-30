@@ -1,5 +1,15 @@
 # History
 
+## 1.3.1 (2025-10-30)
+
+### Performance
+- Avoid nested parallelism in `validate_prediction_interval_calibration` by setting inner `n_jobs=1` and using
+  process-based parallelism at the outer level.
+- Cap effective workers inside LOO-CV loops to prevent oversubscription on large machines (min(tasks, CPUs, 32)).
+
+### Notes
+- Docs release updated to 1.3.1 to match package metadata.
+
 ## 1.3.0 (2025-10-30)
 
 ### Major Changes

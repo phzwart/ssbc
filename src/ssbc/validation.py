@@ -882,6 +882,8 @@ def validate_prediction_interval_calibration(
         cal_labels, cal_probs = cal_simulator.generate(n_calibration)
 
         # Generate PAC report (suppress verbose output)
+        # Important for performance: avoid nested parallelism. We parallelize at the
+        # calibration level (outer loop) and keep inner routines single-threaded.
         report = generate_rigorous_pac_report(
             labels=cal_labels,
             probs=cal_probs,
@@ -890,7 +892,7 @@ def validate_prediction_interval_calibration(
             test_size=test_size,
             ci_level=ci_level,
             use_union_bound=False,
-            n_jobs=n_jobs,
+            n_jobs=1,
             verbose=False,  # Always suppress report printing
             prediction_method=prediction_method,
             use_loo_correction=use_loo_correction,
@@ -905,7 +907,7 @@ def validate_prediction_interval_calibration(
             n_trials=n_trials,
             seed=cal_seed + 1 if cal_seed is not None else None,
             verbose=False,  # Suppress validation progress
-            n_jobs=n_jobs,
+            n_jobs=1,
         )
 
         # Extract coverages and quantiles for all methods
@@ -961,7 +963,9 @@ def validate_prediction_interval_calibration(
     # Parallelize calibration validations
     def _safe_parallel_map_cal(n_jobs_local: int):
         try:
-            results = Parallel(n_jobs=n_jobs_local, backend="threading")(
+            # Use process-based parallelism at the outer level to avoid GIL contention
+            # and prevent nested joblib pools from oversubscribing the machine.
+            results = Parallel(n_jobs=n_jobs_local, backend="loky")(
                 delayed(_single_calibration_validation)(cal_idx) for cal_idx in range(BigN)
             )
             return results

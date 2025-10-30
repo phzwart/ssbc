@@ -1,5 +1,7 @@
 """Simplified operational bounds for fixed calibration (LOO-CV + CP)."""
 
+import os
+
 import numpy as np
 from joblib import Parallel, delayed
 
@@ -9,14 +11,29 @@ from ssbc.core_pkg import SSBCResult
 from .loo_uncertainty import compute_robust_prediction_bounds
 
 
-def _safe_parallel_map(n_jobs: int, func, iterable):
+def _effective_n_jobs(requested_n_jobs: int, n_tasks: int) -> int:
+    """Choose a sane level of parallelism to avoid oversubscription on large machines.
+
+    Caps the number of workers by the number of tasks and a hard ceiling to
+    reduce process scheduling overhead on 100+ core hosts.
+    """
+    if requested_n_jobs in (None, 0, 1):
+        return 1
+    if requested_n_jobs < 0:
+        cpu_total = os.cpu_count() or 1
+        cap = 32  # hard cap to avoid spawning hundreds of processes
+        return max(1, min(cpu_total, cap, n_tasks))
+    return max(1, min(int(requested_n_jobs), n_tasks))
+
+
+def _safe_parallel_map(n_jobs: int, func, iterable, backend: str = "loky"):
     """Execute jobs in parallel if possible, otherwise fall back to serial.
 
     This avoids sandbox/system-limit failures (e.g., PermissionError from loky)
     by retrying in-process serial execution when multiprocessing is unavailable.
     """
     try:
-        return Parallel(n_jobs=n_jobs)(delayed(func)(*args) for args in iterable)
+        return Parallel(n_jobs=n_jobs, backend=backend)(delayed(func)(*args) for args in iterable)
     except Exception:
         # Fallback to serial execution
         return [func(*args) for args in iterable]
@@ -153,8 +170,9 @@ def compute_pac_operational_bounds_marginal(
     k_1 = int(np.ceil((n_1 + 1) * (1 - ssbc_result_1.alpha_corrected)))
 
     # Parallel LOO-CV: evaluate each sample
+    eff_jobs = _effective_n_jobs(n_jobs, n)
     results = _safe_parallel_map(
-        n_jobs,
+        eff_jobs,
         _evaluate_loo_single_sample_marginal,
         ((idx, labels, probs, k_0, k_1) for idx in range(n)),
     )
@@ -680,8 +698,9 @@ def compute_pac_operational_bounds_perclass(
 
     # Parallel LOO-CV: evaluate each sample
     n = len(labels)
+    eff_jobs = _effective_n_jobs(n_jobs, n)
     results = _safe_parallel_map(
-        n_jobs,
+        eff_jobs,
         _evaluate_loo_single_sample_perclass,
         ((idx, labels, probs, k_0, k_1, class_label) for idx in range(n)),
     )
@@ -832,8 +851,9 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
 
     # Parallel LOO-CV: evaluate each sample
     n = len(labels)
+    eff_jobs = _effective_n_jobs(n_jobs, n)
     results = _safe_parallel_map(
-        n_jobs,
+        eff_jobs,
         _evaluate_loo_single_sample_perclass,
         ((idx, labels, probs, k_0, k_1, class_label) for idx in range(n)),
     )
