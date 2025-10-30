@@ -1,8 +1,6 @@
 import io
 import sys
 
-import numpy as np
-
 from ssbc.reporting import generate_rigorous_pac_report
 from ssbc.simulation import BinaryClassifierSimulator
 
@@ -11,7 +9,7 @@ def test_reporting_prints_method_comparison() -> None:
     sim = BinaryClassifierSimulator(p_class1=0.3, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=7)
     labels, probs = sim.generate(60)
 
-    report = generate_rigorous_pac_report(
+    generate_rigorous_pac_report(
         labels=labels,
         probs=probs,
         alpha_target=0.1,
@@ -46,4 +44,3 @@ def test_reporting_prints_method_comparison() -> None:
 
     assert "Method comparison:" in out
     assert "Selected bounds:" in out
-

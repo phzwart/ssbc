@@ -116,4 +116,3 @@ def test_plot_validation_bounds_return_fig() -> None:
     validation = validate_pac_bounds(report=report, simulator=sim, test_size=25, n_trials=5, verbose=False)
     figs = plot_validation_bounds(validation, metric="singleton", return_figs=True)
     assert figs is not None
-
