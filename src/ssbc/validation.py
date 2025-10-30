@@ -72,6 +72,19 @@ def _validate_single_trial(
     marginal = eval_results["marginal"]
     class_0 = eval_results["class_0"]
     class_1 = eval_results["class_1"]
+    n_test = eval_results["n_test"]
+
+    # Additional marginal metrics involving class-conditional singleton errors
+    # - Normalized-by-total error rate for class-0 and class-1 singletons
+    # - Conditional error given singleton & class=c
+    err_c0_norm = (
+        (class_0["n_singletons"] * class_0["singleton_error_rate"]) / n_test if class_0["n_singletons"] > 0 else 0.0
+    )
+    err_c1_norm = (
+        (class_1["n_singletons"] * class_1["singleton_error_rate"]) / n_test if class_1["n_singletons"] > 0 else 0.0
+    )
+    err_cond_c0 = class_0["singleton_error_rate"] if class_0["n_singletons"] > 0 else np.nan
+    err_cond_c1 = class_1["singleton_error_rate"] if class_1["n_singletons"] > 0 else np.nan
 
     return {
         "marginal": {
@@ -79,6 +92,11 @@ def _validate_single_trial(
             "doublet": marginal["doublet_rate"],
             "abstention": marginal["abstention_rate"],
             "singleton_error": marginal["singleton_error_rate"],
+            # New marginal metrics for class-conditional singleton errors
+            "singleton_error_class0": err_c0_norm,
+            "singleton_error_class1": err_c1_norm,
+            "singleton_error_cond_class0": err_cond_c0,
+            "singleton_error_cond_class1": err_cond_c1,
         },
         "class_0": {
             "singleton": class_0["singleton_rate"],
@@ -206,6 +224,11 @@ def validate_pac_bounds(
     marginal_doublet_rates = [result["marginal"]["doublet"] for result in trial_results]
     marginal_abstention_rates = [result["marginal"]["abstention"] for result in trial_results]
     marginal_singleton_error_rates = [result["marginal"]["singleton_error"] for result in trial_results]
+    # New marginal class-conditional error metrics
+    marginal_error_class0_norm = [result["marginal"]["singleton_error_class0"] for result in trial_results]
+    marginal_error_class1_norm = [result["marginal"]["singleton_error_class1"] for result in trial_results]
+    marginal_error_cond_class0 = [result["marginal"]["singleton_error_cond_class0"] for result in trial_results]
+    marginal_error_cond_class1 = [result["marginal"]["singleton_error_cond_class1"] for result in trial_results]
 
     class_0_singleton_rates = [result["class_0"]["singleton"] for result in trial_results]
     class_0_doublet_rates = [result["class_0"]["doublet"] for result in trial_results]
@@ -222,6 +245,10 @@ def validate_pac_bounds(
     marginal_doublet_rates = np.array(marginal_doublet_rates)
     marginal_abstention_rates = np.array(marginal_abstention_rates)
     marginal_singleton_error_rates = np.array(marginal_singleton_error_rates)
+    marginal_error_class0_norm = np.array(marginal_error_class0_norm)
+    marginal_error_class1_norm = np.array(marginal_error_class1_norm)
+    marginal_error_cond_class0 = np.array(marginal_error_cond_class0)
+    marginal_error_cond_class1 = np.array(marginal_error_cond_class1)
 
     class_0_singleton_rates = np.array(class_0_singleton_rates)
     class_0_doublet_rates = np.array(class_0_doublet_rates)
@@ -323,6 +350,44 @@ def validate_pac_bounds(
 
         return method_bounds
 
+    def extract_method_bounds_by_keys(
+        pac_bounds: dict,
+        rate_bounds_key: str,
+        diagnostics_key: str | None = None,
+    ) -> dict[str, tuple[float, float]]:
+        """Extract bounds using explicit keys in pac_bounds (marginal extras).
+
+        rate_bounds_key: e.g., 'singleton_error_rate_class0_bounds'
+        diagnostics_key: e.g., 'singleton_error_class0' inside loo_diagnostics
+        """
+        method_bounds: dict[str, tuple[float, float]] = {}
+
+        default_bounds = pac_bounds.get(rate_bounds_key, (np.nan, np.nan))
+
+        if diagnostics_key is not None:
+            loo_diag = pac_bounds.get("loo_diagnostics", {})
+            metric_diag = loo_diag.get(diagnostics_key, {}) if loo_diag else {}
+            if metric_diag and "comparison" in metric_diag:
+                comp = metric_diag["comparison"]
+                for method_name, method_lower, method_upper in zip(
+                    comp["method"], comp["lower"], comp["upper"], strict=False
+                ):
+                    method_key = method_name.lower().replace(" ", "_")
+                    if "analytical" in method_key:
+                        method_bounds["analytical"] = (method_lower, method_upper)
+                    elif "exact" in method_key:
+                        method_bounds["exact"] = (method_lower, method_upper)
+                    elif "hoeffding" in method_key:
+                        method_bounds["hoeffding"] = (method_lower, method_upper)
+            else:
+                selected_method = metric_diag.get("selected_method", "selected") if metric_diag else "selected"
+                method_bounds[selected_method] = default_bounds
+        else:
+            # No diagnostics key provided; just return selected bounds under 'selected'
+            method_bounds["selected"] = default_bounds
+
+        return method_bounds
+
     # Helper function to validate a metric across all methods
     def validate_metric_all_methods(
         rates: np.ndarray,
@@ -366,6 +431,36 @@ def validate_pac_bounds(
             "method_validations": method_validations,  # All method-specific validations
         }
 
+    def validate_metric_by_keys(
+        rates: np.ndarray,
+        pac_bounds: dict,
+        rate_bounds_key: str,
+        diagnostics_key: str,
+        expected_key: str | None = None,
+        use_nan_check: bool = False,
+    ) -> dict[str, Any]:
+        """Validate a metric using explicit pac_bounds keys and diagnostics key."""
+        method_bounds_map = extract_method_bounds_by_keys(pac_bounds, rate_bounds_key, diagnostics_key)
+        default_bounds = pac_bounds.get(rate_bounds_key, (np.nan, np.nan))
+        expected = pac_bounds.get(expected_key, np.nan) if expected_key else np.nan
+
+        method_validations = {}
+        for method_name, bounds in method_bounds_map.items():
+            coverage = check_coverage_with_nan(rates, bounds) if use_nan_check else check_coverage(rates, bounds)
+            method_validations[method_name] = {"bounds": bounds, "empirical_coverage": coverage}
+
+        return {
+            "rates": rates,
+            "mean": np.nanmean(rates) if use_nan_check else np.mean(rates),
+            "quantiles": compute_quantiles(rates),
+            "bounds": default_bounds,
+            "expected": expected,
+            "empirical_coverage": check_coverage_with_nan(rates, default_bounds)
+            if use_nan_check
+            else check_coverage(rates, default_bounds),
+            "method_validations": method_validations,
+        }
+
     return {
         "n_trials": n_trials,
         "test_size": test_size,
@@ -385,6 +480,39 @@ def validate_pac_bounds(
             ),
             "singleton_error": validate_metric_all_methods(
                 marginal_singleton_error_rates, pac_marg, "singleton_error", use_nan_check=True
+            ),
+            # New marginal metrics: class-conditional singleton error variants
+            "singleton_error_class0": validate_metric_by_keys(
+                marginal_error_class0_norm,
+                pac_marg,
+                "singleton_error_rate_class0_bounds",
+                "singleton_error_class0",
+                expected_key="expected_singleton_error_rate_class0",
+                use_nan_check=False,
+            ),
+            "singleton_error_class1": validate_metric_by_keys(
+                marginal_error_class1_norm,
+                pac_marg,
+                "singleton_error_rate_class1_bounds",
+                "singleton_error_class1",
+                expected_key="expected_singleton_error_rate_class1",
+                use_nan_check=False,
+            ),
+            "singleton_error_cond_class0": validate_metric_by_keys(
+                marginal_error_cond_class0,
+                pac_marg,
+                "singleton_error_rate_cond_class0_bounds",
+                "singleton_error_cond_class0",
+                expected_key="expected_singleton_error_rate_cond_class0",
+                use_nan_check=True,
+            ),
+            "singleton_error_cond_class1": validate_metric_by_keys(
+                marginal_error_cond_class1,
+                pac_marg,
+                "singleton_error_rate_cond_class1_bounds",
+                "singleton_error_cond_class1",
+                expected_key="expected_singleton_error_rate_cond_class1",
+                use_nan_check=True,
             ),
         },
         "class_0": {
@@ -437,8 +565,22 @@ def print_validation_results(validation: dict[str, Any]) -> None:
         print(f"\n{'=' * 80}")
         print(f"{scope_name}")
         print("=" * 80)
+        # Extend metrics for marginal scope to include class-conditional variants
+        if scope == "marginal":
+            metrics_list = [
+                "singleton",
+                "doublet",
+                "abstention",
+                "singleton_error",
+                "singleton_error_class0",
+                "singleton_error_class1",
+                "singleton_error_cond_class0",
+                "singleton_error_cond_class1",
+            ]
+        else:
+            metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
 
-        for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
+        for metric in metrics_list:
             m = validation[scope][metric]
             q = m["quantiles"]
             coverage = m["empirical_coverage"]
@@ -584,7 +726,17 @@ def plot_validation_bounds(
         raise ImportError("matplotlib is required for plotting. Install with: pip install matplotlib") from err
 
     # Validate metric exists
-    valid_metrics = ["singleton", "doublet", "abstention", "singleton_error"]
+    valid_metrics = [
+        "singleton",
+        "doublet",
+        "abstention",
+        "singleton_error",
+        # New marginal-only metrics
+        "singleton_error_class0",
+        "singleton_error_class1",
+        "singleton_error_cond_class0",
+        "singleton_error_cond_class1",
+    ]
     if metric not in valid_metrics:
         raise ValueError(f"metric must be one of {valid_metrics}, got '{metric}'")
 
@@ -932,7 +1084,21 @@ def validate_prediction_interval_calibration(
         result = {}
         for scope in ["marginal", "class_0", "class_1"]:
             result[scope] = {}
-            for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
+            if scope == "marginal":
+                metrics_list = [
+                    "singleton",
+                    "doublet",
+                    "abstention",
+                    "singleton_error",
+                    "singleton_error_class0",
+                    "singleton_error_class1",
+                    "singleton_error_cond_class0",
+                    "singleton_error_cond_class1",
+                ]
+            else:
+                metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
+
+            for metric in metrics_list:
                 m = validation[scope][metric]
 
                 # Get observed quantiles from test set rates
@@ -1042,7 +1208,22 @@ def validate_prediction_interval_calibration(
     for scope in ["marginal", "class_0", "class_1"]:
         scope_dict: dict[str, Any] = {}
         aggregated[scope] = scope_dict
-        for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
+        # Extend metrics for marginal scope to include class-conditional error variants
+        if scope == "marginal":
+            metrics_list = [
+                "singleton",
+                "doublet",
+                "abstention",
+                "singleton_error",
+                "singleton_error_class0",
+                "singleton_error_class1",
+                "singleton_error_cond_class0",
+                "singleton_error_cond_class1",
+            ]
+        else:
+            metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
+
+        for metric in metrics_list:
             metric_dict: dict[str, Any] = {}
             scope_dict[metric] = metric_dict
 
@@ -1099,8 +1280,22 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
         print(f"\n{'=' * 80}")
         print(f"{scope_name}")
         print("=" * 80)
+        # Include extended marginal metrics
+        if scope == "marginal":
+            metrics_list = [
+                "singleton",
+                "doublet",
+                "abstention",
+                "singleton_error",
+                "singleton_error_class0",
+                "singleton_error_class1",
+                "singleton_error_cond_class0",
+                "singleton_error_cond_class1",
+            ]
+        else:
+            metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
 
-        for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
+        for metric in metrics_list:
             print(f"\n{metric.upper().replace('_', ' ')}:")
 
             # Check which methods are available
@@ -1206,7 +1401,18 @@ def get_calibration_bounds_dataframe(
     # Build DataFrame rows
     rows = []
     scopes = ["marginal", "class_0", "class_1"] if scope is None else [scope]
-    metrics = ["singleton", "doublet", "abstention", "singleton_error"] if metric is None else [metric]
+    # Include new marginal metrics by default; per-class scopes will be skipped when missing
+    default_metrics = [
+        "singleton",
+        "doublet",
+        "abstention",
+        "singleton_error",
+        "singleton_error_class0",
+        "singleton_error_class1",
+        "singleton_error_cond_class0",
+        "singleton_error_cond_class1",
+    ]
+    metrics = default_metrics if metric is None else [metric]
 
     for cal_idx in range(BigN):
         for scope_name in scopes:
