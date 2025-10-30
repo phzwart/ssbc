@@ -450,8 +450,10 @@ def print_validation_results(validation: dict[str, Any]) -> None:
             print(f"\n{metric.upper().replace('_', ' ')}:")
             print(f"  Empirical mean: {m['mean']:.4f}")
             print(f"  Expected (LOO): {m['expected']:.4f}")
-            q_str = f"[5%: {q['q05']:.3f}, 25%: {q['q25']:.3f}, 50%: {q['q50']:.3f}, "
-            q_str += f"75%: {q['q75']:.3f}, 95%: {q['q95']:.3f}]"
+            q_str = (
+                f"[2.5%: {q['q025']:.3f}, 5%: {q['q05']:.3f}, 25%: {q['q25']:.3f}, "
+                f"50%: {q['q50']:.3f}, 75%: {q['q75']:.3f}, 95%: {q['q95']:.3f}, 97.5%: {q['q975']:.3f}]"
+            )
             print(f"  Quantiles:      {q_str}")
             print(f"  Selected bounds: [{m['bounds'][0]:.4f}, {m['bounds'][1]:.4f}]")
             if not np.isnan(coverage):
@@ -652,6 +654,11 @@ def plot_validation_bounds(
         ax.axvline(expected, color="g", linestyle="-", linewidth=2.5, label="Expected (LOO)", zorder=5)
         ax.axvline(np.mean(rates), color="darkorange", linestyle=":", linewidth=2, label="Empirical mean", zorder=5)
 
+        # Plot requested 95% quantile lines (2.5% and 97.5%) for the empirical distribution
+        q = validation[scope][metric]["quantiles"]
+        ax.axvline(q["q025"], color="#555555", linestyle="--", linewidth=1.5, label="2.5% quantile", zorder=4)
+        ax.axvline(q["q975"], color="#555555", linestyle="--", linewidth=1.5, label="97.5% quantile", zorder=4)
+
         ax.set_xlabel(f"{metric.replace('_', ' ').title()} Rate", fontsize=11)
         ax.set_ylabel("Frequency", fontsize=11)
 
@@ -727,6 +734,15 @@ def plot_validation_bounds(
                                 linewidth=2,
                                 label=f"Mean [{np.mean(rates):.3f}]",
                                 zorder=5,
+                            )
+
+                            # Plot empirical 2.5% and 97.5% quantiles in detail panels as well
+                            q = validation[scope][metric]["quantiles"]
+                            ax.axvline(
+                                q["q025"], color="#555555", linestyle="--", linewidth=1.2, label="2.5%", zorder=4
+                            )
+                            ax.axvline(
+                                q["q975"], color="#555555", linestyle="--", linewidth=1.2, label="97.5%", zorder=4
                             )
 
                             ax.set_xlabel(f"{metric.replace('_', ' ').title()} Rate", fontsize=10)
@@ -900,12 +916,14 @@ def validate_prediction_interval_calibration(
         )
 
         # Validate bounds
+        # Ensure independent RNG across calibrations even when seed is None
+        base_seed = cal_seed if cal_seed is not None else int(np.random.randint(0, 2**31 - 1))
         validation = validate_pac_bounds(
             report=report,
             simulator=cal_simulator,
             test_size=test_size,
             n_trials=n_trials,
-            seed=cal_seed + 1 if cal_seed is not None else None,
+            seed=base_seed + 1,
             verbose=False,  # Suppress validation progress
             n_jobs=1,
         )
@@ -1299,19 +1317,28 @@ def plot_calibration_excess(
     # Determine which methods are available
     available_methods = []
     method_colors = {
+        "selected": "#4C956C",  # Green
         "analytical": "#2E86AB",  # Blue
         "exact": "#A23B72",  # Purple
         "hoeffding": "#F18F01",  # Orange
     }
 
     if methods is None:
-        # Check which methods have non-NaN data
-        for method_name in ["analytical", "exact", "hoeffding"]:
-            if f"{method_name}_lower" in df_filtered.columns:
-                if df_filtered[f"{method_name}_lower"].notna().any():
+        # Check which methods have non-NaN data (include selected)
+        for method_name in ["selected", "analytical", "exact", "hoeffding"]:
+            lower_col = f"{method_name}_lower" if method_name != "selected" else "selected_lower"
+            if lower_col in df_filtered.columns:
+                if df_filtered[lower_col].notna().any():
                     available_methods.append(method_name)
     else:
-        available_methods = [m for m in methods if f"{m}_lower" in df_filtered.columns]
+        # Respect requested methods; support 'selected'
+        tmp = []
+        for m in methods:
+            if m == "selected" and "selected_lower" in df_filtered.columns:
+                tmp.append(m)
+            elif f"{m}_lower" in df_filtered.columns:
+                tmp.append(m)
+        available_methods = tmp
 
     if len(available_methods) == 0:
         raise ValueError("No method data available in DataFrame")
@@ -1323,7 +1350,8 @@ def plot_calibration_excess(
     # Positive excess = predicted lower bound is too high (conservative)
     # Negative excess = predicted lower bound is too low (underestimates)
     for method_name in available_methods:
-        lower_pred = df_filtered[f"{method_name}_lower"]
+        lower_col = f"{method_name}_lower" if method_name != "selected" else "selected_lower"
+        lower_pred = df_filtered[lower_col]
         lower_obs = df_filtered["observed_q05"]
 
         # Compute excess only for non-NaN pairs
@@ -1363,7 +1391,8 @@ def plot_calibration_excess(
     # Positive excess = predicted upper bound is higher than needed (conservative)
     # Negative excess = predicted upper bound is too low (underestimates)
     for method_name in available_methods:
-        upper_pred = df_filtered[f"{method_name}_upper"]
+        upper_col = f"{method_name}_upper" if method_name != "selected" else "selected_upper"
+        upper_pred = df_filtered[upper_col]
         upper_obs = df_filtered["observed_q95"]
 
         # Compute excess only for non-NaN pairs
