@@ -440,16 +440,21 @@ def compute_loo_corrected_prediction_bounds(
 
         # Effective sample size accounting for LOO correlation
         n_effective = n_cal / inflation_factor
+        # Construct effective counts that preserve p_hat while ensuring integers
+        n_eff_int = max(1, int(np.floor(n_effective)))
+        k_eff_int = int(np.floor(p_hat * n_eff_int))
 
         # Use beta-binomial bounds with effective sample size
         from ssbc.bounds import prediction_bounds_beta_binomial
 
-        lower, upper = prediction_bounds_beta_binomial(k_cal, n_cal, n_test, 1 - alpha)
+        lower, upper = prediction_bounds_beta_binomial(k_eff_int, n_eff_int, n_test, 1 - alpha)
 
         diagnostics = {
             "method": "beta_binomial_loo_corrected",
             "inflation_factor": inflation_factor,
             "n_effective": n_effective,
+            "n_eff_int": n_eff_int,
+            "k_eff_int": k_eff_int,
         }
 
     elif method == "hoeffding":
@@ -593,7 +598,13 @@ def compute_robust_prediction_bounds(
         selected_method = "analytical"
 
     elif method == "exact":
-        L, U, diag = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha)
+        # Pass through provided/estimated inflation factor for consistency
+        infl = (
+            inflation_factor
+            if inflation_factor is not None
+            else estimate_loo_inflation_factor(loo_predictions, verbose=False)
+        )
+        L, U, diag = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha, inflation_factor=infl)
         selected_method = "exact"
 
     elif method == "hoeffding":
@@ -629,7 +640,10 @@ def compute_robust_prediction_bounds(
             L1, U1, diag1 = compute_loo_corrected_bounds_analytical(
                 loo_predictions, n_test, alpha, inflation_factor=inflation_factor
             )
-            L2, U2, diag2 = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha)
+            # Use same inflation factor for exact method to ensure consistency across methods
+            L2, U2, diag2 = compute_loo_corrected_bounds_exact_binomial(
+                k_loo, n_cal, n_test, alpha, inflation_factor=inflation_factor
+            )
             L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(
                 loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose
             )

@@ -11,9 +11,7 @@ import numpy as np
 from ssbc.calibration import mondrian_conformal_calibrate, split_by_class
 from ssbc.core_pkg import ssbc_correct
 from ssbc.metrics import (
-    compute_pac_operational_bounds_marginal,
     compute_pac_operational_bounds_marginal_loo_corrected,
-    compute_pac_operational_bounds_perclass,
     compute_pac_operational_bounds_perclass_loo_corrected,
 )
 
@@ -172,107 +170,54 @@ def generate_rigorous_pac_report(
         class_data=class_data, alpha_target=alpha_dict, delta=delta_dict, mode="beta"
     )
 
-    # Step 3: Compute PAC operational bounds - MARGINAL
-    # Uses minimum confidence (max delta) for conservativeness
-    if use_loo_correction:
-        pac_bounds_marginal = compute_pac_operational_bounds_marginal_loo_corrected(
-            ssbc_result_0=ssbc_result_0,
-            ssbc_result_1=ssbc_result_1,
-            labels=labels,
-            probs=probs,
-            test_size=test_size,
-            ci_level=ci_level,
-            pac_level=pac_level_marginal,
-            use_union_bound=use_union_bound,
-            n_jobs=n_jobs,
-            prediction_method=prediction_method,
-            loo_inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
-    else:
-        pac_bounds_marginal = compute_pac_operational_bounds_marginal(
-            ssbc_result_0=ssbc_result_0,
-            ssbc_result_1=ssbc_result_1,
-            labels=labels,
-            probs=probs,
-            test_size=test_size,
-            ci_level=ci_level,
-            pac_level=pac_level_marginal,
-            use_union_bound=use_union_bound,
-            n_jobs=n_jobs,
-            prediction_method=prediction_method,
-        )
+    # Step 3: Compute PAC operational bounds - MARGINAL (always LOO-corrected)
+    pac_bounds_marginal = compute_pac_operational_bounds_marginal_loo_corrected(
+        ssbc_result_0=ssbc_result_0,
+        ssbc_result_1=ssbc_result_1,
+        labels=labels,
+        probs=probs,
+        test_size=test_size,
+        ci_level=ci_level,
+        pac_level=pac_level_marginal,
+        use_union_bound=use_union_bound,
+        n_jobs=n_jobs,
+        prediction_method=prediction_method,
+        loo_inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
-    # Step 4: Compute PAC operational bounds - PER-CLASS
-    # Each class uses its own delta
-    # Use same approach as marginal: always use LOO-corrected bounds with the same prediction_method
-    if use_loo_correction:
-        # Use LOO-corrected bounds for per-class (same as marginal)
-        # Now supports all methods including "all" for method comparison
-        pac_bounds_class_0 = compute_pac_operational_bounds_perclass_loo_corrected(
-            ssbc_result_0=ssbc_result_0,
-            ssbc_result_1=ssbc_result_1,
-            labels=labels,
-            probs=probs,
-            class_label=0,
-            test_size=test_size,
-            ci_level=ci_level,
-            pac_level=pac_level_0,
-            use_union_bound=use_union_bound,
-            n_jobs=n_jobs,
-            prediction_method=prediction_method,  # Use same method as marginal
-            loo_inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
+    # Step 4: Compute PAC operational bounds - PER-CLASS (always LOO-corrected)
+    pac_bounds_class_0 = compute_pac_operational_bounds_perclass_loo_corrected(
+        ssbc_result_0=ssbc_result_0,
+        ssbc_result_1=ssbc_result_1,
+        labels=labels,
+        probs=probs,
+        class_label=0,
+        test_size=test_size,
+        ci_level=ci_level,
+        pac_level=pac_level_0,
+        use_union_bound=use_union_bound,
+        n_jobs=n_jobs,
+        prediction_method=prediction_method,
+        loo_inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
-        pac_bounds_class_1 = compute_pac_operational_bounds_perclass_loo_corrected(
-            ssbc_result_0=ssbc_result_0,
-            ssbc_result_1=ssbc_result_1,
-            labels=labels,
-            probs=probs,
-            class_label=1,
-            test_size=test_size,
-            ci_level=ci_level,
-            pac_level=pac_level_1,
-            use_union_bound=use_union_bound,
-            n_jobs=n_jobs,
-            prediction_method=prediction_method,  # Use same method as marginal
-            loo_inflation_factor=loo_inflation_factor,
-            verbose=verbose,
-        )
-    else:
-        # No LOO correction - use standard bounds
-        perclass_prediction_method = prediction_method
-
-        pac_bounds_class_0 = compute_pac_operational_bounds_perclass(
-            ssbc_result_0=ssbc_result_0,
-            ssbc_result_1=ssbc_result_1,
-            labels=labels,
-            probs=probs,
-            class_label=0,
-            test_size=test_size,
-            ci_level=ci_level,
-            pac_level=pac_level_0,
-            use_union_bound=use_union_bound,
-            n_jobs=n_jobs,
-            prediction_method=perclass_prediction_method,
-            loo_inflation_factor=loo_inflation_factor,
-        )
-
-        pac_bounds_class_1 = compute_pac_operational_bounds_perclass(
-            ssbc_result_0=ssbc_result_0,
-            ssbc_result_1=ssbc_result_1,
-            labels=labels,
-            probs=probs,
-            class_label=1,
-            test_size=test_size,
-            ci_level=ci_level,
-            pac_level=pac_level_1,
-            use_union_bound=use_union_bound,
-            n_jobs=n_jobs,
-            prediction_method=perclass_prediction_method,
-            loo_inflation_factor=loo_inflation_factor,
-        )
+    pac_bounds_class_1 = compute_pac_operational_bounds_perclass_loo_corrected(
+        ssbc_result_0=ssbc_result_0,
+        ssbc_result_1=ssbc_result_1,
+        labels=labels,
+        probs=probs,
+        class_label=1,
+        test_size=test_size,
+        ci_level=ci_level,
+        pac_level=pac_level_1,
+        use_union_bound=use_union_bound,
+        n_jobs=n_jobs,
+        prediction_method=prediction_method,
+        loo_inflation_factor=loo_inflation_factor,
+        verbose=verbose,
+    )
 
     # Build comprehensive report dict (common to all paths)
     # Build cleaned report with only essential information
