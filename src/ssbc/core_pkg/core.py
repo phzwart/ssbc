@@ -4,10 +4,15 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import numpy as np
 from scipy.stats import beta as beta_dist
 from scipy.stats import betabinom, norm
 
+from ssbc._logging import get_logger
+
 __all__ = ["SSBCResult", "ssbc_correct"]
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -58,7 +63,9 @@ def ssbc_correct(
     n : int
         Calibration set size (must be >= 1)
     delta : float
-        Risk tolerance / PAC parameter (must be in (0,1))
+        PAC risk tolerance (must be in (0,1)). This is the probability that
+        the coverage guarantee fails. For example, delta=0.10 means we want
+        a 90% PAC confidence (1-delta) that coverage ≥ target.
     mode : {"beta", "beta-binomial"}, default="beta"
         "beta" for infinite test window
         "beta-binomial" for finite test window (defaults to m=n)
@@ -89,15 +96,42 @@ def ssbc_correct(
     fails to find a solution, it performs adaptive outward expansion
     (downward then upward) with O(n) worst-case complexity.
     """
-    # Input validation
+    # Input validation with detailed error messages
+    if not isinstance(alpha_target, int | float):
+        raise TypeError(f"alpha_target must be numeric, got {type(alpha_target).__name__}")
     if not (0.0 < alpha_target < 1.0):
-        raise ValueError("alpha_target must be in (0,1).")
-    if n < 1:
-        raise ValueError("n must be >= 1.")
+        raise ValueError(
+            f"alpha_target must be in (0,1), got {alpha_target}. "
+            "This represents the target miscoverage rate (e.g., 0.10 for 90% coverage)."
+        )
+    # Accept both Python int and numpy integer types
+    if not isinstance(n, int | np.integer) or n < 1:
+        raise ValueError(
+            f"n must be a positive integer >= 1, got {n} (type: {type(n).__name__}). This is the calibration set size."
+        )
+    # Convert to Python int for consistency
+    n = int(n)
+
+    # Require minimum calibration size for reliable results
+    MIN_REQUIRED_N = 10
+    if n < MIN_REQUIRED_N:
+        raise ValueError(
+            f"Calibration set size n={n} is too small (required: n >= {MIN_REQUIRED_N}). "
+            "SSBC requires at least 10 calibration samples for reliable PAC guarantees. "
+            "Please collect more calibration data."
+        )
+
+    if not isinstance(delta, int | float):
+        raise TypeError(f"delta must be numeric, got {type(delta).__name__}")
     if not (0.0 < delta < 1.0):
-        raise ValueError("delta must be in (0,1).")
+        raise ValueError(
+            f"delta must be in (0,1), got {delta}. This is the PAC risk tolerance (e.g., 0.10 for 90% PAC confidence)."
+        )
     if mode not in ("beta", "beta-binomial"):
-        raise ValueError("mode must be 'beta' or 'beta-binomial'.")
+        raise ValueError(
+            f"mode must be 'beta' or 'beta-binomial', got {mode!r}. "
+            "'beta' is for infinite test window, 'beta-binomial' for finite test window."
+        )
 
     # Maximum u to search (α' must be ≤ α_target)
     u_max = min(n, math.floor(alpha_target * (n + 1)))

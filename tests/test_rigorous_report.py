@@ -226,9 +226,10 @@ class TestEdgeCases:
     """Test edge cases."""
 
     def test_small_sample_size(self):
-        """Test with very small sample size."""
+        """Test with small sample size (but ensuring each class has >= 10 samples)."""
         sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
-        labels, probs = sim.generate(20)
+        # Generate enough samples to ensure each class has at least 10 after split
+        labels, probs = sim.generate(50)
 
         # Should not crash
         report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
@@ -242,7 +243,9 @@ class TestEdgeCases:
         sim = BinaryClassifierSimulator(
             p_class1=0.05, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42
         )  # 5% class 1
-        labels, probs = sim.generate(100)
+        # Generate enough samples to ensure minority class has at least 10 samples
+        # With p_class1=0.05, need ~200 samples to reliably get 10+ class 1 samples
+        labels, probs = sim.generate(250)
 
         report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 

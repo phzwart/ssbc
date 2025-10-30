@@ -4,16 +4,22 @@ This module provides a single comprehensive report that properly accounts for
 coverage volatility across all operational metrics.
 """
 
+from datetime import datetime
 from typing import Any, cast
 
 import numpy as np
+import scipy
 
+from ssbc import __version__
+from ssbc._logging import get_logger
 from ssbc.calibration import mondrian_conformal_calibrate, split_by_class
 from ssbc.core_pkg import ssbc_correct
 from ssbc.metrics import (
     compute_pac_operational_bounds_marginal_loo_corrected,
     compute_pac_operational_bounds_perclass_loo_corrected,
 )
+
+logger = get_logger(__name__)
 
 
 def generate_rigorous_pac_report(
@@ -133,16 +139,85 @@ def generate_rigorous_pac_report(
     # Done! All bounds account for coverage volatility.
     ```
     """
+    # Comprehensive input validation
+    logger.info("Starting rigorous PAC report generation")
+
+    # Validate labels
+    if not isinstance(labels, np.ndarray):
+        raise TypeError(f"labels must be a numpy array, got {type(labels).__name__}")
+    if len(labels) < 2:
+        raise ValueError(f"Need at least 2 calibration samples, got {len(labels)}")
+    if labels.dtype.kind not in ("i", "u"):
+        raise ValueError(f"labels must be integer array, got dtype {labels.dtype}")
+    unique_labels = np.unique(labels)
+    if not np.all(np.isin(unique_labels, [0, 1])):
+        raise ValueError(
+            f"labels must contain only 0 and 1, found {unique_labels.tolist()}. "
+            "This function is for binary classification only."
+        )
+
+    # Validate probs
+    if not isinstance(probs, np.ndarray):
+        raise TypeError(f"probs must be a numpy array, got {type(probs).__name__}")
+    if probs.shape != (len(labels), 2):
+        raise ValueError(
+            f"probs must have shape ({len(labels)}, 2), got {probs.shape}. "
+            "Each row should contain [P(class=0), P(class=1)]."
+        )
+    if np.any((probs < 0) | (probs > 1)):
+        invalid_mask = (probs < 0) | (probs > 1)
+        invalid_count = np.sum(invalid_mask)
+        raise ValueError(
+            f"All probabilities must be in [0,1], found {invalid_count} invalid values. "
+            f"Invalid range: [{np.min(probs[invalid_mask]):.4f}, {np.max(probs[invalid_mask]):.4f}]"
+        )
+    if np.any(np.isnan(probs)):
+        nan_count = np.sum(np.isnan(probs))
+        raise ValueError(f"probs must not contain NaN values, found {nan_count} NaNs")
+    if np.any(np.isinf(probs)):
+        inf_count = np.sum(np.isinf(probs))
+        raise ValueError(f"probs must not contain Inf values, found {inf_count} Infs")
+
+    # Validate probability sum (should be approximately 1, allow small numerical errors)
+    prob_sums = np.sum(probs, axis=1)
+    if np.any(np.abs(prob_sums - 1.0) > 0.01):
+        bad_indices = np.where(np.abs(prob_sums - 1.0) > 0.01)[0]
+        raise ValueError(
+            f"Probabilities must sum to 1.0 for each sample, "
+            f"found {len(bad_indices)} samples with sums outside [0.99, 1.01]. "
+            f"Example sums: {prob_sums[bad_indices[:5]].tolist()}"
+        )
+
     # Handle scalar inputs - convert to dict format
     if isinstance(alpha_target, int | float):
+        if not (0.0 < float(alpha_target) < 1.0):
+            raise ValueError(f"alpha_target must be in (0,1), got {alpha_target}")
         alpha_dict: dict[int, float] = {0: float(alpha_target), 1: float(alpha_target)}
     else:
         alpha_dict = cast(dict[int, float], alpha_target)
+        if not all(0.0 < v < 1.0 for v in alpha_dict.values()):
+            raise ValueError(f"All alpha_target values must be in (0,1), got {alpha_dict}")
 
     if isinstance(delta, int | float):
+        if not (0.0 < float(delta) < 1.0):
+            raise ValueError(f"delta must be in (0,1), got {delta}")
         delta_dict: dict[int, float] = {0: float(delta), 1: float(delta)}
     else:
         delta_dict = cast(dict[int, float], delta)
+        if not all(0.0 < v < 1.0 for v in delta_dict.values()):
+            raise ValueError(f"All delta values must be in (0,1), got {delta_dict}")
+
+    # Validate other parameters
+    if test_size is not None and test_size < 1:
+        raise ValueError(f"test_size must be >= 1, got {test_size}")
+    if not (0.0 < ci_level < 1.0):
+        raise ValueError(f"ci_level must be in (0,1), got {ci_level}")
+    if not isinstance(use_union_bound, bool):
+        raise TypeError(f"use_union_bound must be bool, got {type(use_union_bound).__name__}")
+    if not isinstance(verbose, bool):
+        raise TypeError(f"verbose must be bool, got {type(verbose).__name__}")
+
+    logger.debug(f"Input validation passed: n={len(labels)}, alpha_target={alpha_dict}, delta={delta_dict}")
 
     # Split by class
     class_data = split_by_class(labels, probs)
@@ -241,7 +316,21 @@ def generate_rigorous_pac_report(
             "pac_level_1": pac_level_1,
             "use_union_bound": use_union_bound,
         },
+        # Metadata for reproducibility
+        "metadata": {
+            "ssbc_version": __version__,
+            "numpy_version": np.__version__,
+            "scipy_version": scipy.__version__,
+            "timestamp": datetime.now().isoformat(),
+            "n_calibration": n_total,
+            "n_class_0": n_0,
+            "n_class_1": n_1,
+            "prediction_method": prediction_method,
+            "use_loo_correction": use_loo_correction,
+            "loo_inflation_factor": loo_inflation_factor,
+        },
     }
+    logger.info(f"Report generated successfully: n={n_total}, n_0={n_0}, n_1={n_1}")
 
     # Print comprehensive report if verbose
     if verbose:

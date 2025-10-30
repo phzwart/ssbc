@@ -825,13 +825,14 @@ class TestComputePACOperationalMetrics:
             compute_pac_operational_metrics(y_cal=labels, probs_cal=probs, alpha=0.1, delta=0.1, class_label=2)
 
     def test_small_sample_size(self):
-        """Test with small calibration set."""
-        labels = np.array([1, 1, 1, 1, 1])
-        probs = np.array([0.8, 0.9, 0.7, 0.85, 0.75])
+        """Test with minimum required calibration set (n >= 10)."""
+        labels = np.array([1] * 10)
+        probs = np.array([[0.2, 0.8]] * 10)
 
         result = compute_pac_operational_metrics(
             y_cal=labels, probs_cal=probs, alpha=0.2, delta=0.2, ci_level=0.90, class_label=1
         )
 
-        assert result["n_calibration"] == 5
-        assert len(result["alpha_grid"]) == 5
+        assert result["n_calibration"] == 10
+        # alpha_grid length depends on n_calibration
+        assert len(result["alpha_grid"]) == 10

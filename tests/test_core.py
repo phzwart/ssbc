@@ -44,8 +44,8 @@ class TestSSBCCorrect:
         assert 1 <= result.u_star <= result.n
         assert 0 <= result.satisfied_mass <= 1
 
-    def test_small_calibration_set(self):
-        """Test with small calibration set."""
+    def test_minimum_calibration_set(self):
+        """Test with minimum required calibration set."""
         result = ssbc_correct(alpha_target=0.10, n=10, delta=0.10, mode="beta")
 
         # With small n, correction should be more conservative
@@ -150,7 +150,7 @@ class TestSSBCCorrect:
 
     def test_invalid_n(self):
         """Test with n < 1."""
-        with pytest.raises(ValueError, match="n must be >= 1"):
+        with pytest.raises(ValueError, match="n must be a positive integer >= 1"):
             ssbc_correct(alpha_target=0.10, n=0, delta=0.10)
 
     def test_invalid_delta_low(self):
@@ -192,14 +192,10 @@ class TestSSBCCorrect:
         assert result1.u_star == result2.u_star
         assert result1.satisfied_mass == result2.satisfied_mass
 
-    def test_edge_case_very_small_n(self):
-        """Test with n=1."""
-        result = ssbc_correct(alpha_target=0.10, n=1, delta=0.10)
-
-        # For n=1, alpha_target=0.1 < 1/(n+1)=0.5, so we're in the trivial regime
-        # where no positive u is allowed (u_max=0)
-        assert result.u_star == 0
-        assert result.alpha_corrected == 0.0  # u_star/(n+1) = 0/2 = 0
+    def test_edge_case_too_small_n(self):
+        """Test that n < 10 raises ValueError."""
+        with pytest.raises(ValueError, match="Calibration set size n=.*is too small"):
+            ssbc_correct(alpha_target=0.10, n=1, delta=0.10)
 
     def test_details_structure(self):
         """Test that details dict has expected keys."""
