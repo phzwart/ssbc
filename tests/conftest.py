@@ -4,8 +4,9 @@ Sets a non-interactive matplotlib backend and disables plt.show() calls
 to avoid warnings and GUI requirements in CI environments.
 """
 
-import matplotlib
 import warnings
+
+import matplotlib
 
 
 def pytest_configure() -> None:
@@ -18,7 +19,7 @@ def pytest_configure() -> None:
         category=UserWarning,
     )
     try:
-        import matplotlib.pyplot as plt  # noqa: WPS433
+        import matplotlib.pyplot as plt
 
         # Disable plt.show() in tests
         plt.show = lambda *args, **kwargs: None  # type: ignore[assignment]
