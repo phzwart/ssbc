@@ -88,14 +88,6 @@ report = generate_rigorous_pac_report(
     delta=0.10,            # 90% PAC confidence
     test_size=1000,        # Expected deployment size
     use_union_bound=True,  # Simultaneous guarantees
-
-    # Optional uncertainty analyses
-    run_bootstrap=True,          # Recalibration uncertainty
-    n_bootstrap=1000,
-    simulator=sim,
-
-    run_cross_conformal=True,    # Finite-sample diagnostics
-    n_folds=10,
 )
 
 # Access results
@@ -108,8 +100,7 @@ print(f"Expected: {pac_bounds['expected_singleton_rate']:.3f}")
 - ✅ PAC coverage guarantees (SSBC-corrected thresholds)
 - ✅ Rigorous operational bounds (singleton, doublet, abstention, error rates)
 - ✅ Per-class and marginal statistics
-- ✅ Optional: Bootstrap uncertainty intervals
-- ✅ Optional: Cross-conformal validation diagnostics
+- ✅ Class-conditional error metrics (P(error | singleton & class))
 
 ### Core SSBC Algorithm
 
@@ -173,8 +164,8 @@ print(f"Std dev: {results['marginal']['singleton']['std']:.3f}")
 - ✅ **Small-Sample Correction**: PAC-valid conformal prediction for small calibration sets
 - ✅ **Mondrian Conformal Prediction**: Per-class calibration for handling class imbalance
 - ✅ **PAC Operational Bounds**: Rigorous bounds on deployment rates (LOO-CV + Clopper-Pearson)
-- ✅ **Bootstrap Uncertainty**: Recalibration variability analysis
-- ✅ **Cross-Conformal Validation**: Finite-sample diagnostics via K-fold
+- ✅ **LOO-CV Uncertainty Correction**: Small-sample uncertainty quantification
+- ✅ **Method Comparison**: Analytical, exact, and Hoeffding bounds comparison
 - ✅ **Empirical Validation**: Verify theoretical guarantees in practice
 - ✅ **Comprehensive Statistics**: Detailed reporting with exact confidence intervals
 - ✅ **Hyperparameter Tuning**: Interactive parallel coordinates visualization

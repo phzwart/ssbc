@@ -1,9 +1,9 @@
-"""Complete uncertainty quantification workflow - all methods integrated.
+"""Complete rigorous PAC report workflow.
 
-Demonstrates the COMPLETE rigorous_pac_report with ALL uncertainty analyses:
-1. PAC Bounds (LOO-CV + CP) - Always included
-2. Bootstrap - Optional, requires simulator
-3. Cross-Conformal - Optional, no simulator needed
+Demonstrates the comprehensive rigorous_pac_report with:
+1. PAC Bounds (LOO-CV + Prediction Bounds) - Always included
+2. Method comparison (analytical, exact, Hoeffding) - Optional
+3. Class-conditional error metrics - Always included for marginal scope
 
 All from a single function call!
 """
@@ -19,12 +19,12 @@ sim = BinaryClassifierSimulator(p_class1=0.20, beta_params_class0=(1, 7), beta_p
 labels, probs = sim.generate(n_samples=100)
 
 print("=" * 80)
-print("COMPLETE UNCERTAINTY QUANTIFICATION - SINGLE FUNCTION CALL")
+print("RIGOROUS PAC REPORT - COMPLETE WORKFLOW")
 print("=" * 80)
 print(f"\nCalibration: {len(labels)} samples ({np.sum(labels == 0)} class 0, {np.sum(labels == 1)} class 1)")
-print("\n✓ Generating comprehensive report with ALL uncertainty analyses...")
+print("\n✓ Generating comprehensive report with LOO-corrected bounds and method comparison...")
 
-# Generate complete report with ALL analyses
+# Generate complete report with method comparison
 report = generate_rigorous_pac_report(
     labels=labels,
     probs=probs,
@@ -35,13 +35,8 @@ report = generate_rigorous_pac_report(
     use_union_bound=True,
     n_jobs=-1,
     verbose=True,
-    # Optional: Bootstrap analysis
-    run_bootstrap=True,
-    n_bootstrap=1000,
-    simulator=sim,
-    # Optional: Cross-conformal validation
-    run_cross_conformal=True,
-    n_folds=10,
+    prediction_method="all",  # Compare analytical, exact, and Hoeffding methods
+    use_loo_correction=True,
 )
 
 print("\n" + "=" * 80)
@@ -50,10 +45,7 @@ print("=" * 80)
 
 # Extract results for comparison
 pac_class_0 = report["pac_bounds_class_0"]
-bootstrap_class_0 = report["bootstrap_results"]["class_0"]["singleton"] if report["bootstrap_results"] else None
-cross_conf_class_0 = (
-    report["cross_conformal_results"]["class_0"]["singleton"] if report["cross_conformal_results"] else None
-)
+pac_marginal = report["pac_bounds_marginal"]
 
 print("\nClass 0 Singleton Rate Summary:")
 print("-" * 80)
@@ -63,17 +55,29 @@ print(f"\n1. PAC Bounds (LOO-CV + CP): [{pac_bounds[0]:.3f}, {pac_bounds[1]:.3f}
 print(f"   Expected: {pac_class_0['expected_singleton_rate']:.3f}")
 print("   → Rigorous deployment guarantees")
 
-if bootstrap_class_0:
-    bs_q = bootstrap_class_0["quantiles"]
-    print(f"\n2. Bootstrap:                [{bs_q['q05']:.3f}, {bs_q['q95']:.3f}]")
-    print(f"   Mean: {bootstrap_class_0['mean']:.3f} ± {bootstrap_class_0['std']:.3f}")
-    print("   → Recalibration uncertainty")
+# Show method comparison if available
+if "loo_diagnostics" in pac_class_0:
+    singleton_diag = pac_class_0["loo_diagnostics"].get("singleton", {})
+    if "comparison" in singleton_diag:
+        print("\n2. Method Comparison:")
+        comp = singleton_diag["comparison"]
+        selected = singleton_diag.get("selected_method", "unknown")
+        for method, lower, upper, width in zip(
+            comp["method"], comp["lower"], comp["upper"], comp["width"], strict=False
+        ):
+            marker = " ← Selected" if method.lower() in selected.lower() else ""
+            print(f"   {method:15s}: [{lower:.3f}, {upper:.3f}] (width: {width:.3f}){marker}")
 
-if cross_conf_class_0:
-    cc_q = cross_conf_class_0["quantiles"]
-    print(f"\n3. Cross-Conformal:          [{cc_q['q05']:.3f}, {cc_q['q95']:.3f}]")
-    print(f"   Mean: {cross_conf_class_0['mean']:.3f} ± {cross_conf_class_0['std']:.3f}")
-    print("   → Finite-sample diagnostics")
+# Show class-conditional error metrics (marginal scope)
+print("\n" + "=" * 80)
+print("CLASS-CONDITIONAL ERROR METRICS (Marginal Scope)")
+print("=" * 80)
+
+if "singleton_error_rate_cond_class0_bounds" in pac_marginal:
+    cond_c0 = pac_marginal["singleton_error_rate_cond_class0_bounds"]
+    cond_c1 = pac_marginal["singleton_error_rate_cond_class1_bounds"]
+    print(f"\nP(error | singleton & class=0): [{cond_c0[0]:.3f}, {cond_c0[1]:.3f}]")
+    print(f"P(error | singleton & class=1): [{cond_c1[0]:.3f}, {cond_c1[1]:.3f}]")
 
 print("\n" + "=" * 80)
 print("DEPLOYMENT RECOMMENDATION")
@@ -84,26 +88,7 @@ pac_lower, pac_upper = pac_class_0["singleton_rate_bounds"]
 print(f"\n✅ Use PAC bounds for SLA: [{pac_lower:.3f}, {pac_upper:.3f}] (90% guarantee)")
 print(f"   → Monitor: Alert if observed rate < {pac_lower:.3f}")
 
-if cross_conf_class_0 and cross_conf_class_0["std"] > 0.1:
-    print(f"\n⚠️  Cross-conformal std = {cross_conf_class_0['std']:.3f} is high")
-    print("   → Consider collecting more calibration data")
-elif cross_conf_class_0:
-    print(f"\n✓ Cross-conformal std = {cross_conf_class_0['std']:.3f} is acceptable")
-    print("   → Current calibration size is adequate")
-else:
-    print("\n✓ Cross-conformal validation not performed")
-
-if bootstrap_class_0:
-    bs_width = bootstrap_class_0["quantiles"]["q95"] - bootstrap_class_0["quantiles"]["q05"]
-    pac_width = pac_upper - pac_lower
-    if bs_width > pac_width * 1.5:
-        print(f"\n⚠️  Bootstrap range ({bs_width:.3f}) >> PAC range ({pac_width:.3f})")
-        print("   → High sensitivity to recalibration")
-    else:
-        print(f"\n✓ Bootstrap range ({bs_width:.3f}) ≈ PAC range ({pac_width:.3f})")
-        print("   → Low recalibration sensitivity")
-
 print("\n" + "=" * 80)
-print("\n💡 All three methods are now part of the standard rigorous_pac_report!")
-print("   Simply set run_bootstrap=True and/or run_cross_conformal=True")
+print("\n💡 Use prediction_method='all' to compare analytical, exact, and Hoeffding methods")
+print("   All bounds now use LOO-corrected uncertainty quantification")
 print("\n" + "=" * 80)

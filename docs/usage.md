@@ -83,36 +83,36 @@ print(f"Singleton rate: {marginal_bounds['singleton_rate_bounds']}")
 print(f"Expected: {marginal_bounds['expected_singleton_rate']:.3f}")
 ```
 
-### With Optional Uncertainty Analyses
+### LOO-CV Uncertainty Methods
+
+The rigorous report supports multiple methods for small-sample uncertainty quantification:
 
 ```python
-# Add bootstrap and cross-conformal analyses
 report = generate_rigorous_pac_report(
     labels=labels,
     probs=probs,
     alpha_target=0.10,
     delta=0.10,
     test_size=1000,
-
-    # Optional: Bootstrap calibration uncertainty
-    run_bootstrap=True,
-    n_bootstrap=1000,
-    simulator=sim,
-
-    # Optional: Cross-conformal validation
-    run_cross_conformal=True,
-    n_folds=10,
+    prediction_method="all",  # Compare analytical, exact, and Hoeffding methods
+    use_loo_correction=True,
+    loo_inflation_factor=2.0,  # Override default LOO variance inflation
 )
 
-# Access bootstrap results
-if report['bootstrap_results']:
-    bootstrap = report['bootstrap_results']['marginal']['singleton']
-    print(f"Bootstrap [5%, 95%]: [{bootstrap['quantiles']['q05']:.3f}, {bootstrap['quantiles']['q95']:.3f}]")
-
-# Access cross-conformal results
-if report['cross_conformal_results']:
-    cross_conf = report['cross_conformal_results']['marginal']['singleton']
-    print(f"Cross-conformal std: {cross_conf['std']:.3f}")
+# Access method comparison
+marginal = report['pac_bounds_marginal']
+if 'loo_diagnostics' in marginal:
+    singleton_diag = marginal['loo_diagnostics'].get('singleton', {})
+    if 'comparison' in singleton_diag:
+        comparison = singleton_diag['comparison']
+        print("Method comparison:")
+        for method, lower, upper, width in zip(
+            comparison['method'],
+            comparison['lower'],
+            comparison['upper'],
+            comparison['width']
+        ):
+            print(f"  {method}: [{lower:.3f}, {upper:.3f}] (width: {width:.3f})")
 ```
 
 ## Core SSBC Algorithm
@@ -196,55 +196,31 @@ print(f"  Singleton coverage: {optimal['singleton_coverage']:.4f}")
 
 ## Uncertainty Quantification
 
-### Bootstrap Calibration Uncertainty
+### Validation with Class-Conditional Error Metrics
 
-Understand variability from recalibration:
+The validation framework now includes class-conditional singleton error metrics:
 
 ```python
-from ssbc import bootstrap_calibration_uncertainty, plot_bootstrap_distributions
+from ssbc import validate_pac_bounds, validate_prediction_interval_calibration
 
-results = bootstrap_calibration_uncertainty(
-    labels=labels,
-    probs=probs,
+# Single validation
+validation = validate_pac_bounds(report, simulator=sim, test_size=1000, n_trials=10000)
+
+# Access class-conditional metrics (marginal scope only)
+marginal = validation['marginal']
+print(f"Error rate (class 0, normalized): {marginal['singleton_error_class0']['mean']:.3f}")
+print(f"Error rate (class 1, normalized): {marginal['singleton_error_class1']['mean']:.3f}")
+print(f"P(error | singleton & class=0): {marginal['singleton_error_cond_class0']['mean']:.3f}")
+print(f"P(error | singleton & class=1): {marginal['singleton_error_cond_class1']['mean']:.3f}")
+
+# Meta-validation across many calibrations
+results = validate_prediction_interval_calibration(
     simulator=sim,
-    n_bootstrap=1000,
-    test_size=1000,
-    alpha_target=0.10,
-    delta=0.10,
+    n_calibration=100,
+    BigN=500,
+    n_trials=1000,
+    prediction_method="all",
 )
-
-# View results
-marginal = results['marginal']['singleton']
-print(f"Mean: {marginal['mean']:.3f} ± {marginal['std']:.3f}")
-print(f"[5%, 95%]: [{marginal['quantiles']['q05']:.3f}, {marginal['quantiles']['q95']:.3f}]")
-
-# Optional: Plot distributions
-plot_bootstrap_distributions(results, save_path='bootstrap_results.png')
-```
-
-### Cross-Conformal Validation
-
-Diagnose calibration quality via K-fold splits:
-
-```python
-from ssbc import cross_conformal_validation, print_cross_conformal_results
-
-results = cross_conformal_validation(
-    labels=labels,
-    probs=probs,
-    n_folds=10,
-    alpha_target=0.10,
-    delta=0.10,
-    stratify=True,
-)
-
-# Print results
-print_cross_conformal_results(results)
-
-# Check if more calibration data is needed
-singleton_std = results['marginal']['singleton']['std']
-if singleton_std > 0.1:
-    print("⚠️ High variability - consider more calibration data")
 ```
 
 ### Empirical Validation
@@ -376,9 +352,8 @@ class_1_bounds = report['pac_bounds_class_1']    # Class 1 conditional
 cal_result = report['calibration_result']  # Thresholds per class
 pred_stats = report['prediction_stats']    # Prediction statistics
 
-# Optional: Bootstrap/Cross-conformal
-bootstrap = report['bootstrap_results']         # If run_bootstrap=True
-cross_conf = report['cross_conformal_results']  # If run_cross_conformal=True
+# LOO diagnostics and method comparison (if prediction_method="all")
+loo_diagnostics = bounds.get('loo_diagnostics', {})
 
 # Parameters used
 params = report['parameters']
@@ -397,11 +372,21 @@ bounds['doublet_rate_bounds']         # [lower, upper]
 bounds['abstention_rate_bounds']      # [lower, upper]
 bounds['singleton_error_rate_bounds'] # [lower, upper]
 
+# Class-conditional error metrics (marginal bounds only)
+bounds.get('singleton_error_rate_class0_bounds', None)      # [lower, upper]
+bounds.get('singleton_error_rate_class1_bounds', None)      # [lower, upper]
+bounds.get('singleton_error_rate_cond_class0_bounds', None) # [lower, upper]
+bounds.get('singleton_error_rate_cond_class1_bounds', None) # [lower, upper]
+
 # Expected values (from LOO-CV)
 bounds['expected_singleton_rate']
 bounds['expected_doublet_rate']
 bounds['expected_abstention_rate']
 bounds['expected_singleton_error_rate']
+bounds.get('expected_singleton_error_rate_class0', None)
+bounds.get('expected_singleton_error_rate_class1', None)
+bounds.get('expected_singleton_error_rate_cond_class0', None)
+bounds.get('expected_singleton_error_rate_cond_class1', None)
 
 # Metadata
 bounds['n_grid_points']  # Number of grid points evaluated
@@ -437,24 +422,14 @@ achieves coverage ≥ 1-α_target on future data.
 - Accounts for estimation uncertainty from finite calibration
 - Valid for any future test set from same distribution
 
-### Bootstrap vs Cross-Conformal vs PAC Bounds
+### PAC Bounds (LOO-CV + Prediction Bounds)
 
-**PAC Bounds (LOO-CV + CP):**
+**PAC Bounds (LOO-CV + Clopper-Pearson):**
 - Question: "Given THIS calibration, what rates on future test sets?"
-- Accounts for: Estimation uncertainty
+- Accounts for: Estimation uncertainty and test set sampling variability
+- Methods: Analytical (recommended n≥40), Exact (n=20-40), Hoeffding (ultra-conservative)
 - Use for: Deployment guarantees, SLA contracts
-
-**Bootstrap:**
-- Question: "If I recalibrate on similar data, how do rates vary?"
-- Accounts for: Recalibration variability
-- Use for: Understanding sensitivity to calibration choice
-
-**Cross-Conformal:**
-- Question: "How stable are rates across calibration subsets?"
-- Accounts for: Finite-sample effects
-- Use for: Diagnosing if more calibration data needed
-
-All three are complementary and answer different questions!
+- Validates: Operational rates (singleton, doublet, abstention, error rates) and class-conditional error metrics
 
 ### Marginal vs Per-Class
 

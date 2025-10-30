@@ -1,5 +1,32 @@
 # History
 
+## 1.3.3 (2025-01-30)
+
+### Features
+- Added validation for class-conditional singleton error metrics
+  - `singleton_error_class0`: Errors among class-0 singletons (normalized by total)
+  - `singleton_error_class1`: Errors among class-1 singletons (normalized by total)
+  - `singleton_error_cond_class0`: P(error | singleton & class=0)
+  - `singleton_error_cond_class1`: P(error | singleton & class=1)
+- Extended `validate_pac_bounds` to compute and validate these metrics
+- Updated `validate_prediction_interval_calibration` to aggregate new metrics
+- Fixed `print_calibration_validation_results` to display marginal special cases
+- Extended `get_calibration_bounds_dataframe` and `plot_validation_bounds` to support new metrics
+
+### Technical Improvements
+- Consistent LOO inflation factor usage across all bound methods (analytical, exact, beta-binomial)
+- Beta-binomial method now uses floored effective counts for integer conversion
+- All operational bounds now always use LOO-corrected paths
+- Comprehensive method comparison diagnostics available for all metrics
+
+## 1.3.2 (2025-01-30)
+
+### Documentation
+- Added comprehensive mathematical documentation (`docs/rigorous_report_math.md`)
+  - Detailed flowchart of rigorous report generation
+  - Step-by-step mathematical derivation with implementation pointers
+  - Ready for manuscript Methods section
+
 ## 1.3.1 (2025-10-30)
 
 ### Performance

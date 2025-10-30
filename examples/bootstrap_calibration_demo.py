@@ -1,12 +1,15 @@
 """STANDALONE Bootstrap analysis demo with plotting and detailed analysis.
 
 This is a comprehensive standalone example showing bootstrap calibration uncertainty
-with visualizations. For integration into main workflow, use:
-- bootstrap_calibration_uncertainty() from src/ssbc/bootstrap.py
-- generate_rigorous_pac_report(run_bootstrap=True) for integrated analysis
+with visualizations. Use bootstrap_calibration_uncertainty() from ssbc.calibration
+for standalone bootstrap analysis.
 
 This models: "If I recalibrate many times on similar datasets, how do rates vary?"
 Different from LOO-CV which models: "Given ONE fixed calibration, how do test sets vary?"
+
+Note: Bootstrap is available as a standalone function, not integrated into
+generate_rigorous_pac_report(). The rigorous report focuses on LOO-CV based
+PAC bounds with prediction interval uncertainty quantification.
 """
 
 import matplotlib.pyplot as plt
