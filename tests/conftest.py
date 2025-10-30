@@ -5,11 +5,18 @@ to avoid warnings and GUI requirements in CI environments.
 """
 
 import matplotlib
+import warnings
 
 
 def pytest_configure() -> None:
     # Use non-interactive backend
     matplotlib.use("Agg", force=True)
+    # Silence expected small-sample warnings from LOO paths in tests
+    warnings.filterwarnings(
+        "ignore",
+        message=r"^n_cal=\d+ is very small\. Consider using Method 2 \(exact binomial\) or Method 3 \(Hoeffding\)",
+        category=UserWarning,
+    )
     try:
         import matplotlib.pyplot as plt  # noqa: WPS433
 

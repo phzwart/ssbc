@@ -618,14 +618,21 @@ def compute_robust_prediction_bounds(
                     f"{estimated_inflation_factor:.3f}) for comparison..."
                 )
 
-        # Compute all three methods
-        L1, U1, diag1 = compute_loo_corrected_bounds_analytical(
-            loo_predictions, n_test, alpha, inflation_factor=inflation_factor
-        )
-        L2, U2, diag2 = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha)
-        L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(
-            loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose
-        )
+        # Compute all three methods while suppressing small-n warnings
+        # specific to analytical method for method comparison runs
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"^n_cal=\\d+ is very small",
+                category=UserWarning,
+            )
+            L1, U1, diag1 = compute_loo_corrected_bounds_analytical(
+                loo_predictions, n_test, alpha, inflation_factor=inflation_factor
+            )
+            L2, U2, diag2 = compute_loo_corrected_bounds_exact_binomial(k_loo, n_cal, n_test, alpha)
+            L3, U3, diag3 = compute_loo_corrected_bounds_hoeffding(
+                loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose
+            )
 
         # Choose analytical as primary, but flag if too optimistic
         L, U = L1, U1
