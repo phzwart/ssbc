@@ -17,5 +17,3 @@ def pytest_configure() -> None:
         plt.show = lambda *args, **kwargs: None  # type: ignore[assignment]
     except Exception:  # pragma: no cover - best effort only
         pass
-
-
