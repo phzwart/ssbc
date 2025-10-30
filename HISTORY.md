@@ -1,5 +1,13 @@
 # History
 
+## 1.3.0 (2025-10-30)
+
+### Major Changes
+- Bumped project version to 1.3.0 for the latest round of improvements and fixes.
+
+### Notes
+- Documentation `release` updated to 1.3.0 to match package metadata.
+
 ## 1.2.7 (2025-01-29)
 
 ### Fixed
