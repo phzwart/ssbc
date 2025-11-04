@@ -555,6 +555,18 @@ def _print_rigorous_report(report: dict) -> None:
             pac["expected_singleton_error_rate"],
             error_diag,
         )
+        
+        # Singleton correct rate: P(correct | singleton, class) = 1 - P(error | singleton, class)
+        if "singleton_correct_rate_bounds" in pac:
+            sc_lower, sc_upper = pac["singleton_correct_rate_bounds"]
+            sc_expected = pac.get("expected_singleton_correct_rate", 1.0 - pac["expected_singleton_error_rate"])
+            # Use same diagnostics as error rate (they're complementary)
+            _print_rate_with_methods(
+                f"Conditional correct rate given singleton (P(correct | singleton, class = {class_label}))",
+                (sc_lower, sc_upper),
+                sc_expected,
+                error_diag,
+            )
 
         # Note about per-class rates (all have random denominators)
         print("\n     Stability note:")

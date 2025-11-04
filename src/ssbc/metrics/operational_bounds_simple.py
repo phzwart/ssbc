@@ -1118,6 +1118,35 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         error_lower = 0.0
         error_upper = 1.0
         error_report = {"selected_method": "no_singletons", "diagnostics": {}}
+    
+    # For singleton_correct_rate: This is a CONDITIONAL rate (W_i^{cor|0} = 1{E_i=0} given Y_i=0, S_i=singleton)
+    # According to the mathematical framework:
+    # - Bernoulli event: W_i^{cor|0} = 1{E_i=0} (only defined when Y_i=0, S_i=singleton)
+    #   This is the complement of W_i^{err|0} = 1{E_i=1} on the same conditional subpopulation
+    # - k_cal = number of correct predictions in conditional subpopulation (singletons without errors)
+    # - n_cal = size of conditional subpopulation (singletons) - same as error rate
+    # - n_test = estimated future conditional test size (estimated future singletons) - same as error rate
+    #
+    # We compute correct rate bounds directly from the conditional subpopulation using compute_robust_prediction_bounds,
+    # NOT by inverting error bounds. This ensures mathematical consistency with the Bernoulli event model.
+    # The correct rate is computed from the complementary Bernoulli event on the same subpopulation.
+    if n_singletons > 0 and len(error_loo_preds_cond) > 0:
+        # Correct rate indicator: 1 if singleton is correct, 0 if error
+        # This is the complement of error_loo_preds_cond on the same conditional subpopulation
+        correct_loo_preds_cond = 1 - error_loo_preds_cond
+        correct_lower, correct_upper, correct_report = compute_robust_prediction_bounds(
+            correct_loo_preds_cond,
+            expected_n_singletons_test,
+            1 - adjusted_ci_level,
+            method=prediction_method,
+            inflation_factor=loo_inflation_factor,
+            verbose=False,
+        )
+    else:
+        # No singletons in calibration - cannot compute bounds
+        correct_lower = 0.0
+        correct_upper = 1.0
+        correct_report = {"selected_method": "no_singletons", "diagnostics": {}}
 
     # Mathematical Framework:
     # All bounds are computed from single well-defined Bernoulli events.
@@ -1146,6 +1175,14 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
     # as this would require combining two intervals and is not mathematically valid.
     # Conditional rates are computed directly using the conditional subpopulation.
 
+    # Expected rates from LOO predictions
+    expected_singleton_error_rate = (
+        float(np.mean(error_loo_preds_cond)) if n_singletons > 0 and len(error_loo_preds_cond) > 0 else 0.0
+    )
+    expected_singleton_correct_rate = (
+        float(np.mean(correct_loo_preds_cond)) if n_singletons > 0 and len(correct_loo_preds_cond) > 0 else 1.0
+    )
+    
     # Build result dict
     result = {
         # Joint per-class rates (full sample, fixed denominator)
@@ -1159,9 +1196,14 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
         "expected_abstention_rate": float(np.mean(abstention_loo_preds)) if n_class_cal > 0 else 0.0,
         # For singleton_error, compute conditional rate (errors / singletons), not joint rate
         # error_loo_preds_cond is already filtered to singleton samples only
-        "expected_singleton_error_rate": (
-            float(np.mean(error_loo_preds_cond)) if n_singletons > 0 and len(error_loo_preds_cond) > 0 else 0.0
-        ),
+        "expected_singleton_error_rate": expected_singleton_error_rate,
+        # Singleton correct rate: P(correct | singleton, class) computed directly from conditional subpopulation
+        # Bernoulli event: W_i^{cor|0} = 1{E_i=0} given Y_i=0, S_i=singleton
+        # k_cal = number of correct predictions in conditional subpopulation (singletons without errors)
+        # n_cal = size of conditional subpopulation (singletons)
+        # n_test = estimated future conditional test size (estimated future singletons)
+        "singleton_correct_rate_bounds": [correct_lower, correct_upper],
+        "expected_singleton_correct_rate": expected_singleton_correct_rate,
         # Class rate information (for reference)
         "class_rate_calibration": class_rate_cal,
         "n_grid_points": 1,
@@ -1176,6 +1218,7 @@ def compute_pac_operational_bounds_perclass_loo_corrected(
             "doublet": doublet_report,
             "abstention": abstention_report,
             "singleton_error": error_report,
+            "singleton_correct": correct_report,
         },
     }
 
