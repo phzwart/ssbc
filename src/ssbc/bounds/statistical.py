@@ -487,11 +487,11 @@ def prediction_bounds(
     applying fixed thresholds to future test sets.
     """
     if method == "simple":
-        lower = prediction_bounds_lower(k_cal, n_cal, n_test, confidence)
-        upper = prediction_bounds_upper(k_cal, n_cal, n_test, confidence)
+        raw_lower = prediction_bounds_lower(k_cal, n_cal, n_test, confidence)
+        raw_upper = prediction_bounds_upper(k_cal, n_cal, n_test, confidence)
         # Ensure monotonicity (clip in case of numerical noise)
-        lower = min(lower, upper)
-        upper = max(lower, upper)
+        lower = min(raw_lower, raw_upper)
+        upper = max(raw_lower, raw_upper)
         return (lower, upper)
     elif method == "beta_binomial":
         return prediction_bounds_beta_binomial(k_cal, n_cal, n_test, confidence)
@@ -538,6 +538,7 @@ def ensure_ci(d: dict[str, Any] | Any, count: int, total: int, confidence: float
 
         if "ci_95" in d and isinstance(d["ci_95"], tuple | list) and len(d["ci_95"]) == 2:
             lo, hi = map(float, d["ci_95"])
+
         else:
             lo = float(d.get("lower", np.nan))
             hi = float(d.get("upper", np.nan))

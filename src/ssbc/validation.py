@@ -74,9 +74,17 @@ def _validate_single_trial(
     class_1 = eval_results["class_1"]
     n_test = eval_results["n_test"]
 
-    # Additional marginal metrics involving class-conditional singleton errors
+    # Additional marginal metrics involving class-conditional rates (normalized by total)
+    # - Singleton, doublet, abstention rates for class 0 and class 1 (normalized by total)
     # - Normalized-by-total error rate for class-0 and class-1 singletons
     # - Conditional error given singleton & class=c
+    # Compute rates normalized by total test set size (not by class size)
+    singleton_rate_class0 = class_0["n_singletons"] / n_test if n_test > 0 else 0.0
+    singleton_rate_class1 = class_1["n_singletons"] / n_test if n_test > 0 else 0.0
+    doublet_rate_class0 = class_0["n_doublets"] / n_test if n_test > 0 else 0.0
+    doublet_rate_class1 = class_1["n_doublets"] / n_test if n_test > 0 else 0.0
+    abstention_rate_class0 = class_0["n_abstentions"] / n_test if n_test > 0 else 0.0
+    abstention_rate_class1 = class_1["n_abstentions"] / n_test if n_test > 0 else 0.0
     err_c0_norm = (
         (class_0["n_singletons"] * class_0["singleton_error_rate"]) / n_test if class_0["n_singletons"] > 0 else 0.0
     )
@@ -92,7 +100,14 @@ def _validate_single_trial(
             "doublet": marginal["doublet_rate"],
             "abstention": marginal["abstention_rate"],
             "singleton_error": marginal["singleton_error_rate"],
-            # New marginal metrics for class-conditional singleton errors
+            # Class-specific rates normalized by total
+            "singleton_rate_class0": singleton_rate_class0,
+            "singleton_rate_class1": singleton_rate_class1,
+            "doublet_rate_class0": doublet_rate_class0,
+            "doublet_rate_class1": doublet_rate_class1,
+            "abstention_rate_class0": abstention_rate_class0,
+            "abstention_rate_class1": abstention_rate_class1,
+            # Class-conditional singleton errors
             "singleton_error_class0": err_c0_norm,
             "singleton_error_class1": err_c1_norm,
             "singleton_error_cond_class0": err_cond_c0,
@@ -223,8 +238,14 @@ def validate_pac_bounds(
     marginal_singleton_rates = [result["marginal"]["singleton"] for result in trial_results]
     marginal_doublet_rates = [result["marginal"]["doublet"] for result in trial_results]
     marginal_abstention_rates = [result["marginal"]["abstention"] for result in trial_results]
-    marginal_singleton_error_rates = [result["marginal"]["singleton_error"] for result in trial_results]
-    # New marginal class-conditional error metrics
+    # Class-specific rates normalized by total
+    marginal_singleton_rate_class0 = [result["marginal"]["singleton_rate_class0"] for result in trial_results]
+    marginal_singleton_rate_class1 = [result["marginal"]["singleton_rate_class1"] for result in trial_results]
+    marginal_doublet_rate_class0 = [result["marginal"]["doublet_rate_class0"] for result in trial_results]
+    marginal_doublet_rate_class1 = [result["marginal"]["doublet_rate_class1"] for result in trial_results]
+    marginal_abstention_rate_class0 = [result["marginal"]["abstention_rate_class0"] for result in trial_results]
+    marginal_abstention_rate_class1 = [result["marginal"]["abstention_rate_class1"] for result in trial_results]
+    # Class-conditional singleton error metrics (marginal singleton_error is not computed in PAC bounds)
     marginal_error_class0_norm = [result["marginal"]["singleton_error_class0"] for result in trial_results]
     marginal_error_class1_norm = [result["marginal"]["singleton_error_class1"] for result in trial_results]
     marginal_error_cond_class0 = [result["marginal"]["singleton_error_cond_class0"] for result in trial_results]
@@ -244,7 +265,14 @@ def validate_pac_bounds(
     marginal_singleton_rates = np.array(marginal_singleton_rates)
     marginal_doublet_rates = np.array(marginal_doublet_rates)
     marginal_abstention_rates = np.array(marginal_abstention_rates)
-    marginal_singleton_error_rates = np.array(marginal_singleton_error_rates)
+    # Class-specific rates normalized by total
+    marginal_singleton_rate_class0 = np.array(marginal_singleton_rate_class0)
+    marginal_singleton_rate_class1 = np.array(marginal_singleton_rate_class1)
+    marginal_doublet_rate_class0 = np.array(marginal_doublet_rate_class0)
+    marginal_doublet_rate_class1 = np.array(marginal_doublet_rate_class1)
+    marginal_abstention_rate_class0 = np.array(marginal_abstention_rate_class0)
+    marginal_abstention_rate_class1 = np.array(marginal_abstention_rate_class1)
+    # Note: marginal_singleton_error_rates is NOT extracted because PAC bounds don't compute it
     marginal_error_class0_norm = np.array(marginal_error_class0_norm)
     marginal_error_class1_norm = np.array(marginal_error_class1_norm)
     marginal_error_cond_class0 = np.array(marginal_error_cond_class0)
@@ -478,10 +506,58 @@ def validate_pac_bounds(
             "abstention": validate_metric_all_methods(
                 marginal_abstention_rates, pac_marg, "abstention", use_nan_check=False
             ),
-            "singleton_error": validate_metric_all_methods(
-                marginal_singleton_error_rates, pac_marg, "singleton_error", use_nan_check=True
+            # Class-specific rates normalized by total
+            "singleton_rate_class0": validate_metric_by_keys(
+                marginal_singleton_rate_class0,
+                pac_marg,
+                "singleton_rate_class0_bounds",
+                "singleton_class0",
+                expected_key="expected_singleton_rate_class0",
+                use_nan_check=False,
             ),
-            # New marginal metrics: class-conditional singleton error variants
+            "singleton_rate_class1": validate_metric_by_keys(
+                marginal_singleton_rate_class1,
+                pac_marg,
+                "singleton_rate_class1_bounds",
+                "singleton_class1",
+                expected_key="expected_singleton_rate_class1",
+                use_nan_check=False,
+            ),
+            "doublet_rate_class0": validate_metric_by_keys(
+                marginal_doublet_rate_class0,
+                pac_marg,
+                "doublet_rate_class0_bounds",
+                "doublet_class0",
+                expected_key="expected_doublet_rate_class0",
+                use_nan_check=False,
+            ),
+            "doublet_rate_class1": validate_metric_by_keys(
+                marginal_doublet_rate_class1,
+                pac_marg,
+                "doublet_rate_class1_bounds",
+                "doublet_class1",
+                expected_key="expected_doublet_rate_class1",
+                use_nan_check=False,
+            ),
+            "abstention_rate_class0": validate_metric_by_keys(
+                marginal_abstention_rate_class0,
+                pac_marg,
+                "abstention_rate_class0_bounds",
+                "abstention_class0",
+                expected_key="expected_abstention_rate_class0",
+                use_nan_check=False,
+            ),
+            "abstention_rate_class1": validate_metric_by_keys(
+                marginal_abstention_rate_class1,
+                pac_marg,
+                "abstention_rate_class1_bounds",
+                "abstention_class1",
+                expected_key="expected_abstention_rate_class1",
+                use_nan_check=False,
+            ),
+            # Class-conditional singleton error variants
+            # Note: We do NOT validate marginal singleton_error because it mixes two different
+            # distributions (class 0 and class 1) which cannot be justified statistically.
             "singleton_error_class0": validate_metric_by_keys(
                 marginal_error_class0_norm,
                 pac_marg,
@@ -571,7 +647,14 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                 "singleton",
                 "doublet",
                 "abstention",
-                "singleton_error",
+                "singleton_rate_class0",
+                "singleton_rate_class1",
+                "doublet_rate_class0",
+                "doublet_rate_class1",
+                "abstention_rate_class0",
+                "abstention_rate_class1",
+                # Note: singleton_error is NOT included for marginal because it mixes
+                # two different distributions (class 0 and class 1) which cannot be justified statistically.
                 "singleton_error_class0",
                 "singleton_error_class1",
                 "singleton_error_cond_class0",
@@ -1089,7 +1172,8 @@ def validate_prediction_interval_calibration(
                     "singleton",
                     "doublet",
                     "abstention",
-                    "singleton_error",
+                    # Note: singleton_error is NOT included for marginal because it mixes
+                    # two different distributions (class 0 and class 1) which cannot be justified statistically.
                     "singleton_error_class0",
                     "singleton_error_class1",
                     "singleton_error_cond_class0",
@@ -1214,7 +1298,8 @@ def validate_prediction_interval_calibration(
                 "singleton",
                 "doublet",
                 "abstention",
-                "singleton_error",
+                # Note: singleton_error is NOT included for marginal because it mixes
+                # two different distributions (class 0 and class 1) which cannot be justified statistically.
                 "singleton_error_class0",
                 "singleton_error_class1",
                 "singleton_error_cond_class0",
@@ -1286,7 +1371,8 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
                 "singleton",
                 "doublet",
                 "abstention",
-                "singleton_error",
+                # Note: singleton_error is NOT included for marginal because it mixes
+                # two different distributions (class 0 and class 1) which cannot be justified statistically.
                 "singleton_error_class0",
                 "singleton_error_class1",
                 "singleton_error_cond_class0",
