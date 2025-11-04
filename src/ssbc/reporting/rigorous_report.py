@@ -725,43 +725,43 @@ def _print_rigorous_report(report: dict) -> None:
     if "doublet_rate_class0_bounds" in pac_marg:
         d_class0_lower, d_class0_upper = pac_marg["doublet_rate_class0_bounds"]
         d_class0_expected = pac_marg.get("expected_doublet_rate_class0", 0.0)
-        _print_rate_with_methods_marginal(
-            "Doublet rate (Class 0, normalized by total)",
-            (d_class0_lower, d_class0_upper),
-            d_class0_expected,
-            doublet_class0_diag_marg,
-        )
+    _print_rate_with_methods_marginal(
+        "Doublet rate (Class 0, normalized by total)",
+        (d_class0_lower, d_class0_upper),
+        d_class0_expected,
+        doublet_class0_diag_marg,
+    )
 
     if "doublet_rate_class1_bounds" in pac_marg:
         d_class1_lower, d_class1_upper = pac_marg["doublet_rate_class1_bounds"]
         d_class1_expected = pac_marg.get("expected_doublet_rate_class1", 0.0)
-        _print_rate_with_methods_marginal(
-            "Doublet rate (Class 1, normalized by total)",
-            (d_class1_lower, d_class1_upper),
-            d_class1_expected,
-            doublet_class1_diag_marg,
-        )
+    _print_rate_with_methods_marginal(
+        "Doublet rate (Class 1, normalized by total)",
+        (d_class1_lower, d_class1_upper),
+        d_class1_expected,
+        doublet_class1_diag_marg,
+    )
 
     # Class-specific abstention rates (normalized against full dataset)
     if "abstention_rate_class0_bounds" in pac_marg:
         a_class0_lower, a_class0_upper = pac_marg["abstention_rate_class0_bounds"]
         a_class0_expected = pac_marg.get("expected_abstention_rate_class0", 0.0)
-        _print_rate_with_methods_marginal(
-            "Abstention rate (Class 0, normalized by total)",
-            (a_class0_lower, a_class0_upper),
-            a_class0_expected,
-            abstention_class0_diag_marg,
-        )
+    _print_rate_with_methods_marginal(
+        "Abstention rate (Class 0, normalized by total)",
+        (a_class0_lower, a_class0_upper),
+        a_class0_expected,
+        abstention_class0_diag_marg,
+    )
 
     if "abstention_rate_class1_bounds" in pac_marg:
         a_class1_lower, a_class1_upper = pac_marg["abstention_rate_class1_bounds"]
         a_class1_expected = pac_marg.get("expected_abstention_rate_class1", 0.0)
-        _print_rate_with_methods_marginal(
-            "Abstention rate (Class 1, normalized by total)",
-            (a_class1_lower, a_class1_upper),
-            a_class1_expected,
-            abstention_class1_diag_marg,
-        )
+    _print_rate_with_methods_marginal(
+        "Abstention rate (Class 1, normalized by total)",
+        (a_class1_lower, a_class1_upper),
+        a_class1_expected,
+        abstention_class1_diag_marg,
+    )
 
     # Class-specific error rates (normalized against full dataset)
     # Note: We do NOT report marginal singleton_error because it mixes two different

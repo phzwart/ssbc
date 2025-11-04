@@ -436,11 +436,15 @@ def prediction_bounds(
     Parameters
     ----------
     k_cal : int
-        Number of successes in calibration data
+        Number of successes in calibration data for a **single well-defined Bernoulli event**.
+        Must be the count of a binary indicator (e.g., Z_i = 1{event}) across all n_cal trials.
     n_cal : int
-        Total number of samples in calibration data
+        Total number of trials in calibration data for the **same Bernoulli event**.
+        This is the fixed denominator (total sample size or conditional subpopulation size).
     n_test : int
-        Expected size of future test sets
+        Expected number of future trials for the **same Bernoulli event**.
+        For joint rates, this is the planned test size (fixed).
+        For conditional rates, this is an estimated future conditional subpopulation size.
     confidence : float, default=0.95
         Confidence level (e.g., 0.95 for 95% prediction bounds)
     method : str, default="simple"
