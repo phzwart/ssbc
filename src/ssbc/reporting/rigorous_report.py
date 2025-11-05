@@ -555,7 +555,7 @@ def _print_rigorous_report(report: dict) -> None:
             pac["expected_singleton_error_rate"],
             error_diag,
         )
-        
+
         # Singleton correct rate: P(correct | singleton, class) = 1 - P(error | singleton, class)
         if "singleton_correct_rate_bounds" in pac:
             sc_lower, sc_upper = pac["singleton_correct_rate_bounds"]
@@ -640,8 +640,77 @@ def _print_rigorous_report(report: dict) -> None:
 
     print("\n  Operational bounds for deployment")
     print("     Class-specific rates (normalized by total test set size):")
-    print("     - Singleton, doublet, and abstention rates for class 0 and class 1 (fixed denominator)")
-    print("     - Error rates for class 0 and class 1 singletons (fixed denominator)")
+    print("     These are JOINT probabilities measuring operational events across the full test set.")
+    print("     ")
+    print("     Singleton rates:")
+    print("     - Definition: P(true_label=class, prediction_set=singleton)")
+    print("     - Count samples where TRUE label = class AND prediction set = singleton")
+    print("     - Example: 'Singleton rate (Class 0)' = P(Y=0, S=singleton)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • True label is class 0")
+    print("         • Prediction set is singleton (can be {{0}} or {{1}})")
+    print("       This includes BOTH correct singletons (predicted {{0}}) and")
+    print("       incorrect singletons (predicted {{1}} when true label is 0).")
+    print("     ")
+    print("     Doublet rates:")
+    print("     - Definition: P(true_label=class, prediction_set=doublet)")
+    print("     - Count samples where TRUE label = class AND prediction set = {{0,1}}")
+    print("     - Example: 'Doublet rate (Class 0)' = P(Y=0, S=doublet)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • True label is class 0")
+    print("         • Prediction set is doublet (contains both {{0, 1}})")
+    print("       Doublets always contain the true label (by coverage guarantee).")
+    print("     ")
+    print("     Abstention rates:")
+    print("     - Definition: P(true_label=class, prediction_set=empty)")
+    print("     - Count samples where TRUE label = class AND prediction set = {{}}")
+    print("     - Example: 'Abstention rate (Class 0)' = P(Y=0, S=abstention)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • True label is class 0")
+    print("         • Prediction set is empty (abstention/rejection)")
+    print("       Abstentions indicate the model is uncertain and rejects the sample.")
+    print("     ")
+    print("     Error rates (normalized by total, conditioned on true label):")
+    print("     - Definition: P(true_label=class, prediction_set=singleton, error=1)")
+    print("     - Count samples where TRUE label = class AND singleton AND prediction is wrong")
+    print("     - Example: 'Error rate (Class 0 singletons)' = P(Y=0, S=singleton, E=1)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • True label is class 0")
+    print("         • Prediction set is singleton (single class predicted)")
+    print("         • Prediction is INCORRECT (predicted class ≠ true label)")
+    print("     ")
+    print("     Correct rates (normalized by total, conditioned on true label):")
+    print("     - Definition: P(true_label=class, prediction_set=singleton, error=0)")
+    print("     - Count samples where TRUE label = class AND singleton AND prediction is correct")
+    print("     - Example: 'Correct rate (Class 0 singletons)' = P(Y=0, S=singleton, E=0)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • True label is class 0")
+    print("         • Prediction set is singleton (single class predicted)")
+    print("         • Prediction is CORRECT (predicted class = true label)")
+    print("     ")
+    print("     Error rates (normalized by total, conditioned on predicted class):")
+    print("     - Definition: P(predicted_class=X, prediction_set=singleton, error=1)")
+    print("     - Count samples where PREDICTED class = X AND singleton AND prediction is wrong")
+    print("     - Example: 'Error rate (when singleton predicted as Class 0)' = P(predicted=0, S=singleton, E=1)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • Prediction set is singleton with predicted class = 0")
+    print("         • Prediction is INCORRECT (predicted class ≠ true label)")
+    print("       This answers: 'If I predict class 0, how often am I wrong?'")
+    print("     ")
+    print("     Correct rates (normalized by total, conditioned on predicted class):")
+    print("     - Definition: P(predicted_class=X, prediction_set=singleton, error=0)")
+    print("     - Count samples where PREDICTED class = X AND singleton AND prediction is correct")
+    print("     - Example: 'Correct rate (when singleton predicted as Class 0)' = P(predicted=0, S=singleton, E=0)")
+    print("       Meaning: Among all test samples, what fraction have:")
+    print("         • Prediction set is singleton with predicted class = 0")
+    print("         • Prediction is CORRECT (predicted class = true label)")
+    print("       This answers: 'If I predict class 0, how often am I correct?'")
+    print("     ")
+    print("     Relationship:")
+    print("     - singleton_rate = error_rate + correct_rate (for same class)")
+    print("     - All rates normalized by total test set size (fixed denominator)")
+    print("     ")
+    print("     All rates use fixed denominator (total test set size) for deployment planning.")
     ci_lvl = params["ci_level"]
     print(f"     Reported confidence level for bounds: {ci_lvl:.0%}")
 
@@ -712,6 +781,10 @@ def _print_rigorous_report(report: dict) -> None:
     error_class1_diag_marg = loo_diag_marg.get("singleton_error_class1") if loo_diag_marg else None
     correct_class0_diag_marg = loo_diag_marg.get("singleton_correct_class0") if loo_diag_marg else None
     correct_class1_diag_marg = loo_diag_marg.get("singleton_correct_class1") if loo_diag_marg else None
+    error_pred_class0_diag_marg = loo_diag_marg.get("singleton_error_pred_class0") if loo_diag_marg else None
+    error_pred_class1_diag_marg = loo_diag_marg.get("singleton_error_pred_class1") if loo_diag_marg else None
+    correct_pred_class0_diag_marg = loo_diag_marg.get("singleton_correct_pred_class0") if loo_diag_marg else None
+    correct_pred_class1_diag_marg = loo_diag_marg.get("singleton_correct_pred_class1") if loo_diag_marg else None
 
     # Class-specific singleton rates (normalized against full dataset)
     # These are operationally meaningful for deployment planning
@@ -819,6 +892,48 @@ def _print_rigorous_report(report: dict) -> None:
             (sc_class1_lower, sc_class1_upper),
             sc_class1_expected,
             correct_class1_diag_marg,
+        )
+
+    # Error rates when singleton is assigned to a specific class (normalized against full dataset)
+    if "singleton_error_rate_pred_class0_bounds" in pac_marg:
+        se_pred_class0_lower, se_pred_class0_upper = pac_marg["singleton_error_rate_pred_class0_bounds"]
+        se_pred_class0_expected = pac_marg.get("expected_singleton_error_rate_pred_class0", 0.0)
+        _print_rate_with_methods_marginal(
+            "Error rate (when singleton predicted as Class 0, normalized by total)",
+            (se_pred_class0_lower, se_pred_class0_upper),
+            se_pred_class0_expected,
+            error_pred_class0_diag_marg,
+        )
+
+    if "singleton_error_rate_pred_class1_bounds" in pac_marg:
+        se_pred_class1_lower, se_pred_class1_upper = pac_marg["singleton_error_rate_pred_class1_bounds"]
+        se_pred_class1_expected = pac_marg.get("expected_singleton_error_rate_pred_class1", 0.0)
+        _print_rate_with_methods_marginal(
+            "Error rate (when singleton predicted as Class 1, normalized by total)",
+            (se_pred_class1_lower, se_pred_class1_upper),
+            se_pred_class1_expected,
+            error_pred_class1_diag_marg,
+        )
+
+    # Correct rates when singleton is assigned to a specific class (normalized against full dataset)
+    if "singleton_correct_rate_pred_class0_bounds" in pac_marg:
+        sc_pred_class0_lower, sc_pred_class0_upper = pac_marg["singleton_correct_rate_pred_class0_bounds"]
+        sc_pred_class0_expected = pac_marg.get("expected_singleton_correct_rate_pred_class0", 0.0)
+        _print_rate_with_methods_marginal(
+            "Correct rate (when singleton predicted as Class 0, normalized by total)",
+            (sc_pred_class0_lower, sc_pred_class0_upper),
+            sc_pred_class0_expected,
+            correct_pred_class0_diag_marg,
+        )
+
+    if "singleton_correct_rate_pred_class1_bounds" in pac_marg:
+        sc_pred_class1_lower, sc_pred_class1_upper = pac_marg["singleton_correct_rate_pred_class1_bounds"]
+        sc_pred_class1_expected = pac_marg.get("expected_singleton_correct_rate_pred_class1", 0.0)
+        _print_rate_with_methods_marginal(
+            "Correct rate (when singleton predicted as Class 1, normalized by total)",
+            (sc_pred_class1_lower, sc_pred_class1_upper),
+            sc_pred_class1_expected,
+            correct_pred_class1_diag_marg,
         )
 
     # Deployment expectations are not reported at marginal level since singleton/doublet
