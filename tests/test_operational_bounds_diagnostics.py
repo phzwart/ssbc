@@ -48,14 +48,19 @@ def test_operational_bounds_loo_diagnostics_present() -> None:
     )
 
     assert "loo_diagnostics" in pac
-    # Marginal diagnostics should NOT include singleton_error (removed because it mixes distributions)
+    # Marginal diagnostics should NOT include conditional rates (those are in per-class scopes)
+    # It should include joint rates (normalized by total) and rates conditioned on predicted class
     expected_keys = {
         "singleton",
         "doublet",
         "abstention",
         "singleton_error_class0",
         "singleton_error_class1",
-        "singleton_error_cond_class0",
-        "singleton_error_cond_class1",
+        "singleton_correct_class0",
+        "singleton_correct_class1",
+        "singleton_error_pred_class0",
+        "singleton_error_pred_class1",
+        "singleton_correct_pred_class0",
+        "singleton_correct_pred_class1",
     }
     assert expected_keys.issubset(pac["loo_diagnostics"].keys())
