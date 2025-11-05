@@ -247,8 +247,9 @@ def validate_pac_bounds(
                 for trial_idx in range(n_trials)
             )
         except Exception:
+            test_size_int = int(test_size) if not np.isnan(test_size) else 100
             return [
-                _validate_single_trial(trial_idx, simulator, test_size, threshold_0, threshold_1, seed)
+                _validate_single_trial(trial_idx, simulator, test_size_int, threshold_0, threshold_1, seed)
                 for trial_idx in range(n_trials)
             ]
 
@@ -851,9 +852,13 @@ def validate_pac_bounds(
     prob_consistency_checks = {}
     for class_label in [0, 1]:
         # Extract joint rates from marginal validation
-        q_sing = result["marginal"][f"singleton_rate_class{class_label}"]["mean"]
-        q_dbl = result["marginal"][f"doublet_rate_class{class_label}"]["mean"]
-        q_abs = result["marginal"][f"abstention_rate_class{class_label}"]["mean"]
+        marginal_dict = result.get("marginal", {})
+        if isinstance(marginal_dict, dict):
+            q_sing = marginal_dict.get(f"singleton_rate_class{class_label}", {}).get("mean", np.nan)
+            q_dbl = marginal_dict.get(f"doublet_rate_class{class_label}", {}).get("mean", np.nan)
+            q_abs = marginal_dict.get(f"abstention_rate_class{class_label}", {}).get("mean", np.nan)
+        else:
+            q_sing = q_dbl = q_abs = np.nan
 
         # Compute sum of joint rates (should equal p_y_test)
         sum_joint_rates = q_sing + q_dbl + q_abs
@@ -861,7 +866,8 @@ def validate_pac_bounds(
         # Compute test set class prevalence DIRECTLY from class counts (not from sum!)
         # Extract n_samples from trial results where we stored it
         class_rates_key = f"class_{class_label}"
-        test_size = result.get("test_size", np.nan)
+        test_size_val = result.get("test_size")
+        test_size: float = float(test_size_val) if test_size_val is not None else np.nan
 
         # Extract n_samples for this class from each trial
         n_samples_per_trial = [trial_result[class_rates_key]["n_samples"] for trial_result in trial_results]

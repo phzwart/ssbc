@@ -138,7 +138,7 @@ BERNOULLI_EVENT_DEFINITIONS = {
 }
 
 
-def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: str) -> dict[str, int | float]:
+def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: str) -> dict[str, Any]:
     """Extract calibration counts (k_cal, n_cal) and test size (n_test) for a metric.
 
     Parameters
@@ -187,24 +187,29 @@ def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: s
     else:
         test_size = np.nan
 
-    # Normalize metric_key for lookup (remove _rate_ if present, e.g., "singleton_correct_rate_class0" -> "singleton_correct_class0")
+    # Normalize metric_key for lookup (remove _rate_ if present)
+    # Example: "singleton_correct_rate_class0" -> "singleton_correct_class0"
     # This handles both formats: with and without _rate_ in the key
     normalized_metric_key = metric_key.replace("_rate_", "_").replace("_rate", "")
-    
+
     # Get event definition (try normalized key first, then original)
     event_def = BERNOULLI_EVENT_DEFINITIONS.get(normalized_metric_key, {})
     if not event_def:
         # Try original metric_key as fallback
         event_def = BERNOULLI_EVENT_DEFINITIONS.get(metric_key, {})
-    
+
     if not event_def:
         # Metric key not found - return early with diagnostic info
-        available_keys_sample = [k for k in BERNOULLI_EVENT_DEFINITIONS.keys() if normalized_metric_key.split("_")[0] in k][:5]
+        available_keys_sample = [
+            k for k in BERNOULLI_EVENT_DEFINITIONS.keys() if normalized_metric_key.split("_")[0] in k
+        ][:5]
         return {
             "k_cal": np.nan,
             "n_cal": np.nan,
             "n_test": test_size,
-            "event_definition": f"Unknown (metric_key='{metric_key}' not found, tried normalized='{normalized_metric_key}')",
+            "event_definition": (
+                f"Unknown (metric_key='{metric_key}' not found, " f"tried normalized='{normalized_metric_key}')"
+            ),
             "denominator_fixed": True,
             "diagnostic": {
                 "metric_key": metric_key,
@@ -241,7 +246,12 @@ def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: s
         # Expected keys are: "expected_singleton_rate_class0", "expected_doublet_rate_class0", etc.
         # Map metric_key to expected key format (some metrics have "_rate_" in the key)
         # Use normalized_metric_key for consistency with event definition lookup
-        if normalized_metric_key in ["singleton_error_class0", "singleton_error_class1", "singleton_correct_class0", "singleton_correct_class1"]:
+        if normalized_metric_key in [
+            "singleton_error_class0",
+            "singleton_error_class1",
+            "singleton_correct_class0",
+            "singleton_correct_class1",
+        ]:
             # Map to expected key with "_rate_" inserted
             expected_key = f"expected_{normalized_metric_key.replace('_class', '_rate_class')}"
         else:
@@ -654,11 +664,12 @@ def validate_metric_mathematical_consistency(
         if "diagnostic" in cal_counts:
             diagnostic_info = cal_counts["diagnostic"]
         # Use event definition from cal_counts if it's more informative
-        if event_str_from_cal and event_str_from_cal != "Unknown" and "Unknown" not in event_str_from_cal:
-            event_str = event_str_from_cal
-        elif "Unknown" in event_str_from_cal and "not found" in event_str_from_cal:
-            # Use the diagnostic message from extract_calibration_counts
-            event_str = event_str_from_cal
+        if isinstance(event_str_from_cal, str):
+            if event_str_from_cal and event_str_from_cal != "Unknown" and "Unknown" not in event_str_from_cal:
+                event_str = event_str_from_cal
+            elif "Unknown" in event_str_from_cal and "not found" in event_str_from_cal:
+                # Use the diagnostic message from extract_calibration_counts
+                event_str = event_str_from_cal
     except Exception as e:
         # If extraction fails, use defaults and log the error
         import traceback
@@ -676,7 +687,15 @@ def validate_metric_mathematical_consistency(
         }
 
     # 1. Denominator alignment check
-    denom_check = validate_denominator_alignment(k_cal, n_cal, n_test, event_type, denominator_fixed)
+    # Cast to appropriate types for validation functions
+    k_cal_int = int(k_cal) if not np.isnan(k_cal) else 0
+    n_cal_int = int(n_cal) if not np.isnan(n_cal) else 0
+    n_test_int = int(n_test) if not np.isnan(n_test) else 0
+    event_type_str = str(event_type) if event_type is not None else ""
+    denominator_fixed_bool = bool(denominator_fixed) if denominator_fixed is not None else True
+    denom_check = validate_denominator_alignment(
+        k_cal_int, n_cal_int, n_test_int, event_type_str, denominator_fixed_bool
+    )
 
     # 2. Coverage check
     pac_bounds_key = f"pac_bounds_{scope}"
@@ -710,7 +729,9 @@ def validate_metric_mathematical_consistency(
 
     # 3. Beta-Binomial predictive validation (if calibration counts are available)
     if not np.isnan(k_cal) and not np.isnan(n_cal) and n_cal > 0:
-        beta_binom_check = validate_beta_binomial_predictive(k_cal, n_cal, n_test, validation_rates, ci_level)
+        beta_binom_check = validate_beta_binomial_predictive(
+            k_cal_int, n_cal_int, n_test_int, validation_rates, ci_level
+        )
     else:
         beta_binom_check = {
             "valid": False,
