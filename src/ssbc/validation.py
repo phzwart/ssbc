@@ -98,8 +98,17 @@ def _validate_single_trial(
     err_c1_norm = (
         (class_1["n_singletons"] * class_1["singleton_error_rate"]) / n_test if class_1["n_singletons"] > 0 else 0.0
     )
-    err_cond_c0 = class_0["singleton_error_rate"] if class_0["n_singletons"] > 0 else np.nan
-    err_cond_c1 = class_1["singleton_error_rate"] if class_1["n_singletons"] > 0 else np.nan
+    # Joint correct rates: P(correct AND singleton AND class=0/1), normalized by total
+    correct_c0_norm = (
+        (class_0["n_singletons"] * (1 - class_0["singleton_error_rate"])) / n_test
+        if class_0["n_singletons"] > 0
+        else 0.0
+    )
+    correct_c1_norm = (
+        (class_1["n_singletons"] * (1 - class_1["singleton_error_rate"])) / n_test
+        if class_1["n_singletons"] > 0
+        else 0.0
+    )
 
     return {
         "marginal": {
@@ -114,24 +123,28 @@ def _validate_single_trial(
             "doublet_rate_class1": doublet_rate_class1,
             "abstention_rate_class0": abstention_rate_class0,
             "abstention_rate_class1": abstention_rate_class1,
-            # Class-conditional singleton errors
+            # Class-specific singleton error rates (normalized by total)
             "singleton_error_class0": err_c0_norm,
             "singleton_error_class1": err_c1_norm,
-            "singleton_error_cond_class0": err_cond_c0,
-            "singleton_error_cond_class1": err_cond_c1,
+            # Class-specific singleton correct rates (normalized by total)
+            "singleton_correct_class0": correct_c0_norm,
+            "singleton_correct_class1": correct_c1_norm,
         },
         "class_0": {
             "singleton": class_0["singleton_rate"],
             "doublet": class_0["doublet_rate"],
             "abstention": class_0["abstention_rate"],
             "singleton_error": class_0["singleton_error_rate"],
+            "n_samples": class_0["n_samples"],  # Store for computing test set class prevalence
         },
         "class_1": {
             "singleton": class_1["singleton_rate"],
             "doublet": class_1["doublet_rate"],
             "abstention": class_1["abstention_rate"],
             "singleton_error": class_1["singleton_error_rate"],
+            "n_samples": class_1["n_samples"],  # Store for computing test set class prevalence
         },
+        "n_test": n_test,  # Store test size for computing prevalence
     }
 
 
@@ -252,11 +265,12 @@ def validate_pac_bounds(
     marginal_doublet_rate_class1 = [result["marginal"]["doublet_rate_class1"] for result in trial_results]
     marginal_abstention_rate_class0 = [result["marginal"]["abstention_rate_class0"] for result in trial_results]
     marginal_abstention_rate_class1 = [result["marginal"]["abstention_rate_class1"] for result in trial_results]
-    # Class-conditional singleton error metrics (marginal singleton_error is not computed in PAC bounds)
+    # Class-specific singleton error metrics (normalized by total)
     marginal_error_class0_norm = [result["marginal"]["singleton_error_class0"] for result in trial_results]
     marginal_error_class1_norm = [result["marginal"]["singleton_error_class1"] for result in trial_results]
-    marginal_error_cond_class0 = [result["marginal"]["singleton_error_cond_class0"] for result in trial_results]
-    marginal_error_cond_class1 = [result["marginal"]["singleton_error_cond_class1"] for result in trial_results]
+    # Class-specific singleton correct metrics (normalized by total)
+    marginal_correct_class0_norm = [result["marginal"]["singleton_correct_class0"] for result in trial_results]
+    marginal_correct_class1_norm = [result["marginal"]["singleton_correct_class1"] for result in trial_results]
 
     class_0_singleton_rates = [result["class_0"]["singleton"] for result in trial_results]
     class_0_doublet_rates = [result["class_0"]["doublet"] for result in trial_results]
@@ -282,8 +296,9 @@ def validate_pac_bounds(
     # Note: marginal_singleton_error_rates is NOT extracted because PAC bounds don't compute it
     marginal_error_class0_norm = np.array(marginal_error_class0_norm)
     marginal_error_class1_norm = np.array(marginal_error_class1_norm)
-    marginal_error_cond_class0 = np.array(marginal_error_cond_class0)
-    marginal_error_cond_class1 = np.array(marginal_error_cond_class1)
+    # Class-specific singleton correct metrics (normalized by total)
+    marginal_correct_class0_norm = np.array(marginal_correct_class0_norm)
+    marginal_correct_class1_norm = np.array(marginal_correct_class1_norm)
 
     class_0_singleton_rates = np.array(class_0_singleton_rates)
     class_0_doublet_rates = np.array(class_0_doublet_rates)
@@ -768,23 +783,23 @@ def validate_pac_bounds(
                 scope="marginal",
                 report=report,
             ),
-            "singleton_error_cond_class0": validate_metric_by_keys(
-                marginal_error_cond_class0,
+            "singleton_correct_class0": validate_metric_by_keys(
+                marginal_correct_class0_norm,
                 pac_marg,
-                "singleton_error_rate_cond_class0_bounds",
-                "singleton_error_cond_class0",
-                expected_key="expected_singleton_error_rate_cond_class0",
-                use_nan_check=True,
+                "singleton_correct_rate_class0_bounds",
+                "singleton_correct_class0",
+                expected_key="expected_singleton_correct_rate_class0",
+                use_nan_check=False,
                 scope="marginal",
                 report=report,
             ),
-            "singleton_error_cond_class1": validate_metric_by_keys(
-                marginal_error_cond_class1,
+            "singleton_correct_class1": validate_metric_by_keys(
+                marginal_correct_class1_norm,
                 pac_marg,
-                "singleton_error_rate_cond_class1_bounds",
-                "singleton_error_cond_class1",
-                expected_key="expected_singleton_error_rate_cond_class1",
-                use_nan_check=True,
+                "singleton_correct_rate_class1_bounds",
+                "singleton_correct_class1",
+                expected_key="expected_singleton_correct_rate_class1",
+                use_nan_check=False,
                 scope="marginal",
                 report=report,
             ),
@@ -830,7 +845,9 @@ def validate_pac_bounds(
     }
 
     # Add probability consistency checks for joint rates
-    # For each class y: q_y^sing + q_y^dbl + q_y^abs = p_y ± ε
+    # For each class y: q_y^sing + q_y^dbl + q_y^abs = p_y_test ± ε
+    # NOTE: p_y_test should be computed directly from test set class counts, NOT from the sum!
+    # The sum should equal the test set class prevalence by the law of total probability.
     prob_consistency_checks = {}
     for class_label in [0, 1]:
         # Extract joint rates from marginal validation
@@ -838,8 +855,31 @@ def validate_pac_bounds(
         q_dbl = result["marginal"][f"doublet_rate_class{class_label}"]["mean"]
         q_abs = result["marginal"][f"abstention_rate_class{class_label}"]["mean"]
 
-        # Estimate class prevalence from calibration data
-        # calibration_result doesn't store labels, but we can estimate from n counts
+        # Compute sum of joint rates (should equal p_y_test)
+        sum_joint_rates = q_sing + q_dbl + q_abs
+
+        # Compute test set class prevalence DIRECTLY from class counts (not from sum!)
+        # Extract n_samples from trial results where we stored it
+        class_rates_key = f"class_{class_label}"
+        test_size = result.get("test_size", np.nan)
+
+        # Extract n_samples for this class from each trial
+        n_samples_per_trial = [trial_result[class_rates_key]["n_samples"] for trial_result in trial_results]
+        n_test_per_trial = [trial_result.get("n_test", test_size) for trial_result in trial_results]
+
+        # Compute p_y_test as mean class prevalence across trials
+        if len(n_samples_per_trial) > 0 and not np.isnan(test_size):
+            # Use actual n_test from each trial if available, otherwise use test_size
+            p_y_test_trials = [
+                n_samples / n_test for n_samples, n_test in zip(n_samples_per_trial, n_test_per_trial, strict=False)
+            ]
+            p_y_test = np.mean(p_y_test_trials)
+        else:
+            # Fallback: use sum (which should equal p_y_test by definition)
+            p_y_test = sum_joint_rates
+
+        # Also get calibration class prevalence for comparison
+        p_y_calibration = np.nan
         if "calibration_result" in report:
             n_class = report["calibration_result"][class_label].get("n", 0)
             n_total = (
@@ -847,39 +887,53 @@ def validate_pac_bounds(
                 if 0 in report["calibration_result"] and 1 in report["calibration_result"]
                 else n_class
             )
-            p_y = n_class / n_total if n_total > 0 else np.nan
-        else:
-            # Fallback to metadata if available
-            metadata = report.get("metadata", {})
-            if f"n_class_{class_label}" in metadata:
-                n_class = metadata[f"n_class_{class_label}"]
-                n_total = metadata.get("n_calibration", n_class)
-                p_y = n_class / n_total if n_total > 0 else np.nan
-            else:
-                p_y = np.nan
+            p_y_calibration = n_class / n_total if n_total > 0 else np.nan
 
-        # Check consistency
-        total = q_sing + q_dbl + q_abs
-        difference = abs(total - p_y) if not np.isnan(p_y) else np.nan
-        tolerance = 1e-3
-        valid = difference < tolerance if not np.isnan(difference) else False
+        # Verify the sum equals p_y_test (law of total probability)
+        # The sum should equal p_y_test by definition: q_y^sing + q_y^dbl + q_y^abs = P(Y=y) = p_y_test
+        # We verify this holds numerically (within floating point precision)
+        tolerance_numerical = 1e-5  # Numerical precision check (allowing for averaging across trials)
+        sum_valid = abs(sum_joint_rates - p_y_test) < tolerance_numerical
+
+        # Compare to calibration as a sanity check (test set class distribution may differ due to random sampling)
+        difference_from_calibration = np.nan
+        if not np.isnan(p_y_calibration):
+            difference_from_calibration = abs(p_y_test - p_y_calibration)
+            # The main check is that sum = p_y_test (sum_valid), calibration comparison is just informational
+            valid = sum_valid
+            difference = difference_from_calibration
+        else:
+            # If no calibration data, just verify sum equals p_y_test
+            valid = sum_valid and (0.0 < p_y_test < 1.0)
+            difference = abs(sum_joint_rates - p_y_test) if not sum_valid else 0.0
+
+        # Build message
+        if valid:
+            msg = f"✅ Probability consistency valid (sum={sum_joint_rates:.6f} = test p_y={p_y_test:.6f}"
+            if not np.isnan(p_y_calibration):
+                msg += f", calibration p_y={p_y_calibration:.6f}, difference={difference_from_calibration:.6f}"
+            msg += ")"
+        else:
+            diff_sum = abs(sum_joint_rates - p_y_test)
+            msg = (
+                f"❌ Probability consistency violated: sum={sum_joint_rates:.6f} "
+                f"≠ test p_y={p_y_test:.6f} (difference={diff_sum:.6f})"
+            )
+            if not np.isnan(p_y_calibration):
+                msg += f", calibration p_y={p_y_calibration:.6f}"
 
         prob_consistency_checks[f"class_{class_label}"] = {
             "valid": valid,
             "q_sing": q_sing,
             "q_dbl": q_dbl,
             "q_abs": q_abs,
-            "sum": total,
-            "expected": p_y,
-            "difference": difference,
-            "message": (
-                f"✅ Probability consistency valid (difference: {difference:.6f} < {tolerance})"
-                if valid
-                else (
-                    f"❌ Probability consistency violated: "
-                    f"sum={total:.6f}, expected={p_y:.6f}, difference={difference:.6f}"
-                )
-            ),
+            "sum": sum_joint_rates,  # Sum of joint rates (should equal p_y_test)
+            "p_y_test": p_y_test,  # Test set class prevalence (computed from class counts)
+            "p_y_calibration": p_y_calibration
+            if not np.isnan(p_y_calibration)
+            else None,  # Calibration class prevalence (for comparison)
+            "difference": difference,  # Difference from calibration (if available) or numerical difference
+            "message": msg,
         }
 
     result["probability_consistency"] = prob_consistency_checks
@@ -930,8 +984,8 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                 # two different distributions (class 0 and class 1) which cannot be justified statistically.
                 "singleton_error_class0",
                 "singleton_error_class1",
-                "singleton_error_cond_class0",
-                "singleton_error_cond_class1",
+                "singleton_correct_class0",
+                "singleton_correct_class1",
             ]
         else:
             metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1078,7 +1132,9 @@ def print_validation_results(validation: dict[str, Any]) -> None:
         print("\n" + "=" * 80)
         print("PROBABILITY CONSISTENCY CHECKS")
         print("=" * 80)
-        print("\nFor each class y: q_y^sing + q_y^dbl + q_y^abs = p_y ± ε (ε < 10^-3)")
+        print("\nFor each class y: q_y^sing + q_y^dbl + q_y^abs = p_y_test (test set class prevalence)")
+        print("This verifies the law of total probability holds numerically.")
+        print("Comparison with calibration p_y shown for reference (may differ due to random sampling)")
         for class_label in [0, 1]:
             pc = validation["probability_consistency"].get(f"class_{class_label}", {})
             if pc:
@@ -1088,8 +1144,14 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                 print(f"  q^dbl:  {pc.get('q_dbl', 0):.6f}")
                 print(f"  q^abs:  {pc.get('q_abs', 0):.6f}")
                 print(f"  Sum:    {pc.get('sum', 0):.6f}")
-                print(f"  Expected (p_y): {pc.get('expected', 0):.6f}")
-                print(f"  Difference: {pc.get('difference', 0):.6f}")
+                sum_val = pc.get("sum", 0)
+                p_y_test = pc.get("p_y_test", sum_val)  # Test set class prevalence from class counts
+                p_y_calibration = pc.get("p_y_calibration", None)
+                diff_val = pc.get("difference", 0)
+                print(f"  Test set p_y (from class counts): {p_y_test:.6f}")
+                if p_y_calibration is not None:
+                    print(f"  Calibration p_y (for reference): {p_y_calibration:.6f}")
+                    print(f"  Difference from calibration: {diff_val:.6f}")
                 print(f"  {pc.get('message', '')}")
 
     print("\n" + "=" * 80)
@@ -1179,8 +1241,8 @@ def plot_validation_bounds(
         # New marginal-only metrics
         "singleton_error_class0",
         "singleton_error_class1",
-        "singleton_error_cond_class0",
-        "singleton_error_cond_class1",
+        "singleton_correct_class0",
+        "singleton_correct_class1",
     ]
     if metric not in valid_metrics:
         raise ValueError(f"metric must be one of {valid_metrics}, got '{metric}'")
@@ -1545,8 +1607,8 @@ def validate_prediction_interval_calibration(
                     # two different distributions (class 0 and class 1) which cannot be justified statistically.
                     "singleton_error_class0",
                     "singleton_error_class1",
-                    "singleton_error_cond_class0",
-                    "singleton_error_cond_class1",
+                    "singleton_correct_class0",
+                    "singleton_correct_class1",
                 ]
             else:
                 metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1678,8 +1740,8 @@ def validate_prediction_interval_calibration(
                 # two different distributions (class 0 and class 1) which cannot be justified statistically.
                 "singleton_error_class0",
                 "singleton_error_class1",
-                "singleton_error_cond_class0",
-                "singleton_error_cond_class1",
+                "singleton_correct_class0",
+                "singleton_correct_class1",
             ]
         else:
             metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1751,8 +1813,8 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
                 # two different distributions (class 0 and class 1) which cannot be justified statistically.
                 "singleton_error_class0",
                 "singleton_error_class1",
-                "singleton_error_cond_class0",
-                "singleton_error_cond_class1",
+                "singleton_correct_class0",
+                "singleton_correct_class1",
             ]
         else:
             metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1879,8 +1941,9 @@ def get_calibration_bounds_dataframe(
         # Class-specific error rates
         "singleton_error_class0",
         "singleton_error_class1",
-        "singleton_error_cond_class0",
-        "singleton_error_cond_class1",
+        # Class-specific correct rates
+        "singleton_correct_class0",
+        "singleton_correct_class1",
     ]
     metrics = default_metrics if metric is None else [metric]
 

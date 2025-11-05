@@ -429,13 +429,14 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         - 'abstention_rate_bounds': [L, U]
         - 'singleton_error_rate_class0_bounds': [L, U]
         - 'singleton_error_rate_class1_bounds': [L, U]
-        - 'singleton_error_rate_cond_class0_bounds': [L, U]
-        - 'singleton_error_rate_cond_class1_bounds': [L, U]
+        - 'singleton_correct_rate_class0_bounds': [L, U]
+        - 'singleton_correct_rate_class1_bounds': [L, U]
         - 'expected_*_rate': point estimates
         - 'loo_diagnostics': Detailed LOO uncertainty analysis
 
         Note: Marginal singleton_error_rate_bounds is NOT computed because it mixes
         two different distributions (class 0 and class 1) which cannot be justified statistically.
+        Note: Conditional rates are NOT computed in the marginal section.
     """
     n = len(labels)
 
@@ -482,6 +483,16 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
     # Error rate for singletons with true_label=1, normalized by total samples
     error_class1_loo_preds = ((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 0)).astype(int)
 
+    # Class-specific singleton correct rates (normalized against full dataset)
+    # Correct rate for singletons with true_label=0, normalized by total samples
+    # Bernoulli event: Z_i^{cor,0} = 1{Y_i=0, S_i=singleton, E_i=0} (LOO indicators)
+    # Mean: θ_0^{cor} = P(Y=0, S=singleton, E=0)
+    correct_class0_loo_preds = ((results_array[:, 0] == 1) & (labels == 0) & (results_array[:, 3] == 1)).astype(int)
+    # Correct rate for singletons with true_label=1, normalized by total samples
+    # Bernoulli event: Z_i^{cor,1} = 1{Y_i=1, S_i=singleton, E_i=0} (LOO indicators)
+    # Mean: θ_1^{cor} = P(Y=1, S=singleton, E=0)
+    correct_class1_loo_preds = ((results_array[:, 0] == 1) & (labels == 1) & (results_array[:, 3] == 1)).astype(int)
+
     # Point estimates for class-specific rates (normalized against full dataset)
     singleton_rate_class0 = float(np.mean(singleton_class0_loo_preds)) if n > 0 else 0.0
     singleton_rate_class1 = float(np.mean(singleton_class1_loo_preds)) if n > 0 else 0.0
@@ -491,41 +502,19 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
     abstention_rate_class1 = float(np.mean(abstention_class1_loo_preds)) if n > 0 else 0.0
     singleton_error_rate_class0 = float(np.mean(error_class0_loo_preds)) if n > 0 else 0.0
     singleton_error_rate_class1 = float(np.mean(error_class1_loo_preds)) if n > 0 else 0.0
-
-    # Conditional error rates: P(error | singleton & class)
-    # Binary predictions: 1 if singleton with class_label AND error, 0 otherwise
-    singleton_class0_mask = (results_array[:, 0] == 1) & (labels == 0)
-    singleton_class1_mask = (results_array[:, 0] == 1) & (labels == 1)
-    n_singletons_class0 = int(np.sum(singleton_class0_mask))
-    n_singletons_class1 = int(np.sum(singleton_class1_mask))
-    n_errors_class0_singleton = int(np.sum(error_class0_loo_preds))
-    n_errors_class1_singleton = int(np.sum(error_class1_loo_preds))
-
-    # Conditional rates
-    singleton_error_rate_cond_class0 = (
-        n_errors_class0_singleton / n_singletons_class0 if n_singletons_class0 > 0 else 0.0
-    )
-    singleton_error_rate_cond_class1 = (
-        n_errors_class1_singleton / n_singletons_class1 if n_singletons_class1 > 0 else 0.0
-    )
-
-    # LOO predictions for conditional error rates (need to filter by singleton & class)
-    error_cond_class0_loo_preds = np.zeros(n, dtype=int)
-    if n_singletons_class0 > 0:
-        error_cond_class0_loo_preds[singleton_class0_mask] = (results_array[singleton_class0_mask, 3] == 0).astype(int)
-
-    error_cond_class1_loo_preds = np.zeros(n, dtype=int)
-    if n_singletons_class1 > 0:
-        error_cond_class1_loo_preds[singleton_class1_mask] = (results_array[singleton_class1_mask, 3] == 0).astype(int)
+    singleton_correct_rate_class0 = float(np.mean(correct_class0_loo_preds)) if n > 0 else 0.0
+    singleton_correct_rate_class1 = float(np.mean(correct_class1_loo_preds)) if n > 0 else 0.0
 
     # Apply union bound adjustment
     # Now we have 13 metrics: singleton, doublet, abstention,
     # singleton_class0 (normalized), singleton_class1 (normalized),
     # doublet_class0 (normalized), doublet_class1 (normalized),
     # abstention_class0 (normalized), abstention_class1 (normalized),
-    # error_class0 (normalized), error_class1 (normalized), error_cond_class0, error_cond_class1
+    # error_class0 (normalized), error_class1 (normalized),
+    # correct_class0 (normalized), correct_class1 (normalized)
     # Note: We do NOT compute marginal singleton_error because it mixes two different
     # distributions (class 0 and class 1) which cannot be justified statistically.
+    # Note: We do NOT compute conditional rates in the marginal section.
     n_metrics = 13
     if use_union_bound:
         adjusted_ci_level = 1 - (1 - ci_level) / n_metrics
@@ -644,46 +633,28 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         verbose=False,
     )
 
-    # Conditional error rates: P(error | singleton & class)
-    # Bernoulli event: W_i^{err|0} = 1{E_i=1} given Y_i=0, S_i=singleton (LOO indicators)
-    # Mean: r_0^{err} = P(E=1 | Y=0, S=singleton)
-    # loo_predictions: array filtered to conditional subpopulation (Y=0, S=singleton)
-    # n_test: estimated future number of class-0 singletons in test (point estimate)
-    #
-    # NOTE: The denominator (n_test) is random, making bounds conservative.
-    # This is documented in the stability note in the report.
-    expected_n_singletons_class0_test = int(test_size * (n_singletons_class0 / n)) if n > 0 else 1
-    expected_n_singletons_class0_test = max(expected_n_singletons_class0_test, 1) if n_singletons_class0 > 0 else 1
-    expected_n_singletons_class1_test = int(test_size * (n_singletons_class1 / n)) if n > 0 else 1
-    expected_n_singletons_class1_test = max(expected_n_singletons_class1_test, 1) if n_singletons_class1 > 0 else 1
+    # Class-specific singleton correct rates (normalized against full dataset)
+    # Bernoulli event: Z_i^{cor,0} = 1{Y_i=0, S_i=singleton, E_i=0} (LOO indicators)
+    # Mean: θ_0^{cor} = P(Y=0, S=singleton, E=0)
+    # loo_predictions: array of LOO indicators (correlated due to LOO-CV structure)
+    # n_test: planned test size (fixed)
+    correct_class0_lower, correct_class0_upper, correct_class0_report = compute_robust_prediction_bounds(
+        correct_class0_loo_preds,
+        test_size,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=False,
+    )
 
-    if n_singletons_class0 > 0:
-        error_cond_class0_lower, error_cond_class0_upper, error_cond_class0_report = compute_robust_prediction_bounds(
-            error_cond_class0_loo_preds[singleton_class0_mask],
-            expected_n_singletons_class0_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=False,
-        )
-    else:
-        error_cond_class0_lower = 0.0
-        error_cond_class0_upper = 1.0
-        error_cond_class0_report = {"selected_method": "no_singletons_class0", "diagnostics": {}}
-
-    if n_singletons_class1 > 0:
-        error_cond_class1_lower, error_cond_class1_upper, error_cond_class1_report = compute_robust_prediction_bounds(
-            error_cond_class1_loo_preds[singleton_class1_mask],
-            expected_n_singletons_class1_test,
-            1 - adjusted_ci_level,
-            method=prediction_method,
-            inflation_factor=loo_inflation_factor,
-            verbose=False,
-        )
-    else:
-        error_cond_class1_lower = 0.0
-        error_cond_class1_upper = 1.0
-        error_cond_class1_report = {"selected_method": "no_singletons_class1", "diagnostics": {}}
+    correct_class1_lower, correct_class1_upper, correct_class1_report = compute_robust_prediction_bounds(
+        correct_class1_loo_preds,
+        test_size,
+        1 - adjusted_ci_level,
+        method=prediction_method,
+        inflation_factor=loo_inflation_factor,
+        verbose=False,
+    )
 
     return {
         "singleton_rate_bounds": [singleton_lower, singleton_upper],
@@ -697,8 +668,8 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         "abstention_rate_class1_bounds": [abstention_class1_lower, abstention_class1_upper],
         "singleton_error_rate_class0_bounds": [error_class0_lower, error_class0_upper],
         "singleton_error_rate_class1_bounds": [error_class1_lower, error_class1_upper],
-        "singleton_error_rate_cond_class0_bounds": [error_cond_class0_lower, error_cond_class0_upper],
-        "singleton_error_rate_cond_class1_bounds": [error_cond_class1_lower, error_cond_class1_upper],
+        "singleton_correct_rate_class0_bounds": [correct_class0_lower, correct_class0_upper],
+        "singleton_correct_rate_class1_bounds": [correct_class1_lower, correct_class1_upper],
         "expected_singleton_rate": singleton_rate,
         "expected_doublet_rate": doublet_rate,
         "expected_abstention_rate": abstention_rate,
@@ -710,8 +681,8 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
         "expected_abstention_rate_class1": abstention_rate_class1,
         "expected_singleton_error_rate_class0": singleton_error_rate_class0,
         "expected_singleton_error_rate_class1": singleton_error_rate_class1,
-        "expected_singleton_error_rate_cond_class0": singleton_error_rate_cond_class0,
-        "expected_singleton_error_rate_cond_class1": singleton_error_rate_cond_class1,
+        "expected_singleton_correct_rate_class0": singleton_correct_rate_class0,
+        "expected_singleton_correct_rate_class1": singleton_correct_rate_class1,
         "n_grid_points": 1,  # Single scenario (fixed thresholds)
         "pac_level": adjusted_ci_level,
         "ci_level": ci_level,
@@ -730,8 +701,8 @@ def compute_pac_operational_bounds_marginal_loo_corrected(
             "abstention_class1": abstention_class1_report,
             "singleton_error_class0": error_class0_report,
             "singleton_error_class1": error_class1_report,
-            "singleton_error_cond_class0": error_cond_class0_report,
-            "singleton_error_cond_class1": error_cond_class1_report,
+            "singleton_correct_class0": correct_class0_report,
+            "singleton_correct_class1": correct_class1_report,
         },
     }
 

@@ -710,6 +710,8 @@ def _print_rigorous_report(report: dict) -> None:
     abstention_class1_diag_marg = loo_diag_marg.get("abstention_class1") if loo_diag_marg else None
     error_class0_diag_marg = loo_diag_marg.get("singleton_error_class0") if loo_diag_marg else None
     error_class1_diag_marg = loo_diag_marg.get("singleton_error_class1") if loo_diag_marg else None
+    correct_class0_diag_marg = loo_diag_marg.get("singleton_correct_class0") if loo_diag_marg else None
+    correct_class1_diag_marg = loo_diag_marg.get("singleton_correct_class1") if loo_diag_marg else None
 
     # Class-specific singleton rates (normalized against full dataset)
     # These are operationally meaningful for deployment planning
@@ -796,6 +798,27 @@ def _print_rigorous_report(report: dict) -> None:
             (se_class1_lower, se_class1_upper),
             se_class1_expected,
             error_class1_diag_marg,
+        )
+
+    # Class-specific singleton correct rates (normalized against full dataset)
+    if "singleton_correct_rate_class0_bounds" in pac_marg:
+        sc_class0_lower, sc_class0_upper = pac_marg["singleton_correct_rate_class0_bounds"]
+        sc_class0_expected = pac_marg.get("expected_singleton_correct_rate_class0", 0.0)
+        _print_rate_with_methods_marginal(
+            "Correct rate (Class 0 singletons, normalized by total)",
+            (sc_class0_lower, sc_class0_upper),
+            sc_class0_expected,
+            correct_class0_diag_marg,
+        )
+
+    if "singleton_correct_rate_class1_bounds" in pac_marg:
+        sc_class1_lower, sc_class1_upper = pac_marg["singleton_correct_rate_class1_bounds"]
+        sc_class1_expected = pac_marg.get("expected_singleton_correct_rate_class1", 0.0)
+        _print_rate_with_methods_marginal(
+            "Correct rate (Class 1 singletons, normalized by total)",
+            (sc_class1_lower, sc_class1_upper),
+            sc_class1_expected,
+            correct_class1_diag_marg,
         )
 
     # Deployment expectations are not reported at marginal level since singleton/doublet

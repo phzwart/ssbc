@@ -110,17 +110,30 @@ BERNOULLI_EVENT_DEFINITIONS = {
         "type": "conditional",
         "denominator_fixed": False,
     },
+    # Joint rates normalized by total (for marginal scope)
     "singleton_error_class0": {
-        "event": "W_i^{err|0} = 1{E_i=1} given Y_i=0, S_i=singleton",
-        "mean": "r_0^{err} = P(E=1 | Y=0, S=singleton)",
-        "type": "conditional",
-        "denominator_fixed": False,
+        "event": "Z_i^{err,0} = 1{Y_i=0, S_i=singleton, E_i=1}",
+        "mean": "θ_0^{err} = P(Y=0, S=singleton, E=1)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
     },
     "singleton_error_class1": {
-        "event": "W_i^{err|1} = 1{E_i=1} given Y_i=1, S_i=singleton",
-        "mean": "r_1^{err} = P(E=1 | Y=1, S=singleton)",
-        "type": "conditional",
-        "denominator_fixed": False,
+        "event": "Z_i^{err,1} = 1{Y_i=1, S_i=singleton, E_i=1}",
+        "mean": "θ_1^{err} = P(Y=1, S=singleton, E=1)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
+    },
+    "singleton_correct_class0": {
+        "event": "Z_i^{cor,0} = 1{Y_i=0, S_i=singleton, E_i=0}",
+        "mean": "θ_0^{cor} = P(Y=0, S=singleton, E=0)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
+    },
+    "singleton_correct_class1": {
+        "event": "Z_i^{cor,1} = 1{Y_i=1, S_i=singleton, E_i=0}",
+        "mean": "θ_1^{cor} = P(Y=1, S=singleton, E=0)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
     },
 }
 
@@ -174,19 +187,28 @@ def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: s
     else:
         test_size = np.nan
 
-    # Get event definition
-    event_def = BERNOULLI_EVENT_DEFINITIONS.get(metric_key, {})
+    # Normalize metric_key for lookup (remove _rate_ if present, e.g., "singleton_correct_rate_class0" -> "singleton_correct_class0")
+    # This handles both formats: with and without _rate_ in the key
+    normalized_metric_key = metric_key.replace("_rate_", "_").replace("_rate", "")
+    
+    # Get event definition (try normalized key first, then original)
+    event_def = BERNOULLI_EVENT_DEFINITIONS.get(normalized_metric_key, {})
+    if not event_def:
+        # Try original metric_key as fallback
+        event_def = BERNOULLI_EVENT_DEFINITIONS.get(metric_key, {})
+    
     if not event_def:
         # Metric key not found - return early with diagnostic info
-        available_keys_sample = [k for k in BERNOULLI_EVENT_DEFINITIONS.keys() if metric_key.split("_")[0] in k][:5]
+        available_keys_sample = [k for k in BERNOULLI_EVENT_DEFINITIONS.keys() if normalized_metric_key.split("_")[0] in k][:5]
         return {
             "k_cal": np.nan,
             "n_cal": np.nan,
             "n_test": test_size,
-            "event_definition": f"Unknown (metric_key='{metric_key}' not found)",
+            "event_definition": f"Unknown (metric_key='{metric_key}' not found, tried normalized='{normalized_metric_key}')",
             "denominator_fixed": True,
             "diagnostic": {
                 "metric_key": metric_key,
+                "normalized_metric_key": normalized_metric_key,
                 "scope": scope,
                 "available_keys_sample": available_keys_sample,
             },
@@ -217,7 +239,17 @@ def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: s
         # Extract expected rate and estimate k_cal
         # For joint rates normalized by total: expected_rate * n_cal ≈ k_cal
         # Expected keys are: "expected_singleton_rate_class0", "expected_doublet_rate_class0", etc.
-        expected_key = f"expected_{metric_key}"
+        # Map metric_key to expected key format (some metrics have "_rate_" in the key)
+        # Use normalized_metric_key for consistency with event definition lookup
+        if normalized_metric_key in ["singleton_error_class0", "singleton_error_class1", "singleton_correct_class0", "singleton_correct_class1"]:
+            # Map to expected key with "_rate_" inserted
+            expected_key = f"expected_{normalized_metric_key.replace('_class', '_rate_class')}"
+        else:
+            # For keys that already have _rate_ in them, keep as is
+            if "_rate_" in metric_key:
+                expected_key = f"expected_{metric_key}"
+            else:
+                expected_key = f"expected_{metric_key}"
         expected = pac_bounds.get(expected_key, np.nan)
 
         if not np.isnan(expected) and not np.isnan(n_cal) and n_cal > 0:

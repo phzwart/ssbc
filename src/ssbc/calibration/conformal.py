@@ -8,7 +8,7 @@ from scipy.stats import beta as beta_dist
 
 from ssbc.bounds import clopper_pearson_lower, clopper_pearson_upper, cp_interval
 from ssbc.core_pkg import ssbc_correct
-from ssbc.utils import build_mondrian_prediction_sets
+from ssbc.utils import build_conditional_prediction_sets, build_mondrian_prediction_sets
 
 
 def split_by_class(labels: np.ndarray, probs: np.ndarray) -> dict[int, dict[str, Any]]:
@@ -178,7 +178,7 @@ def mondrian_conformal_calibrate(
 
     prediction_stats = {}
 
-    # Step 2a: Evaluate per true class
+    # Step 2a: Evaluate per true class CONDITIONALLY
     for true_label in [0, 1]:
         data = class_data[true_label]
         n_class = data["n"]
@@ -188,8 +188,13 @@ def mondrian_conformal_calibrate(
             continue
 
         probs = data["probs"]
-        # Build prediction sets using shared utility (returns lists for compatibility)
-        prediction_sets = build_mondrian_prediction_sets(probs, threshold_0, threshold_1, return_lists=True)
+
+        # Use the SINGLE threshold calibrated for this class
+        threshold_for_class = calibration_result[true_label]["threshold"]
+
+        # Build prediction sets using SINGLE threshold for conditional analysis
+        # This ensures conditional coverage: P(Y in C(X) | Y = true_label) >= 1 - alpha
+        prediction_sets = build_conditional_prediction_sets(probs, threshold_for_class, return_lists=True)
 
         # Count set sizes and correctness
         n_abstentions = sum(len(ps) == 0 for ps in prediction_sets)
