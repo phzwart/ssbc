@@ -54,7 +54,19 @@ class TestValidatePACBounds:
         # Check all metrics present
         # Note: singleton_error is NOT included in marginal because it mixes two different
         # distributions (class 0 and class 1) which cannot be justified statistically.
-        for metric in ["singleton", "doublet", "abstention", "singleton_error_class0", "singleton_error_class1"]:
+        for metric in [
+            "singleton",
+            "doublet",
+            "abstention",
+            "singleton_error_class0",
+            "singleton_error_class1",
+            "singleton_correct_class0",
+            "singleton_correct_class1",
+            "singleton_error_pred_class0",
+            "singleton_error_pred_class1",
+            "singleton_correct_pred_class0",
+            "singleton_correct_pred_class1",
+        ]:
             assert metric in marginal
             m = marginal[metric]
 

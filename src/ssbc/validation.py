@@ -81,6 +81,43 @@ def _validate_single_trial(
     class_1 = eval_results["class_1"]
     n_test = eval_results["n_test"]
 
+    # Build prediction sets to compute predicted class rates
+    from ssbc.utils import build_mondrian_prediction_sets
+
+    prediction_sets = build_mondrian_prediction_sets(probs_test, threshold_0, threshold_1, return_lists=True)
+
+    # Compute predicted class rates: P(predicted_class=X, S=singleton, E=error/correct)
+    # Count singletons predicted as class 0 and class 1, and their errors/corrects
+    n_singleton_pred_class0 = 0
+    n_singleton_pred_class0_error = 0
+    n_singleton_pred_class0_correct = 0
+    n_singleton_pred_class1 = 0
+    n_singleton_pred_class1_error = 0
+    n_singleton_pred_class1_correct = 0
+
+    for pred_set, true_label in zip(prediction_sets, labels_test, strict=False):
+        if len(pred_set) == 1:  # Singleton
+            predicted_class = pred_set[0]
+            is_correct = true_label == predicted_class
+            if predicted_class == 0:
+                n_singleton_pred_class0 += 1
+                if is_correct:
+                    n_singleton_pred_class0_correct += 1
+                else:
+                    n_singleton_pred_class0_error += 1
+            elif predicted_class == 1:
+                n_singleton_pred_class1 += 1
+                if is_correct:
+                    n_singleton_pred_class1_correct += 1
+                else:
+                    n_singleton_pred_class1_error += 1
+
+    # Normalize by total test set size
+    error_pred_class0 = n_singleton_pred_class0_error / n_test if n_test > 0 else 0.0
+    error_pred_class1 = n_singleton_pred_class1_error / n_test if n_test > 0 else 0.0
+    correct_pred_class0 = n_singleton_pred_class0_correct / n_test if n_test > 0 else 0.0
+    correct_pred_class1 = n_singleton_pred_class1_correct / n_test if n_test > 0 else 0.0
+
     # Additional marginal metrics involving class-conditional rates (normalized by total)
     # - Singleton, doublet, abstention rates for class 0 and class 1 (normalized by total)
     # - Normalized-by-total error rate for class-0 and class-1 singletons
@@ -129,6 +166,11 @@ def _validate_single_trial(
             # Class-specific singleton correct rates (normalized by total)
             "singleton_correct_class0": correct_c0_norm,
             "singleton_correct_class1": correct_c1_norm,
+            # Error/correct rates when singleton is assigned to a specific class (normalized by total)
+            "singleton_error_pred_class0": error_pred_class0,
+            "singleton_error_pred_class1": error_pred_class1,
+            "singleton_correct_pred_class0": correct_pred_class0,
+            "singleton_correct_pred_class1": correct_pred_class1,
         },
         "class_0": {
             "singleton": class_0["singleton_rate"],
@@ -272,6 +314,11 @@ def validate_pac_bounds(
     # Class-specific singleton correct metrics (normalized by total)
     marginal_correct_class0_norm = [result["marginal"]["singleton_correct_class0"] for result in trial_results]
     marginal_correct_class1_norm = [result["marginal"]["singleton_correct_class1"] for result in trial_results]
+    # Error/correct rates when singleton is assigned to a specific class (normalized by total)
+    marginal_error_pred_class0 = [result["marginal"]["singleton_error_pred_class0"] for result in trial_results]
+    marginal_error_pred_class1 = [result["marginal"]["singleton_error_pred_class1"] for result in trial_results]
+    marginal_correct_pred_class0 = [result["marginal"]["singleton_correct_pred_class0"] for result in trial_results]
+    marginal_correct_pred_class1 = [result["marginal"]["singleton_correct_pred_class1"] for result in trial_results]
 
     class_0_singleton_rates = [result["class_0"]["singleton"] for result in trial_results]
     class_0_doublet_rates = [result["class_0"]["doublet"] for result in trial_results]
@@ -300,6 +347,11 @@ def validate_pac_bounds(
     # Class-specific singleton correct metrics (normalized by total)
     marginal_correct_class0_norm = np.array(marginal_correct_class0_norm)
     marginal_correct_class1_norm = np.array(marginal_correct_class1_norm)
+    # Error/correct rates when singleton is assigned to a specific class (normalized by total)
+    marginal_error_pred_class0 = np.array(marginal_error_pred_class0)
+    marginal_error_pred_class1 = np.array(marginal_error_pred_class1)
+    marginal_correct_pred_class0 = np.array(marginal_correct_pred_class0)
+    marginal_correct_pred_class1 = np.array(marginal_correct_pred_class1)
 
     class_0_singleton_rates = np.array(class_0_singleton_rates)
     class_0_doublet_rates = np.array(class_0_doublet_rates)
@@ -804,6 +856,47 @@ def validate_pac_bounds(
                 scope="marginal",
                 report=report,
             ),
+            # Error/correct rates when singleton is assigned to a specific class (normalized by total)
+            "singleton_error_pred_class0": validate_metric_by_keys(
+                marginal_error_pred_class0,
+                pac_marg,
+                "singleton_error_rate_pred_class0_bounds",
+                "singleton_error_pred_class0",
+                expected_key="expected_singleton_error_rate_pred_class0",
+                use_nan_check=False,
+                scope="marginal",
+                report=report,
+            ),
+            "singleton_error_pred_class1": validate_metric_by_keys(
+                marginal_error_pred_class1,
+                pac_marg,
+                "singleton_error_rate_pred_class1_bounds",
+                "singleton_error_pred_class1",
+                expected_key="expected_singleton_error_rate_pred_class1",
+                use_nan_check=False,
+                scope="marginal",
+                report=report,
+            ),
+            "singleton_correct_pred_class0": validate_metric_by_keys(
+                marginal_correct_pred_class0,
+                pac_marg,
+                "singleton_correct_rate_pred_class0_bounds",
+                "singleton_correct_pred_class0",
+                expected_key="expected_singleton_correct_rate_pred_class0",
+                use_nan_check=False,
+                scope="marginal",
+                report=report,
+            ),
+            "singleton_correct_pred_class1": validate_metric_by_keys(
+                marginal_correct_pred_class1,
+                pac_marg,
+                "singleton_correct_rate_pred_class1_bounds",
+                "singleton_correct_pred_class1",
+                expected_key="expected_singleton_correct_rate_pred_class1",
+                use_nan_check=False,
+                scope="marginal",
+                report=report,
+            ),
         },
         "class_0": {
             "singleton": validate_metric_all_methods(
@@ -992,6 +1085,11 @@ def print_validation_results(validation: dict[str, Any]) -> None:
                 "singleton_error_class1",
                 "singleton_correct_class0",
                 "singleton_correct_class1",
+                # Error/correct rates when singleton is assigned to a specific class
+                "singleton_error_pred_class0",
+                "singleton_error_pred_class1",
+                "singleton_correct_pred_class0",
+                "singleton_correct_pred_class1",
             ]
         else:
             metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1249,6 +1347,10 @@ def plot_validation_bounds(
         "singleton_error_class1",
         "singleton_correct_class0",
         "singleton_correct_class1",
+        "singleton_error_pred_class0",
+        "singleton_error_pred_class1",
+        "singleton_correct_pred_class0",
+        "singleton_correct_pred_class1",
     ]
     if metric not in valid_metrics:
         raise ValueError(f"metric must be one of {valid_metrics}, got '{metric}'")
@@ -1615,6 +1717,10 @@ def validate_prediction_interval_calibration(
                     "singleton_error_class1",
                     "singleton_correct_class0",
                     "singleton_correct_class1",
+                    "singleton_error_pred_class0",
+                    "singleton_error_pred_class1",
+                    "singleton_correct_pred_class0",
+                    "singleton_correct_pred_class1",
                 ]
             else:
                 metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1748,6 +1854,10 @@ def validate_prediction_interval_calibration(
                 "singleton_error_class1",
                 "singleton_correct_class0",
                 "singleton_correct_class1",
+                "singleton_error_pred_class0",
+                "singleton_error_pred_class1",
+                "singleton_correct_pred_class0",
+                "singleton_correct_pred_class1",
             ]
         else:
             metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1821,6 +1931,10 @@ def print_calibration_validation_results(results: dict[str, Any]) -> None:
                 "singleton_error_class1",
                 "singleton_correct_class0",
                 "singleton_correct_class1",
+                "singleton_error_pred_class0",
+                "singleton_error_pred_class1",
+                "singleton_correct_pred_class0",
+                "singleton_correct_pred_class1",
             ]
         else:
             metrics_list = ["singleton", "doublet", "abstention", "singleton_error"]
@@ -1950,6 +2064,11 @@ def get_calibration_bounds_dataframe(
         # Class-specific correct rates
         "singleton_correct_class0",
         "singleton_correct_class1",
+        # Error/correct rates when singleton is assigned to a specific class
+        "singleton_error_pred_class0",
+        "singleton_error_pred_class1",
+        "singleton_correct_pred_class0",
+        "singleton_correct_pred_class1",
     ]
     metrics = default_metrics if metric is None else [metric]
 
