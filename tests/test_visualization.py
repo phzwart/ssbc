@@ -192,3 +192,180 @@ class TestPlotParallelCoordinatesPlotly:
         if fig.data:
             unselected_line = fig.data[0].unselected.line
             assert "color" in unselected_line
+
+
+class TestReportPredictionStatsOperationalBounds:
+    """Test report_prediction_stats with operational bounds."""
+
+    @pytest.fixture
+    def sample_data(self):
+        """Create sample calibration and prediction stats."""
+        sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 8), beta_params_class1=(8, 2), seed=42)
+        labels, probs = sim.generate(n_samples=100)
+        class_data = split_by_class(labels, probs)
+
+        cal_result, pred_stats = mondrian_conformal_calibrate(
+            class_data=class_data, alpha_target=0.10, delta=0.10, mode="beta"
+        )
+
+        return cal_result, pred_stats, labels, probs
+
+    def test_operational_bounds_reporting_per_class(self, sample_data, capsys):
+        """Test reporting with operational bounds per class."""
+        cal_result, pred_stats, _, _ = sample_data
+
+        # Create mock operational bounds objects matching expected structure
+        class RateBounds:
+            def __init__(self, lower, upper, n_successes, n_evaluations):
+                self.lower_bound = lower
+                self.upper_bound = upper
+                self.n_successes = n_successes
+                self.n_evaluations = n_evaluations
+
+        class OperationalBounds:
+            def __init__(self, ci_width, n_calibration):
+                self.ci_width = ci_width
+                self.n_calibration = n_calibration
+                self.rate_bounds = {
+                    "singleton": RateBounds(0.7, 0.9, 80, 100),
+                    "doublet": RateBounds(0.05, 0.15, 10, 100),
+                    "abstention": RateBounds(0.0, 0.1, 5, 100),
+                    "correct_in_singleton": RateBounds(0.85, 0.95, 70, 80),
+                    "error_in_singleton": RateBounds(0.05, 0.15, 10, 80),
+                }
+
+        operational_bounds_per_class = {
+            0: OperationalBounds(0.95, 50),
+            1: OperationalBounds(0.95, 50),
+        }
+
+        summary = report_prediction_stats(
+            pred_stats, cal_result, operational_bounds_per_class=operational_bounds_per_class, verbose=True
+        )
+
+        captured = capsys.readouterr()
+        assert "RIGOROUS Operational Bounds" in captured.out
+        assert "CI width" in captured.out
+        assert "CONDITIONAL RATES" in captured.out
+        assert isinstance(summary, dict)
+        assert 0 in summary
+        assert 1 in summary
+        assert "operational_bounds" in summary[0]
+
+    def test_operational_bounds_reporting_marginal(self, sample_data, capsys):
+        """Test reporting with marginal operational bounds."""
+
+        cal_result, pred_stats, _, _ = sample_data
+
+        # Create mock operational bounds object
+        class RateBounds:
+            def __init__(self, lower, upper, n_successes, n_evaluations):
+                self.lower_bound = lower
+                self.upper_bound = upper
+                self.n_successes = n_successes
+                self.n_evaluations = n_evaluations
+
+        class OperationalBounds:
+            def __init__(self, ci_width, n_calibration):
+                self.ci_width = ci_width
+                self.n_calibration = n_calibration
+                self.rate_bounds = {
+                    "singleton": RateBounds(0.7, 0.9, 80, 100),
+                    "doublet": RateBounds(0.05, 0.15, 10, 100),
+                    "abstention": RateBounds(0.0, 0.1, 5, 100),
+                    "correct_in_singleton": RateBounds(0.85, 0.95, 70, 80),
+                    "error_in_singleton": RateBounds(0.05, 0.15, 10, 80),
+                }
+
+        marginal_operational_bounds = OperationalBounds(0.95, 100)
+
+        summary = report_prediction_stats(
+            pred_stats, cal_result, marginal_operational_bounds=marginal_operational_bounds, verbose=True
+        )
+
+        captured = capsys.readouterr()
+        assert "MARGINAL STATISTICS" in captured.out
+        assert "Deployment View" in captured.out
+        assert "RIGOROUS Marginal Bounds" in captured.out
+        assert "Deployment Expectations" in captured.out
+        assert isinstance(summary, dict)
+        assert "marginal_bounds" in summary
+
+    def test_operational_bounds_reporting_both(self, sample_data, capsys):
+        """Test reporting with both per-class and marginal operational bounds."""
+
+        cal_result, pred_stats, _, _ = sample_data
+
+        # Create mock operational bounds objects
+        class RateBounds:
+            def __init__(self, lower, upper, n_successes, n_evaluations):
+                self.lower_bound = lower
+                self.upper_bound = upper
+                self.n_successes = n_successes
+                self.n_evaluations = n_evaluations
+
+        class OperationalBounds:
+            def __init__(self, ci_width, n_calibration):
+                self.ci_width = ci_width
+                self.n_calibration = n_calibration
+                self.rate_bounds = {
+                    "singleton": RateBounds(0.7, 0.9, 80, 100),
+                    "doublet": RateBounds(0.05, 0.15, 10, 100),
+                    "abstention": RateBounds(0.0, 0.1, 5, 100),
+                    "correct_in_singleton": RateBounds(0.85, 0.95, 70, 80),
+                    "error_in_singleton": RateBounds(0.05, 0.15, 10, 80),
+                }
+
+        operational_bounds_per_class = {
+            0: OperationalBounds(0.95, 50),
+            1: OperationalBounds(0.95, 50),
+        }
+        marginal_operational_bounds = OperationalBounds(0.95, 100)
+
+        summary = report_prediction_stats(
+            pred_stats,
+            cal_result,
+            operational_bounds_per_class=operational_bounds_per_class,
+            marginal_operational_bounds=marginal_operational_bounds,
+            verbose=True,
+        )
+
+        captured = capsys.readouterr()
+        assert "RIGOROUS Operational Bounds" in captured.out
+        assert "MARGINAL STATISTICS" in captured.out
+        assert "Operational bounds have PAC guarantees" in captured.out
+        assert isinstance(summary, dict)
+
+    def test_operational_bounds_no_conditional_rates(self, sample_data, capsys):
+        """Test operational bounds without conditional rates."""
+        cal_result, pred_stats, _, _ = sample_data
+
+        # Create mock operational bounds without conditional rates
+        class RateBounds:
+            def __init__(self, lower, upper, n_successes, n_evaluations):
+                self.lower_bound = lower
+                self.upper_bound = upper
+                self.n_successes = n_successes
+                self.n_evaluations = n_evaluations
+
+        class OperationalBounds:
+            def __init__(self, ci_width, n_calibration):
+                self.ci_width = ci_width
+                self.n_calibration = n_calibration
+                self.rate_bounds = {
+                    "singleton": RateBounds(0.7, 0.9, 80, 100),
+                    "doublet": RateBounds(0.05, 0.15, 10, 100),
+                    "abstention": RateBounds(0.0, 0.1, 5, 100),
+                }
+
+        operational_bounds_per_class = {0: OperationalBounds(0.95, 50), 1: OperationalBounds(0.95, 50)}
+
+        summary = report_prediction_stats(
+            pred_stats, cal_result, operational_bounds_per_class=operational_bounds_per_class, verbose=True
+        )
+
+        captured = capsys.readouterr()
+        assert "RIGOROUS Operational Bounds" in captured.out
+        # Should not have conditional rates section
+        assert "CONDITIONAL RATES" not in captured.out
+        assert isinstance(summary, dict)
