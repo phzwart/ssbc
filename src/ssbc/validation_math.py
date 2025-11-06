@@ -135,6 +135,31 @@ BERNOULLI_EVENT_DEFINITIONS = {
         "type": "joint_full_sample",
         "denominator_fixed": True,
     },
+    # Error/correct rates when singleton is assigned to a specific class (normalized by total)
+    "singleton_error_pred_class0": {
+        "event": "Z_i^{err,pred0} = 1{predicted_class=0, S_i=singleton, E_i=1}",
+        "mean": "θ_0^{err,pred} = P(predicted_class=0, S=singleton, E=1)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
+    },
+    "singleton_error_pred_class1": {
+        "event": "Z_i^{err,pred1} = 1{predicted_class=1, S_i=singleton, E_i=1}",
+        "mean": "θ_1^{err,pred} = P(predicted_class=1, S=singleton, E=1)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
+    },
+    "singleton_correct_pred_class0": {
+        "event": "Z_i^{cor,pred0} = 1{predicted_class=0, S_i=singleton, E_i=0}",
+        "mean": "θ_0^{cor,pred} = P(predicted_class=0, S=singleton, E=0)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
+    },
+    "singleton_correct_pred_class1": {
+        "event": "Z_i^{cor,pred1} = 1{predicted_class=1, S_i=singleton, E_i=0}",
+        "mean": "θ_1^{cor,pred} = P(predicted_class=1, S=singleton, E=0)",
+        "type": "joint_full_sample",
+        "denominator_fixed": True,
+    },
 }
 
 
@@ -254,6 +279,15 @@ def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: s
         ]:
             # Map to expected key with "_rate_" inserted
             expected_key = f"expected_{normalized_metric_key.replace('_class', '_rate_class')}"
+        elif normalized_metric_key in [
+            "singleton_error_pred_class0",
+            "singleton_error_pred_class1",
+            "singleton_correct_pred_class0",
+            "singleton_correct_pred_class1",
+        ]:
+            # Map to expected key with "_rate_" inserted before "_pred_"
+            # e.g., "singleton_error_pred_class0" -> "expected_singleton_error_rate_pred_class0"
+            expected_key = f"expected_{normalized_metric_key.replace('_pred_class', '_rate_pred_class')}"
         else:
             # For keys that already have _rate_ in them, keep as is
             if "_rate_" in metric_key:
