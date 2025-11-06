@@ -233,7 +233,7 @@ def extract_calibration_counts(report: dict[str, Any], metric_key: str, scope: s
             "n_cal": np.nan,
             "n_test": test_size,
             "event_definition": (
-                f"Unknown (metric_key='{metric_key}' not found, " f"tried normalized='{normalized_metric_key}')"
+                f"Unknown (metric_key='{metric_key}' not found, tried normalized='{normalized_metric_key}')"
             ),
             "denominator_fixed": True,
             "diagnostic": {
