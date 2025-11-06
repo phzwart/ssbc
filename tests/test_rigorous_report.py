@@ -153,20 +153,33 @@ class TestGenerateRigorousPACReport:
             "singleton_rate_bounds",
             "doublet_rate_bounds",
             "abstention_rate_bounds",
-            "singleton_error_rate_bounds",
+            "singleton_error_rate_class0_bounds",
+            "singleton_error_rate_class1_bounds",
             "expected_singleton_rate",
             "expected_doublet_rate",
             "expected_abstention_rate",
-            "expected_singleton_error_rate",
+            "expected_singleton_error_rate_class0",
+            "expected_singleton_error_rate_class1",
         ]
 
         for key in required_keys:
             assert key in marginal
 
         # Check per-class bounds
+        # Per-class bounds have singleton_error_rate_bounds (not class0/class1 specific)
+        per_class_required_keys = [
+            "singleton_rate_bounds",
+            "doublet_rate_bounds",
+            "abstention_rate_bounds",
+            "singleton_error_rate_bounds",  # Per-class has this, not class0/class1
+            "expected_singleton_rate",
+            "expected_doublet_rate",
+            "expected_abstention_rate",
+            "expected_singleton_error_rate",
+        ]
         for class_label in [0, 1]:
             class_bounds = report[f"pac_bounds_class_{class_label}"]
-            for key in required_keys:
+            for key in per_class_required_keys:
                 assert key in class_bounds
 
     def test_calibration_result_structure(self, test_data):
@@ -226,9 +239,10 @@ class TestEdgeCases:
     """Test edge cases."""
 
     def test_small_sample_size(self):
-        """Test with very small sample size."""
+        """Test with small sample size (but ensuring each class has >= 10 samples)."""
         sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
-        labels, probs = sim.generate(20)
+        # Generate enough samples to ensure each class has at least 10 after split
+        labels, probs = sim.generate(50)
 
         # Should not crash
         report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
@@ -242,7 +256,9 @@ class TestEdgeCases:
         sim = BinaryClassifierSimulator(
             p_class1=0.05, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42
         )  # 5% class 1
-        labels, probs = sim.generate(100)
+        # Generate enough samples to ensure minority class has at least 10 samples
+        # With p_class1=0.05, need ~200 samples to reliably get 10+ class 1 samples
+        labels, probs = sim.generate(250)
 
         report = generate_rigorous_pac_report(labels=labels, probs=probs, alpha_target=0.10, delta=0.10, verbose=False)
 

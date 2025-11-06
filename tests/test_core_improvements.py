@@ -7,7 +7,7 @@ import pytest
 from ssbc.core_pkg import ssbc_correct
 
 
-@pytest.mark.parametrize("n", [1, 2, 5, 50, 200])
+@pytest.mark.parametrize("n", [10, 15, 50, 200])
 @pytest.mark.parametrize("alpha_target", [1e-6, 1e-3, 0.01, 0.1, 0.4])
 @pytest.mark.parametrize("delta", [0.1, 0.05, 0.001])
 def test_monotone_alpha(n, alpha_target, delta):
@@ -48,10 +48,9 @@ def test_numerical_stability_edge_cases():
     assert r1.u_star >= 0
     assert r1.alpha_corrected <= 1e-8
 
-    # Very small n
-    r2 = ssbc_correct(alpha_target=0.1, n=1, delta=0.1)
-    assert r2.u_star >= 0
-    assert r2.alpha_corrected <= 0.1
+    # Very small n (should raise error)
+    with pytest.raises(ValueError, match="Calibration set size n=.*is too small"):
+        ssbc_correct(alpha_target=0.1, n=1, delta=0.1)
 
     # Very small delta
     r3 = ssbc_correct(alpha_target=0.1, n=50, delta=1e-6)
@@ -80,8 +79,8 @@ def test_survival_function_usage():
 
 def test_conservative_fallback():
     """Test that the most conservative fallback (u=0) is used when appropriate."""
-    # Use parameters that might require fallback
-    r = ssbc_correct(alpha_target=0.01, n=5, delta=0.001)
+    # Use parameters that might require fallback (but n must be >= 10)
+    r = ssbc_correct(alpha_target=0.01, n=10, delta=0.001)
     assert r.u_star >= 0
     assert r.alpha_corrected >= 0.0
     # If u_star=0, then alpha_corrected should be 0.0

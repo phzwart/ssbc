@@ -264,9 +264,9 @@ class TestEdgeCases:
     """Test edge cases."""
 
     def test_small_sample_size(self):
-        """Test with very small sample size."""
+        """Test with small sample size (ensuring each class has >= 10 samples)."""
         sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
-        labels, probs = sim.generate(15)
+        labels, probs = sim.generate(50)  # Enough to ensure each class has >= 10
 
         # Use fewer folds for small sample
         results = cross_conformal_validation(
@@ -279,7 +279,7 @@ class TestEdgeCases:
         )
 
         # Should handle gracefully
-        assert results["n_samples"] == 15
+        assert results["n_samples"] == 50
         assert results["n_folds"] == 3
 
     def test_imbalanced_classes(self):
@@ -287,7 +287,9 @@ class TestEdgeCases:
         sim = BinaryClassifierSimulator(
             p_class1=0.1, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42
         )  # 10% class 1
-        labels, probs = sim.generate(50)
+        # Need enough samples so that each fold has at least 10 samples per class
+        # With n_folds=5 and p_class1=0.1, need ~500 samples total
+        labels, probs = sim.generate(500)
 
         results = cross_conformal_validation(
             labels=labels,
@@ -305,10 +307,11 @@ class TestEdgeCases:
 
     def test_perfect_predictions(self):
         """Test with perfect predictions."""
-        # Create perfect predictions
-        labels = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
-        probs = np.zeros((10, 2))
-        for i in range(10):
+        # Create perfect predictions - need enough so each fold has >= 10 per class
+        # With n_folds=2, need at least 40 samples total (20 per fold, 10 per class per fold)
+        labels = np.array([0] * 20 + [1] * 20)
+        probs = np.zeros((40, 2))
+        for i in range(40):
             probs[i, labels[i]] = 1.0
 
         results = cross_conformal_validation(
@@ -318,6 +321,7 @@ class TestEdgeCases:
             delta=0.10,
             n_folds=2,
             seed=42,
+            stratify=True,  # Stratified to ensure balanced classes per fold
         )
 
         # Should handle perfect predictions

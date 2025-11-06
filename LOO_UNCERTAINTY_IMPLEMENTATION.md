@@ -183,15 +183,17 @@ n_effective = n_cal / inflation_factor
 
 ## Migration Checklist
 
-After integration, verify:
-- [ ] All bound computation functions accept `n_test` parameter
-- [ ] LOO predictions stored as binary arrays (not just counts)
-- [ ] Reports clearly state bounds account for "all four uncertainty sources"
-- [ ] Validation tests show proper empirical coverage
-- [ ] Old Clopper-Pearson code removed or marked deprecated
-- [ ] Method selection based on sample size
-- [ ] Warnings issued when n_cal < 20 (very small sample)
-- [ ] Comparison table shows all three methods for transparency
+✅ **Completed** - All items have been implemented:
+- ✅ All bound computation functions accept `n_test` parameter
+- ✅ LOO predictions stored as binary arrays (not just counts)
+- ✅ Reports clearly state bounds account for "all four uncertainty sources"
+- ✅ Validation tests show proper empirical coverage (see `tests/test_operational_bounds.py`)
+- ✅ Old Clopper-Pearson code removed or marked deprecated
+- ✅ Method selection based on sample size (auto-selects analytical/exact/hoeffding)
+- ✅ Warnings issued when n_cal < 20 (via LOO diagnostics)
+- ✅ Comparison table shows all three methods for transparency (when `prediction_method="all"`)
+
+**Status**: Migration complete. This implementation is fully integrated into `generate_rigorous_pac_report()`.
 
 ## Conclusion
 

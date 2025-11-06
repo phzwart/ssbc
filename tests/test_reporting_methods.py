@@ -42,5 +42,5 @@ def test_reporting_prints_method_comparison() -> None:
         sys.stdout = old
     out = buf.getvalue()
 
-    assert "Method comparison:" in out
-    assert "Selected bounds:" in out
+    assert "Candidate bounds" in out
+    assert "Operational bounds:" in out

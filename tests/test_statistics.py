@@ -142,9 +142,9 @@ class TestCpInterval:
         result = cp_interval(count=0, total=0)
 
         assert result["count"] == 0
-        assert result["proportion"] == 0.0
+        assert np.isnan(result["proportion"])
         assert result["lower"] == 0.0
-        assert result["upper"] == 0.0
+        assert result["upper"] == 1.0
 
     def test_different_confidence_levels(self):
         """Test different confidence levels."""
@@ -259,14 +259,18 @@ class TestEnsureCi:
         assert width_99 > width_95
 
     def test_zero_values_edge_case(self):
-        """Test edge case with zeros."""
-        d = {"rate": 0.0, "lower": 0.0, "upper": 0.0}
+        """Test edge case with NaN values triggering recomputation."""
+        import numpy as np
 
-        # Should recompute because CI is all zeros
+        d = {"rate": np.nan, "lower": np.nan, "upper": np.nan}
+
+        # Should recompute because values are NaN
         rate, lower, upper = ensure_ci(d, count=5, total=10)
 
-        assert rate > 0
-        assert upper > 0
+        assert rate == 0.5  # 5/10
+        assert lower >= 0
+        assert upper <= 1
+        assert lower < rate < upper
 
     def test_returns_floats(self):
         """Test that all return values are floats."""

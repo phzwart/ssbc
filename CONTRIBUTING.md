@@ -49,13 +49,14 @@ Ready to contribute? Here's how to set up `ssbc` for local development.
    git clone git@github.com:your_name_here/ssbc.git
    ```
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development:
+3. Install your local copy. The project uses `uv` for package management. Install in development mode:
 
    ```sh
-   mkvirtualenv ssbc
    cd ssbc/
-   python setup.py develop
+   uv pip install -e .
    ```
+
+   This installs the package in editable mode with all dependencies.
 
 4. Create a branch for local development:
 
@@ -65,16 +66,20 @@ Ready to contribute? Here's how to set up `ssbc` for local development.
 
    Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass flake8 and the tests, including testing other Python versions with tox:
+5. When you're done making changes, check that your changes pass linting and tests:
 
    ```sh
-   make lint
-   make test
-   # Or
-   make test-all
+   # Run all quality checks (formatting, linting, type checking, tests)
+   just qa
+
+   # Or run tests only
+   just test
+
+   # Run tests for all supported Python versions (3.10, 3.11, 3.12, 3.13)
+   just testall
    ```
 
-   To get flake8 and tox, just pip install them into your virtualenv.
+   The project uses `just` for task running. Install it with `cargo install just` or see [just documentation](https://github.com/casey/just).
 
 6. Commit your changes and push your branch to GitHub:
 
@@ -92,7 +97,7 @@ Before you submit a pull request, check that it meets these guidelines:
 
 1. The pull request should include tests.
 2. If the pull request adds functionality, the docs should be updated. Put your new functionality into a function with a docstring, and add the feature to the list in README.md.
-3. The pull request should work for Python 3.12 and 3.13. Tests run in GitHub Actions on every pull request to the main branch, make sure that the tests pass for all supported Python versions.
+3. The pull request should work for Python 3.10, 3.11, 3.12, and 3.13. Tests run in GitHub Actions on every pull request to the main branch, make sure that the tests pass for all supported Python versions.
 
 ## Tips
 
@@ -104,12 +109,15 @@ pytest tests.test_ssbc
 
 ## Deploying
 
-A reminder for the maintainers on how to deploy. Make sure all your changes are committed (including an entry in HISTORY.md). Then run:
+A reminder for the maintainers on how to deploy. Make sure all your changes are committed (including an entry in HISTORY.md). Then:
+
+1. Update the version in `pyproject.toml` (e.g., from `1.3.4` to `1.3.5`)
+2. Commit the version change
+3. Create and push a git tag:
 
 ```sh
-bump2version patch # possible: major / minor / patch
-git push
-git push --tags
+git tag -a v1.3.5 -m "Release version 1.3.5"
+git push origin v1.3.5
 ```
 
 You can set up a [GitHub Actions workflow](https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-python#publishing-to-pypi) to automatically deploy your package to PyPI when you push a new tag.

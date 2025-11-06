@@ -196,9 +196,50 @@ print(f"  Singleton coverage: {optimal['singleton_coverage']:.4f}")
 
 ## Uncertainty Quantification
 
+### Standalone Diagnostic Tools
+
+Bootstrap and cross-conformal validation are available as standalone diagnostic tools (not integrated into the main PAC bounds computation):
+
+### Bootstrap Calibration Uncertainty
+
+Analyze how operational rates vary if you recalibrate on similar datasets:
+
+```python
+from ssbc import bootstrap_calibration_uncertainty, plot_bootstrap_distributions
+
+results = bootstrap_calibration_uncertainty(
+    labels=labels,
+    probs=probs,
+    simulator=sim,
+    n_bootstrap=1000,
+    test_size=1000
+)
+
+# Visualize distributions
+plot_bootstrap_distributions(results, save_path='bootstrap_results.png')
+```
+
+### Cross-Conformal Validation
+
+K-fold cross-validation for finite-sample diagnostics:
+
+```python
+from ssbc import cross_conformal_validation
+
+results = cross_conformal_validation(
+    labels=labels,
+    probs=probs,
+    n_folds=10,
+    alpha_target=0.10,
+    delta=0.10
+)
+
+print(f"Singleton rate: {results['marginal']['singleton']['mean']:.3f} ± {results['marginal']['singleton']['std']:.3f}")
+```
+
 ### Validation with Class-Conditional Error Metrics
 
-The validation framework now includes class-conditional singleton error metrics:
+The validation framework includes class-conditional singleton error metrics:
 
 ```python
 from ssbc import validate_pac_bounds, validate_prediction_interval_calibration
@@ -459,11 +500,11 @@ python examples/mondrian_conformal_example.py
 ```
 Complete workflow: simulation → calibration → per-class reporting.
 
-### 3. Complete Workflow with All Uncertainty Analyses
+### 3. Complete Workflow with PAC Operational Bounds
 ```bash
 python examples/complete_workflow_example.py
 ```
-Shows PAC bounds, bootstrap, and cross-conformal all together.
+Shows the complete PAC bounds workflow using `generate_rigorous_pac_report()`.
 
 ### 4. SLA/Deployment Contracts
 ```bash
@@ -483,17 +524,17 @@ python examples/pac_validation_example.py
 ```
 Empirically validate that theoretical PAC guarantees hold in practice.
 
-### 7. Bootstrap Demo
+### 7. Bootstrap Demo (Standalone Diagnostic)
 ```bash
 python examples/bootstrap_calibration_demo.py
 ```
-Standalone bootstrap analysis with detailed visualization.
+Standalone bootstrap analysis with detailed visualization. This is a diagnostic tool, not integrated into PAC bounds.
 
-### 8. Cross-Conformal Validation
+### 8. Cross-Conformal Validation (Standalone Diagnostic)
 ```bash
 python examples/cross_conformal_example.py
 ```
-K-fold cross-validation for finite-sample diagnostics.
+K-fold cross-validation for finite-sample diagnostics. This is a diagnostic tool, not integrated into PAC bounds.
 
 ## References
 

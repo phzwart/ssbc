@@ -52,7 +52,21 @@ class TestValidatePACBounds:
         marginal = validation["marginal"]
 
         # Check all metrics present
-        for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
+        # Note: singleton_error is NOT included in marginal because it mixes two different
+        # distributions (class 0 and class 1) which cannot be justified statistically.
+        for metric in [
+            "singleton",
+            "doublet",
+            "abstention",
+            "singleton_error_class0",
+            "singleton_error_class1",
+            "singleton_correct_class0",
+            "singleton_correct_class1",
+            "singleton_error_pred_class0",
+            "singleton_error_pred_class1",
+            "singleton_correct_pred_class0",
+            "singleton_correct_pred_class1",
+        ]:
             assert metric in marginal
             m = marginal[metric]
 
@@ -97,7 +111,13 @@ class TestValidatePACBounds:
 
         # Check coverage is between 0 and 1 (or NaN)
         for scope in ["marginal", "class_0", "class_1"]:
-            for metric in ["singleton", "doublet", "abstention", "singleton_error"]:
+            if scope == "marginal":
+                # Marginal doesn't have singleton_error (mixes distributions)
+                metrics = ["singleton", "doublet", "abstention", "singleton_error_class0", "singleton_error_class1"]
+            else:
+                # Per-class has singleton_error
+                metrics = ["singleton", "doublet", "abstention", "singleton_error"]
+            for metric in metrics:
                 coverage = validation[scope][metric]["empirical_coverage"]
                 assert np.isnan(coverage) or (0 <= coverage <= 1)
 
@@ -228,9 +248,10 @@ class TestEdgeCases:
 
         validation = validate_pac_bounds(report=report, simulator=sim, test_size=100, n_trials=10, verbose=False)
 
-        # singleton_error rates may contain NaN (when no singletons)
+        # singleton_error_class0 rates may contain NaN (when no singletons)
         # Coverage calculation should handle this
-        coverage = validation["marginal"]["singleton_error"]["empirical_coverage"]
+        # Note: marginal doesn't have singleton_error (mixes distributions), use class0 instead
+        coverage = validation["marginal"]["singleton_error_class0"]["empirical_coverage"]
 
         # Should be a number or NaN, not crash
         assert isinstance(coverage, float | np.floating)

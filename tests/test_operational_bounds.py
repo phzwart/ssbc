@@ -56,11 +56,11 @@ class TestPACOperationalBoundsPerClass:
         assert "singleton_rate_bounds" in result
         assert "doublet_rate_bounds" in result
         assert "abstention_rate_bounds" in result
-        assert "singleton_error_rate_bounds" in result
+        assert "singleton_error_rate_bounds" in result  # Per-class has this, not class0/class1 specific
         assert "expected_singleton_rate" in result
         assert "expected_doublet_rate" in result
         assert "expected_abstention_rate" in result
-        assert "expected_singleton_error_rate" in result
+        assert "expected_singleton_error_rate" in result  # Per-class has this, not class0/class1 specific
 
         # Check bounds are lists (returned as lists from function)
         assert isinstance(result["singleton_rate_bounds"], list | tuple)
@@ -196,7 +196,10 @@ class TestPACOperationalBoundsMarginal:
         assert "singleton_rate_bounds" in result
         assert "doublet_rate_bounds" in result
         assert "abstention_rate_bounds" in result
-        assert "singleton_error_rate_bounds" in result
+        assert "singleton_error_rate_class0_bounds" in result
+        assert "singleton_error_rate_class1_bounds" in result
+        # Note: singleton_error_rate_bounds is NOT included because it mixes two
+        # different distributions (class 0 and class 1) which cannot be justified statistically.
         assert "n_grid_points" in result
 
         # Check bounds validity
@@ -264,9 +267,9 @@ class TestEdgeCases:
     """Test edge cases and error handling."""
 
     def test_small_sample_size(self):
-        """Test with very small sample size."""
+        """Test with small sample size (ensuring each class has >= 10 samples)."""
         sim = BinaryClassifierSimulator(p_class1=0.5, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
-        labels, probs = sim.generate(20)  # Small sample
+        labels, probs = sim.generate(50)  # Enough to ensure each class has >= 10
 
         n_0 = np.sum(labels == 0)
         n_1 = np.sum(labels == 1)

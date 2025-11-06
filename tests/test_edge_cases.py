@@ -86,11 +86,9 @@ class TestEdgeCases:
         assert result.alpha_corrected <= result.alpha_target
 
     def test_ssbc_minimum_n(self):
-        """Test SSBC with minimum possible n."""
-        result = ssbc_correct(alpha_target=0.10, n=1, delta=0.10, mode="beta")
-        assert result.n == 1
-        assert result.u_star >= 0
-        assert result.u_star <= 1
+        """Test that n < 10 raises ValueError."""
+        with pytest.raises(ValueError, match="Calibration set size n=.*is too small"):
+            ssbc_correct(alpha_target=0.10, n=1, delta=0.10, mode="beta")
 
     def test_prediction_bounds_edge_cases(self):
         """Test prediction bounds with edge cases."""
@@ -145,15 +143,9 @@ class TestEdgeCases:
 
     def test_conformal_extreme_probabilities(self):
         """Test conformal prediction with extreme probabilities."""
-        labels = np.array([0, 0, 1, 1])
-        probs = np.array(
-            [
-                [1.0, 0.0],
-                [1.0, 0.0],
-                [0.0, 1.0],
-                [0.0, 1.0],
-            ]
-        )  # Extreme probabilities per class
+        # Need at least 10 samples per class, so minimum 20 total
+        labels = np.array([0] * 10 + [1] * 10)
+        probs = np.array([[1.0, 0.0]] * 10 + [[0.0, 1.0]] * 10)  # Extreme probabilities per class
 
         split_data = split_by_class(labels, probs)
         assert 0 in split_data
@@ -166,16 +158,9 @@ class TestEdgeCases:
 
     def test_numerical_stability(self):
         """Test numerical stability with very small/large numbers."""
-        # Very small probabilities
-        labels = np.array([0, 0, 1, 1])
-        probs = np.array(
-            [
-                [1.0 - 1e-10, 1e-10],
-                [1.0 - 1e-10, 1e-10],
-                [1e-10, 1.0 - 1e-10],
-                [1e-10, 1.0 - 1e-10],
-            ]
-        )
+        # Very small probabilities - need at least 10 samples per class
+        labels = np.array([0] * 10 + [1] * 10)
+        probs = np.array([[1.0 - 1e-10, 1e-10]] * 10 + [[1e-10, 1.0 - 1e-10]] * 10)
 
         split_data = split_by_class(labels, probs)
         cal_result, pred_stats = mondrian_conformal_calibrate(split_data, alpha_target=0.1, delta=0.1)

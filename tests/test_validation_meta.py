@@ -61,7 +61,8 @@ def test_print_validation_results_contains_legacy_markers() -> None:
             "singleton_rate_bounds": (0.0, 1.0),
             "doublet_rate_bounds": (0.0, 1.0),
             "abstention_rate_bounds": (0.0, 1.0),
-            "singleton_error_rate_bounds": (0.0, 1.0),
+            # Note: singleton_error_rate_bounds is NOT computed for marginal because it mixes
+            # two different distributions (class 0 and class 1) which cannot be justified statistically.
         },
         "pac_bounds_class_0": {
             "singleton_rate_bounds": (0.0, 1.0),

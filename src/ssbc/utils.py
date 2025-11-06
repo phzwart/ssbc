@@ -84,6 +84,93 @@ def build_mondrian_prediction_sets(
     return prediction_sets
 
 
+def build_conditional_prediction_sets(
+    probs: np.ndarray,
+    threshold: float,
+    return_lists: bool = False,
+) -> list[set[int] | list[int]]:
+    """Build prediction sets using a SINGLE threshold for conditional analysis.
+
+    Unlike Mondrian CP which uses separate thresholds per class, this uses
+    ONE threshold for BOTH classes - as in standard (non-Mondrian) conformal prediction.
+
+    This is used for conditional analysis where we want to evaluate predictions
+    conditioned on the true class label, using the threshold calibrated for that class.
+
+    Parameters
+    ----------
+    probs : np.ndarray, shape (n, 2)
+        Probability predictions [P(class=0), P(class=1)]
+        Note: The data should be filtered by true class label before calling this function.
+        For conditional analysis, only samples with the same true label should be included.
+    threshold : float
+        Single conformal prediction threshold for both classes
+        This should be the threshold calibrated for the class of the samples in probs.
+    return_lists : bool, default=False
+        If True, returns lists instead of sets
+
+    Returns
+    -------
+    list[set[int]] or list[list[int]]
+        Prediction sets where:
+        - {0, 1} if both P(0) >= 1-threshold AND P(1) >= 1-threshold (doublet)
+        - {0} if P(0) >= 1-threshold AND P(1) < 1-threshold (singleton)
+        - {1} if P(1) >= 1-threshold AND P(0) < 1-threshold (singleton)
+        - {} if both P(0) < 1-threshold AND P(1) < 1-threshold (abstention)
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from ssbc.utils import build_conditional_prediction_sets
+    >>>
+    >>> probs = np.array([
+    ...     [0.8, 0.2],  # High confidence class 0: score_0=0.2, score_1=0.8
+    ...     [0.75, 0.75],  # Uncertain, both above threshold: score_0=0.25, score_1=0.25
+    ...     [0.2, 0.8],  # High confidence class 1: score_0=0.8, score_1=0.2
+    ... ])
+    >>> threshold = 0.3
+    >>> pred_sets = build_conditional_prediction_sets(probs, threshold)
+    >>> print(pred_sets)  # [{0}, {0, 1}, {1}]
+
+    Notes
+    -----
+    This function is used for conditional analysis in Mondrian conformal prediction,
+    where we evaluate prediction sets conditioned on the true class label. For each
+    class, we use the threshold calibrated for that class and apply it to BOTH classes
+    in the prediction set, providing conditional coverage guarantees.
+
+    The data is filtered by true class label BEFORE calling this function (e.g., via
+    split_by_class). This ensures that when evaluating conditional coverage P(Y ∈ C(X) | Y = y),
+    we only analyze samples where the true label Y equals the class y for which the
+    threshold was calibrated.
+    """
+    n = len(probs)
+    if probs.shape != (n, 2):
+        raise ValueError(f"probs must have shape (n, 2), got {probs.shape}")
+
+    # Compute nonconformity scores
+    scores_0 = 1.0 - probs[:, 0]
+    scores_1 = 1.0 - probs[:, 1]
+
+    prediction_sets = []
+    for score_0, score_1 in zip(scores_0, scores_1, strict=False):
+        if return_lists:
+            pred_set = []
+            if score_0 <= threshold:  # Same threshold for both classes!
+                pred_set.append(0)
+            if score_1 <= threshold:  # Same threshold for both classes!
+                pred_set.append(1)
+        else:
+            pred_set = set()
+            if score_0 <= threshold:
+                pred_set.add(0)
+            if score_1 <= threshold:
+                pred_set.add(1)
+        prediction_sets.append(pred_set)
+
+    return prediction_sets
+
+
 def compute_operational_rate(
     prediction_sets: list[set[int] | list[int]],
     true_labels: np.ndarray,

@@ -176,4 +176,6 @@ Code: `src/ssbc/reporting/rigorous_report.py` lines 277–305.
 
 ### Reproducibility and finite-sample policy
 
-- Distribution-free, finite-sample guarantees are prioritized throughout (SSBC, CP, Hoeffding-style options). No K-fold CV or transfer cushions are used. LOO-CV is used to maintain unbiasedness of operational estimates in the fixed-calibration setting.
+- Distribution-free, finite-sample guarantees are prioritized throughout (SSBC, CP, Hoeffding-style options).
+- LOO-CV is used to maintain unbiasedness of operational estimates in the fixed-calibration setting.
+- K-fold cross-conformal validation is available as a standalone diagnostic tool (not integrated into PAC bounds computation).

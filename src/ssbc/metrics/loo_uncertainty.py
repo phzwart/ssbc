@@ -79,7 +79,7 @@ def compute_loo_corrected_bounds_analytical(
     inflation_factor: float | None = None,
 ) -> tuple[float, float, dict[str, Any]]:
     """
-    METHOD 1: Analytical bounds with LOO correction (RECOMMENDED).
+    METHOD 1: Analytical bounds with LOO correction.
 
     This method:
     - Uses empirical variance of LOO predictions (captures correlation)
@@ -87,7 +87,10 @@ def compute_loo_corrected_bounds_analytical(
     - Uses t-distribution for small-sample critical values
     - Combines calibration and test sampling uncertainty
 
-    Best for: n_cal, n_test ≥ 20
+    Best for: n_cal, n_test ≥ 40 AND inflation_factor ≥ 1.2
+
+    Note: When inflation_factor ≈ 1 (low correlation), the normal approximation
+    becomes unreliable. Use Method 2 (exact binomial) instead in these cases.
 
     Parameters:
     -----------
@@ -142,6 +145,16 @@ def compute_loo_corrected_bounds_analytical(
 
     # Use the LARGER of the two (conservative)
     var_calibration = max(var_calibration_empirical, var_calibration_theoretical)
+
+    # Warn if inflation factor is very low - normal approximation may be unreliable
+    if inflation_factor is not None and inflation_factor < 1.2:
+        warnings.warn(
+            f"inflation_factor={inflation_factor:.3f} is very low (< 1.2), indicating low LOO correlation. "
+            "The analytical method using normal approximation may be unreliable in this regime. "
+            "Consider using method='exact' (beta-binomial) for more accurate bounds.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Source #4: Test sampling variance
     var_test = p_hat * (1 - p_hat) / n_test
@@ -556,30 +569,54 @@ def compute_robust_prediction_bounds(
     n_cal = len(loo_predictions)
     k_loo = int(np.sum(loo_predictions))
 
-    # Auto-select method based on sample size
-    if method == "auto":
-        if n_cal >= 40:
-            method = "analytical"
-        elif n_cal >= 25:
-            method = "exact"
-        else:
-            method = "hoeffding"
-        if verbose:
-            print(f"Auto-selected LOO method: {method} (n_cal={n_cal})")
-
-    # Always estimate inflation factor for reporting, but use provided value if given
+    # Always estimate inflation factor first (needed for method selection)
     estimated_inflation_factor = estimate_loo_inflation_factor(loo_predictions, verbose=False)
 
-    # Use provided inflation factor for calculations if available, otherwise use estimated
+    # Use provided inflation factor if available, otherwise use estimated
+    effective_inflation_factor = inflation_factor if inflation_factor is not None else estimated_inflation_factor
+
+    # Auto-select method based on sample size AND inflation factor
+    # When inflation_factor ≈ 1, normal approximation in analytical method is unreliable
+    # Prefer exact (beta-binomial) method in these cases
+    if method == "auto":
+        # If inflation factor is very close to 1, analytical method unreliable
+        # Use exact method instead (beta-binomial handles low correlation better)
+        if effective_inflation_factor < 1.2:
+            # Low correlation case: prefer exact method for reliability
+            if n_cal >= 20:
+                method = "exact"
+            else:
+                method = "hoeffding"
+            if verbose:
+                print(
+                    f"Auto-selected LOO method: {method} "
+                    f"(n_cal={n_cal}, inflation_factor={effective_inflation_factor:.3f} < 1.2, "
+                    "analytical method unreliable for low correlation)"
+                )
+        elif n_cal >= 40:
+            method = "analytical"
+            if verbose:
+                print(f"Auto-selected LOO method: {method} (n_cal={n_cal})")
+        elif n_cal >= 25:
+            method = "exact"
+            if verbose:
+                print(f"Auto-selected LOO method: {method} (n_cal={n_cal})")
+        else:
+            method = "hoeffding"
+            if verbose:
+                print(f"Auto-selected LOO method: {method} (n_cal={n_cal})")
+
+    # Use inflation factor for calculations based on method requirements
     if inflation_factor is None:
         if method in ["analytical", "hoeffding"]:
             inflation_factor = estimated_inflation_factor
             if verbose:
                 print(f"Using estimated LOO inflation factor: {inflation_factor:.3f}")
         else:
-            # Not needed for this method, but still report estimated value
+            # For exact method, still use estimated factor
+            inflation_factor = estimated_inflation_factor
             if verbose:
-                print(f"LOO inflation factor not needed for this method (estimated: {estimated_inflation_factor:.3f})")
+                print(f"Using estimated LOO inflation factor: {inflation_factor:.3f} (exact method)")
     else:
         # User provided value - use it for calculations, but still report estimated
         if verbose:
@@ -629,12 +666,12 @@ def compute_robust_prediction_bounds(
                     f"{estimated_inflation_factor:.3f}) for comparison..."
                 )
 
-        # Compute all three methods while suppressing small-n warnings
+        # Compute all three methods while suppressing small-n and low-inflation warnings
         # specific to analytical method for method comparison runs
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message=r"^n_cal=\\d+ is very small",
+                message=r"^n_cal=\\d+ is very small|inflation_factor.*is very low",
                 category=UserWarning,
             )
             L1, U1, diag1 = compute_loo_corrected_bounds_analytical(
@@ -648,17 +685,30 @@ def compute_robust_prediction_bounds(
                 loo_predictions, n_test, alpha, inflation_factor=inflation_factor, verbose=verbose
             )
 
-        # Choose analytical as primary, but flag if too optimistic
-        L, U = L1, U1
-        selected_method = "analytical"
-
-        # Check if analytical is suspiciously narrow
-        # Auto-correct to exact if analytical bounds are too narrow
-        # Suppress warning when method="all" since we're explicitly comparing methods
-        if (U1 - L1) < 0.7 * (U2 - L2):
+        # Choose method based on reliability:
+        # - If inflation factor < 1.2, prefer exact (analytical unreliable for low correlation)
+        # - Otherwise prefer analytical if bounds are reasonable
+        # - Auto-correct if analytical bounds are suspiciously narrow
+        if effective_inflation_factor < 1.2:
+            # Low correlation: prefer exact method (more reliable)
             L, U = L2, U2
-            selected_method = "exact (auto-corrected)"
-            # Note: No warning here - method="all" is for comparison, auto-correction is expected
+            selected_method = "exact (low correlation, inflation_factor < 1.2)"
+            if verbose:
+                print(
+                    f"Note: Selected exact method due to low correlation "
+                    f"(inflation_factor={effective_inflation_factor:.3f} < 1.2). "
+                    "Analytical method may be unreliable in this regime."
+                )
+        elif (U1 - L1) < 0.7 * (U2 - L2):
+            # Analytical bounds suspiciously narrow - auto-correct to exact
+            L, U = L2, U2
+            selected_method = "exact (auto-corrected, analytical too narrow)"
+            if verbose:
+                print("Note: Auto-corrected to exact method - analytical bounds were suspiciously narrow.")
+        else:
+            # Analytical bounds reasonable
+            L, U = L1, U1
+            selected_method = "analytical"
 
         # Build comparison table
         comparison = {
