@@ -71,6 +71,7 @@ from ssbc.validation_pkg import (
     plot_validation_bounds,
     print_calibration_validation_results,
     print_validation_results,
+    tabulate_calibration_excess,
     validate_pac_bounds,
     validate_prediction_interval_calibration,
 )
@@ -114,6 +115,7 @@ __all__ = [
     "print_calibration_validation_results",
     "get_calibration_bounds_dataframe",
     "plot_calibration_excess",
+    "tabulate_calibration_excess",
     # Rigorous reporting
     "generate_rigorous_pac_report",
     # Hyperparameter

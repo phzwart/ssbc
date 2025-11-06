@@ -2111,6 +2111,185 @@ def get_calibration_bounds_dataframe(
     return df
 
 
+def tabulate_calibration_excess(
+    df: Any,
+    scope: str | None = None,
+    metric: str | None = None,
+    methods: list[str] | None = None,
+) -> Any:
+    """Tabulate excess values for all methods as a DataFrame.
+
+    Computes excess values (difference between observed and predicted quantiles)
+    for each method and returns a structured DataFrame with statistics.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Output from get_calibration_bounds_dataframe()
+    scope : str, optional
+        Filter to specific scope: "marginal", "class_0", or "class_1".
+        If None, includes all scopes.
+    metric : str, optional
+        Filter to specific metric: "singleton", "doublet", "abstention", "singleton_error".
+        If None, includes all metrics.
+    methods : list[str], optional
+        Methods to include: ["analytical", "exact", "hoeffding", "selected"].
+        If None, includes all available methods.
+
+    Returns
+    -------
+    DataFrame
+        DataFrame with columns:
+        - method: Method name (analytical, exact, hoeffding, selected)
+        - bound_type: "lower" or "upper"
+        - excess_mean: Mean excess value
+        - excess_std: Standard deviation of excess
+        - excess_min: Minimum excess value
+        - excess_max: Maximum excess value
+        - excess_q05: 5th percentile of excess
+        - excess_q25: 25th percentile of excess
+        - excess_q50: 50th percentile (median) of excess
+        - excess_q75: 75th percentile of excess
+        - excess_q95: 95th percentile of excess
+        - n_negative: Number of negative excess values (risky)
+        - n_positive: Number of positive excess values (conservative)
+        - pct_negative: Percentage of negative excess values
+        - n_valid: Number of valid (non-NaN) excess values
+        - scope: Scope name (if filtered)
+        - metric: Metric name (if filtered)
+
+    Examples
+    --------
+    >>> from ssbc import get_calibration_bounds_dataframe, tabulate_calibration_excess
+    >>> results = validate_prediction_interval_calibration(...)
+    >>> df = get_calibration_bounds_dataframe(results)
+    >>> # Tabulate excess for singleton marginal
+    >>> df_single = df[(df['scope'] == 'marginal') & (df['metric'] == 'singleton')]
+    >>> excess_table = tabulate_calibration_excess(df_single, scope='marginal', metric='singleton')
+    >>> print(excess_table)
+    """
+    try:
+        import pandas as pd
+    except ImportError as err:
+        raise ImportError("pandas is required for tabulation. Install with: pip install pandas") from err
+
+    # Filter DataFrame
+    df_filtered = df.copy()
+
+    # Apply scope filter
+    if scope is not None:
+        df_filtered = df_filtered[df_filtered["scope"] == scope]
+
+    # Apply metric filter
+    if metric is not None:
+        unique_metrics = (
+            df_filtered["metric"].unique() if "metric" in df_filtered.columns and len(df_filtered) > 0 else []
+        )
+        if len(unique_metrics) == 1 and unique_metrics[0] != metric:
+            actual_metric = unique_metrics[0]
+            df_filtered = df_filtered[df_filtered["metric"] == actual_metric]
+        else:
+            df_filtered = df_filtered[df_filtered["metric"] == metric]
+
+    if len(df_filtered) == 0:
+        available_metrics = df["metric"].unique().tolist() if "metric" in df.columns else []
+        available_scopes = df["scope"].unique().tolist() if "scope" in df.columns else []
+        raise ValueError(
+            f"No data matching the specified scope/metric filters.\n"
+            f"  Requested: scope='{scope}', metric='{metric}'\n"
+            f"  Available metrics: {available_metrics}\n"
+            f"  Available scopes: {available_scopes}"
+        )
+
+    # Determine which methods are available
+    available_methods = []
+    if methods is None:
+        for method_name in ["selected", "analytical", "exact", "hoeffding"]:
+            lower_col = f"{method_name}_lower" if method_name != "selected" else "selected_lower"
+            if lower_col in df_filtered.columns:
+                if df_filtered[lower_col].notna().any():
+                    available_methods.append(method_name)
+    else:
+        for m in methods:
+            if m == "selected" and "selected_lower" in df_filtered.columns:
+                available_methods.append(m)
+            elif f"{m}_lower" in df_filtered.columns:
+                available_methods.append(m)
+
+    if len(available_methods) == 0:
+        raise ValueError("No method data available in DataFrame")
+
+    # Build table rows
+    rows = []
+    for method_name in available_methods:
+        # Lower excess: observed_q05 - predicted_lower
+        lower_col = f"{method_name}_lower" if method_name != "selected" else "selected_lower"
+        lower_pred = df_filtered[lower_col]
+        lower_obs = df_filtered["observed_q05"]
+        valid_mask_lower = lower_pred.notna() & lower_obs.notna()
+
+        if valid_mask_lower.sum() > 0:
+            excess_lower = lower_obs[valid_mask_lower] - lower_pred[valid_mask_lower]
+            excess_array = excess_lower.values
+
+            rows.append(
+                {
+                    "method": method_name,
+                    "bound_type": "lower",
+                    "excess_mean": float(np.mean(excess_array)),
+                    "excess_std": float(np.std(excess_array)),
+                    "excess_min": float(np.min(excess_array)),
+                    "excess_max": float(np.max(excess_array)),
+                    "excess_q05": float(np.percentile(excess_array, 5)),
+                    "excess_q25": float(np.percentile(excess_array, 25)),
+                    "excess_q50": float(np.percentile(excess_array, 50)),
+                    "excess_q75": float(np.percentile(excess_array, 75)),
+                    "excess_q95": float(np.percentile(excess_array, 95)),
+                    "n_negative": int((excess_array < 0).sum()),
+                    "n_positive": int((excess_array >= 0).sum()),
+                    "pct_negative": float((excess_array < 0).sum() / len(excess_array) * 100),
+                    "n_valid": int(len(excess_array)),
+                    "scope": scope if scope else df_filtered["scope"].iloc[0] if len(df_filtered) > 0 else None,
+                    "metric": metric if metric else df_filtered["metric"].iloc[0] if len(df_filtered) > 0 else None,
+                }
+            )
+
+        # Upper excess: predicted_upper - observed_q95
+        upper_col = f"{method_name}_upper" if method_name != "selected" else "selected_upper"
+        upper_pred = df_filtered[upper_col]
+        upper_obs = df_filtered["observed_q95"]
+        valid_mask_upper = upper_pred.notna() & upper_obs.notna()
+
+        if valid_mask_upper.sum() > 0:
+            excess_upper = upper_pred[valid_mask_upper] - upper_obs[valid_mask_upper]
+            excess_array = excess_upper.values
+
+            rows.append(
+                {
+                    "method": method_name,
+                    "bound_type": "upper",
+                    "excess_mean": float(np.mean(excess_array)),
+                    "excess_std": float(np.std(excess_array)),
+                    "excess_min": float(np.min(excess_array)),
+                    "excess_max": float(np.max(excess_array)),
+                    "excess_q05": float(np.percentile(excess_array, 5)),
+                    "excess_q25": float(np.percentile(excess_array, 25)),
+                    "excess_q50": float(np.percentile(excess_array, 50)),
+                    "excess_q75": float(np.percentile(excess_array, 75)),
+                    "excess_q95": float(np.percentile(excess_array, 95)),
+                    "n_negative": int((excess_array < 0).sum()),
+                    "n_positive": int((excess_array >= 0).sum()),
+                    "pct_negative": float((excess_array < 0).sum() / len(excess_array) * 100),
+                    "n_valid": int(len(excess_array)),
+                    "scope": scope if scope else df_filtered["scope"].iloc[0] if len(df_filtered) > 0 else None,
+                    "metric": metric if metric else df_filtered["metric"].iloc[0] if len(df_filtered) > 0 else None,
+                }
+            )
+
+    result_df = pd.DataFrame(rows)
+    return result_df
+
+
 def plot_calibration_excess(
     df: Any,
     scope: str | None = None,
@@ -2119,6 +2298,7 @@ def plot_calibration_excess(
     figsize: tuple[int, int] = (14, 6),
     bins: int = 30,
     return_fig: bool = False,
+    filename: str | None = None,
 ) -> Any:
     """Plot excess (difference between observed and predicted quantiles).
 
@@ -2145,6 +2325,9 @@ def plot_calibration_excess(
         Number of histogram bins
     return_fig : bool, default=False
         If True, returns matplotlib Figure object. If False, calls plt.show()
+    filename : str, optional
+        If provided, saves the plot to this filename (e.g., "excess_plot.png").
+        Supports common formats: .png, .pdf, .svg, .jpg, etc.
 
     Returns
     -------
@@ -2362,8 +2545,17 @@ def plot_calibration_excess(
 
     plt.tight_layout()
 
+    # Save to file if filename provided
+    if filename is not None:
+        fig.savefig(filename, dpi=300, bbox_inches="tight")
+        print(f"Plot saved to: {filename}")
+
     if return_fig:
         return fig
+    elif filename is not None:
+        # If saved to file, don't show (close figure)
+        plt.close(fig)
+        return None
     else:
         plt.show()
         return None

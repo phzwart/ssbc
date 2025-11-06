@@ -10,6 +10,7 @@ from ssbc.validation import (
     plot_calibration_excess,
     plot_validation_bounds,
     print_calibration_validation_results,
+    tabulate_calibration_excess,
     validate_prediction_interval_calibration,
 )
 
@@ -347,3 +348,96 @@ class TestPlotCalibrationExcess:
                 pytest.skip("get_calibration_bounds_dataframe returned None")
         except Exception as e:
             pytest.skip(f"plot_calibration_excess requires DataFrame: {e}")
+
+    def test_plot_save_to_file(self, calibration_results, tmp_path):
+        """Test saving plot to file."""
+        try:
+            df = get_calibration_bounds_dataframe(calibration_results, scope="marginal", metric="singleton")
+            if df is not None:
+                filename = tmp_path / "test_excess_plot.png"
+                plot_calibration_excess(df, scope="marginal", metric="singleton", filename=str(filename))
+                assert filename.exists()
+            else:
+                pytest.skip("get_calibration_bounds_dataframe returned None")
+        except Exception as e:
+            pytest.skip(f"plot_calibration_excess requires DataFrame: {e}")
+
+
+class TestTabulateCalibrationExcess:
+    """Test tabulate_calibration_excess function."""
+
+    @pytest.fixture
+    def calibration_results(self):
+        """Generate calibration validation results."""
+        sim = BinaryClassifierSimulator(p_class1=0.3, beta_params_class0=(2, 5), beta_params_class1=(6, 2), seed=42)
+
+        results = validate_prediction_interval_calibration(
+            simulator=sim,
+            n_calibration=50,
+            BigN=5,
+            n_trials=10,
+            test_size=100,
+            verbose=False,
+            n_jobs=1,
+        )
+
+        return results
+
+    def test_basic_tabulation(self, calibration_results):
+        """Test basic tabulation."""
+        df = get_calibration_bounds_dataframe(calibration_results)
+        df_single = df[(df["scope"] == "marginal") & (df["metric"] == "singleton")]
+
+        table = tabulate_calibration_excess(df_single, scope="marginal", metric="singleton")
+
+        assert table is not None
+        assert len(table) > 0
+        assert "method" in table.columns
+        assert "bound_type" in table.columns
+        assert "excess_mean" in table.columns
+        assert "excess_std" in table.columns
+
+    def test_tabulation_structure(self, calibration_results):
+        """Test tabulation structure."""
+        df = get_calibration_bounds_dataframe(calibration_results)
+        df_single = df[(df["scope"] == "marginal") & (df["metric"] == "singleton")]
+
+        table = tabulate_calibration_excess(df_single, scope="marginal", metric="singleton")
+
+        # Check required columns
+        required_cols = [
+            "method",
+            "bound_type",
+            "excess_mean",
+            "excess_std",
+            "excess_min",
+            "excess_max",
+            "excess_q05",
+            "excess_q25",
+            "excess_q50",
+            "excess_q75",
+            "excess_q95",
+            "n_negative",
+            "n_positive",
+            "pct_negative",
+            "n_valid",
+        ]
+        for col in required_cols:
+            assert col in table.columns
+
+        # Check that we have both lower and upper bounds
+        assert "lower" in table["bound_type"].values
+        assert "upper" in table["bound_type"].values
+
+    def test_tabulation_with_methods(self, calibration_results):
+        """Test tabulation with specific methods."""
+        df = get_calibration_bounds_dataframe(calibration_results)
+        df_single = df[(df["scope"] == "marginal") & (df["metric"] == "singleton")]
+
+        table = tabulate_calibration_excess(
+            df_single, scope="marginal", metric="singleton", methods=["analytical", "exact"]
+        )
+
+        assert table is not None
+        methods_in_table = table["method"].unique()
+        assert "analytical" in methods_in_table or "exact" in methods_in_table

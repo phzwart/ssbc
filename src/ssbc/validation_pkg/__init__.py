@@ -9,6 +9,7 @@ from ssbc.validation import (
     plot_validation_bounds,
     print_calibration_validation_results,
     print_validation_results,
+    tabulate_calibration_excess,
     validate_pac_bounds,
     validate_prediction_interval_calibration,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "plot_validation_bounds",
     "print_calibration_validation_results",
     "print_validation_results",
+    "tabulate_calibration_excess",
     "validate_pac_bounds",
     "validate_prediction_interval_calibration",
 ]
