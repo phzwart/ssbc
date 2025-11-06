@@ -5,13 +5,13 @@
 To install ssbc, run this command in your terminal:
 
 ```sh
-uv add ssbc
+pip install ssbc
 ```
 
-Or if you prefer to use `pip`:
+Or if you prefer to use `uv`:
 
 ```sh
-pip install ssbc
+uv add ssbc
 ```
 
 ## From source

@@ -148,14 +148,14 @@ def generate_rigorous_pac_report(
 
     Notes
     -----
-    **This replaces the old workflow:**
+    **This replaces the old workflow (removed in v1.1.0):**
 
-    OLD (incomplete):
+    OLD (removed - these functions no longer exist):
     ```python
-    cal_result, pred_stats = mondrian_conformal_calibrate(...)
-    op_bounds = compute_mondrian_operational_bounds(...)  # No coverage volatility!
-    marginal_bounds = compute_marginal_operational_bounds(...)  # No coverage volatility!
-    report_prediction_stats(...)  # Uses incomplete bounds
+    # These functions were removed in v1.1.0:
+    # op_bounds = compute_mondrian_operational_bounds(...)  # Removed
+    # marginal_bounds = compute_marginal_operational_bounds(...)  # Removed
+    # report_prediction_stats(...)  # Removed
     ```
 
     NEW (rigorous):

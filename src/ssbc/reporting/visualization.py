@@ -28,9 +28,9 @@ def report_prediction_stats(
     calibration_result : dict
         Output from mondrian_conformal_calibrate (first return value)
     operational_bounds_per_class : dict[int, OperationalRateBoundsResult], optional
-        Per-class operational bounds from compute_mondrian_operational_bounds
+        Per-class operational bounds (from generate_rigorous_pac_report)
     marginal_operational_bounds : OperationalRateBoundsResult, optional
-        Marginal operational bounds from compute_marginal_operational_bounds
+        Marginal operational bounds (from generate_rigorous_pac_report)
     verbose : bool, default=True
         If True, print detailed statistics to stdout
 
@@ -43,16 +43,13 @@ def report_prediction_stats(
 
     Examples
     --------
-    >>> # Basic: Only calibration data (limited info)
-    >>> cal_result, pred_stats = mondrian_conformal_calibrate(...)
-    >>> summary = report_prediction_stats(pred_stats, cal_result)
-    >>>
-    >>> # With per-class operational bounds (rigorous)
-    >>> op_bounds = compute_mondrian_operational_bounds(cal_result, class_data, delta=0.05)
-    >>> summary = report_prediction_stats(pred_stats, cal_result, op_bounds)
-    >>>
-    >>> # With marginal bounds too (complete SLA)
-    >>> marginal = compute_marginal_operational_bounds(labels, probs, 0.1, 0.05, 0.05)
+    >>> # Get operational bounds from rigorous PAC report
+    >>> from ssbc import generate_rigorous_pac_report
+    >>> report = generate_rigorous_pac_report(labels, probs, alpha_target=0.10, delta=0.10)
+    >>> cal_result = report['calibration_result']
+    >>> pred_stats = report['prediction_stats']
+    >>> op_bounds = report['pac_bounds_class_0']  # Per-class bounds
+    >>> marginal = report['pac_bounds_marginal']  # Marginal bounds
     >>> summary = report_prediction_stats(pred_stats, cal_result, op_bounds, marginal)
     """
     summary: dict[str | int, Any] = {}
@@ -330,13 +327,19 @@ def report_prediction_stats(
         if operational_bounds_per_class or marginal_operational_bounds:
             print("✓ Operational bounds have PAC guarantees via cross-validation")
         else:
-            print("\n⚠️  For rigorous deployment bounds, run:")
-            print("   - compute_mondrian_operational_bounds() for per-class bounds")
-            print("   - compute_marginal_operational_bounds() for marginal bounds")
+            print("\n⚠️  For rigorous deployment bounds, use:")
+            print("   - generate_rigorous_pac_report() which provides all bounds")
+            print(
+                "   - Access via report['pac_bounds_class_0'],"
+                " report['pac_bounds_class_1'], report['pac_bounds_marginal']"
+            )
 
         if prediction_stats.get("marginal") and marginal_operational_bounds is None:
             print("\n⚠️  Marginal stats from calibration data NOT shown (invalid CIs for Mondrian)")
-            print("   Use compute_marginal_operational_bounds() for valid marginal bounds")
+            print(
+                "   Use generate_rigorous_pac_report() and access"
+                " report['pac_bounds_marginal'] for valid marginal bounds"
+            )
 
     return summary
 

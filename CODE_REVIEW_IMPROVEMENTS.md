@@ -132,12 +132,14 @@ delta : float
 
 ### 6. Progress Bars for Long Operations
 
-**Status**: Pending
+**Status**: Pending (Low Priority)
 
 **Recommendation**: Add progress bars using `rich.progress` (already in dependencies) for:
 - LOO-CV computations (when n_jobs=1 or verbose=True)
 - Validation trials (`validate_pac_bounds`)
 - Bootstrap iterations (`bootstrap_calibration_uncertainty`)
+
+**Note**: Currently, verbose output shows progress via print statements. Rich progress bars would provide a better user experience but are not critical for functionality.
 
 **Example Implementation**:
 ```python
